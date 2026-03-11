@@ -4,3 +4,4 @@ dist/
 web/node_modules/
 web/dist/
 api/velori-api
+api/api
