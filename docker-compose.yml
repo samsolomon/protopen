@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: velori-postgres
+    environment:
+      POSTGRES_DB: velori
+      POSTGRES_USER: velori
+      POSTGRES_PASSWORD: velori
+    ports:
+      - "5432:5432"
+    volumes:
+      - velori_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  velori_postgres_data:
