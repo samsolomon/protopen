@@ -48,8 +48,12 @@ go run .
 
 The web app expects the API at `http://localhost:8080`.
 
+Local hosted prototype content is served separately at `http://localhost:8081`.
+
 The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
 
 The current upload flow now sends real multipart file uploads to the API for both folder and zip selections. Folder uploads are normalized into a temporary ingest directory, and zip uploads are extracted server-side into that same staging area before validation.
 
 Use `INGEST_ROOT` to override the local staging directory. By default it uses `api/.data/ingest` when the API is started from `api/`.
+
+Successful staged deploys are now served from the content origin at URLs like `http://localhost:8081/~sam/product-teardown`.

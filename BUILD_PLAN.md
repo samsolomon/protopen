@@ -94,7 +94,7 @@ Purpose: move from metadata-only uploads to real file transfer and validation.
 - [x] Guard against zip bombs and excessive file counts
 - [x] Reject symlinks and unsupported archive entries
 - [x] Re-run validation against extracted content
-- [ ] Detect a usable site root containing `index.html`
+- [x] Detect a usable site root containing `index.html`
 
 Exit criteria:
 
@@ -123,35 +123,35 @@ Exit criteria:
 
 Purpose: serve the latest successful deploy at a stable public URL.
 
-- [ ] Implement route resolution for `~username/project-slug`
+- [x] Implement route resolution for `~username/project-slug`
 - [ ] Resolve project to current deploy
-- [ ] Serve `index.html` for the project root
-- [ ] Serve static asset files from the current deploy
-- [ ] Support SPA fallback rules for unmatched routes
-- [ ] Return 404 for missing assets
+- [x] Serve `index.html` for the project root
+- [x] Serve static asset files from the current deploy
+- [x] Support SPA fallback rules for unmatched routes
+- [x] Return 404 for missing assets
 - [ ] Ensure deleted files from older deploys do not leak into newer deploys
-- [ ] Add cache headers appropriate for HTML vs static assets
+- [x] Add cache headers appropriate for HTML vs static assets
 
 Exit criteria:
 
-- [ ] A shared project URL renders the latest successful deploy
+- [x] A shared project URL renders the latest successful deploy
 - [ ] A redeploy changes the served content without changing the URL
 
 ### Milestone 6 - Origin Isolation
 
 Purpose: safely separate trusted app surfaces from untrusted uploaded code.
 
-- [ ] Choose local-dev origin model for app vs content
+- [x] Choose local-dev origin model for app vs content
 - [ ] Choose production origin model for app vs content
 - [ ] Serve dashboard/account UI from trusted app origin
-- [ ] Serve uploaded prototype content from separate untrusted content origin
+- [x] Serve uploaded prototype content from separate untrusted content origin
 - [ ] Confirm cookies or sessions do not flow to the content origin unnecessarily
-- [ ] Add baseline security headers for hosted content
+- [x] Add baseline security headers for hosted content
 - [ ] Explicitly disallow service workers in v1
 
 Exit criteria:
 
-- [ ] Uploaded HTML runs on a different origin than the dashboard
+- [x] Uploaded HTML runs on a different origin than the dashboard
 - [ ] A prototype cannot access trusted app session context by origin
 
 ### Milestone 7 - Simple Account System

@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -35,9 +37,9 @@ const (
 var migrationFiles embed.FS
 
 type application struct {
-	db            *pgxpool.Pool
-	ingestRoot    string
-	publicBaseURL string
+	db             *pgxpool.Pool
+	ingestRoot     string
+	contentBaseURL string
 }
 
 type project struct {
@@ -71,7 +73,9 @@ func main() {
 	ctx := context.Background()
 	databaseURL := getenv("DATABASE_URL", "postgres://velori:velori@localhost:5432/velori?sslmode=disable")
 	ingestRoot := getenv("INGEST_ROOT", filepath.Join(".data", "ingest"))
-	publicBaseURL := strings.TrimRight(getenv("PUBLIC_APP_URL", "https://velori.dev"), "/")
+	appListenAddr := getenv("APP_LISTEN_ADDR", ":8080")
+	contentListenAddr := getenv("CONTENT_LISTEN_ADDR", ":8081")
+	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://localhost:8081"), "/")
 
 	db, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -87,24 +91,47 @@ func main() {
 		log.Fatalf("create ingest root: %v", err)
 	}
 
-	app := &application{db: db, ingestRoot: ingestRoot, publicBaseURL: publicBaseURL}
+	app := &application{db: db, ingestRoot: ingestRoot, contentBaseURL: contentBaseURL}
 	if err := app.seedDemoData(ctx); err != nil {
 		log.Fatalf("seed demo data: %v", err)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", app.healthzHandler)
-	mux.HandleFunc("/api/projects", app.projectsHandler)
-	mux.HandleFunc("/api/uploads", app.uploadsHandler)
+	appMux := http.NewServeMux()
+	appMux.HandleFunc("/healthz", app.healthzHandler)
+	appMux.HandleFunc("/api/projects", app.projectsHandler)
+	appMux.HandleFunc("/api/uploads", app.uploadsHandler)
 
-	server := &http.Server{
-		Addr:              ":8080",
-		Handler:           withCORS(mux),
+	contentMux := http.NewServeMux()
+	contentMux.HandleFunc("/", app.serveProjectHandler)
+
+	appServer := &http.Server{
+		Addr:              appListenAddr,
+		Handler:           withCORS(appMux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Println("velori api listening on http://localhost:8080")
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	contentServer := &http.Server{
+		Addr:              contentListenAddr,
+		Handler:           contentSecurityHeaders(contentMux),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		log.Printf("velori app api listening on http://localhost%s", appListenAddr)
+		if err := appServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	go func() {
+		log.Printf("velori content serving on http://localhost%s", contentListenAddr)
+		if err := contentServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	if err := <-errCh; err != nil {
 		log.Fatal(err)
 	}
 }
@@ -122,6 +149,49 @@ func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	username, slug, assetPath, ok := parseProjectPath(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	deployment, err := app.lookupLiveDeploy(r.Context(), username, slug)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		log.Printf("lookup live deploy: %v", err)
+		http.Error(w, "could not load project", http.StatusInternalServerError)
+		return
+	}
+
+	resolvedPath, fallbackToIndex, err := resolveAssetPath(deployment.siteRoot, assetPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if fallbackToIndex {
+		resolvedPath = filepath.Join(deployment.siteRoot, "index.html")
+	}
+
+	if err := serveFile(w, r, resolvedPath); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		log.Printf("serve project file: %v", err)
+		http.Error(w, "could not serve file", http.StatusInternalServerError)
+	}
 }
 
 func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
@@ -253,14 +323,23 @@ func (app *application) prepareMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	if payload.Mode == "zip" {
-		normalizedFiles, err := collectFiles(normalizedRoot)
-		if err != nil {
+		if _, err := collectFiles(normalizedRoot); err != nil {
 			return preparedUpload{}, err
 		}
-		payload.Files = normalizedFiles
 	}
 
-	prepared = preparedUpload{request: payload, ingestRoot: uploadRoot, normalizedTo: normalizedRoot}
+	siteRoot, err := detectSiteRoot(normalizedRoot)
+	if err != nil {
+		return preparedUpload{}, err
+	}
+
+	normalizedFiles, err := collectFiles(siteRoot)
+	if err != nil {
+		return preparedUpload{}, err
+	}
+	payload.Files = normalizedFiles
+
+	prepared = preparedUpload{request: payload, ingestRoot: uploadRoot, normalizedTo: siteRoot}
 	return prepared, nil
 }
 
@@ -436,6 +515,40 @@ func collectFiles(root string) ([]fileMeta, error) {
 	return files, nil
 }
 
+func detectSiteRoot(root string) (string, error) {
+	var candidates []string
+	err := filepath.WalkDir(root, func(pathname string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !strings.EqualFold(entry.Name(), "index.html") {
+			return nil
+		}
+		candidates = append(candidates, filepath.Dir(pathname))
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no index.html found - Velori hosts built static sites only")
+	}
+
+	sort.Slice(candidates, func(i int, j int) bool {
+		depthI := strings.Count(filepath.ToSlash(candidates[i]), "/")
+		depthJ := strings.Count(filepath.ToSlash(candidates[j]), "/")
+		if depthI == depthJ {
+			return candidates[i] < candidates[j]
+		}
+		return depthI < depthJ
+	})
+
+	return candidates[0], nil
+}
+
 func fileHeadersFromForm(form *multipart.Form) []*multipart.FileHeader {
 	if form == nil || len(form.File) == 0 {
 		return nil
@@ -473,10 +586,10 @@ func (app *application) seedDemoData(ctx context.Context) error {
 	}
 
 	if projectCount == 0 {
-		if err := insertSeedProject(ctx, tx, userID, username, app.publicBaseURL, "Product Teardown", "product-teardown", 4); err != nil {
+		if err := insertSeedProject(ctx, tx, userID, username, app.contentBaseURL, "Product Teardown", "product-teardown", 4, app.ingestRoot); err != nil {
 			return err
 		}
-		if err := insertSeedProject(ctx, tx, userID, username, app.publicBaseURL, "AI Signup Flow", "ai-signup-flow", 2); err != nil {
+		if err := insertSeedProject(ctx, tx, userID, username, app.contentBaseURL, "AI Signup Flow", "ai-signup-flow", 2, app.ingestRoot); err != nil {
 			return err
 		}
 	}
@@ -520,7 +633,7 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 
 		entry.DeployCount = int(deployCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
-		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.publicBaseURL, username, entry.Slug)
+		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, username, entry.Slug)
 		projects = append(projects, entry)
 	}
 
@@ -614,7 +727,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 		Slug:        entry.Slug,
 		UpdatedAt:   relativeTime(now),
 		DeployCount: countForMatch(matches),
-		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.publicBaseURL, username, entry.Slug),
+		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, username, entry.Slug),
 	}, nil
 }
 
@@ -685,6 +798,113 @@ type projectRecord struct {
 	Slug     string
 	Username string
 	Deploys  int
+}
+
+type liveDeploy struct {
+	siteRoot string
+}
+
+func parseProjectPath(rawPath string) (username string, slug string, assetPath string, ok bool) {
+	trimmed := strings.Trim(rawPath, "/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) < 2 || !strings.HasPrefix(parts[0], "~") {
+		return "", "", "", false
+	}
+
+	username = strings.TrimPrefix(parts[0], "~")
+	slug = parts[1]
+	if username == "" || slug == "" {
+		return "", "", "", false
+	}
+
+	if len(parts) > 2 {
+		assetPath = strings.Join(parts[2:], "/")
+	}
+
+	return username, slug, assetPath, true
+}
+
+func (app *application) lookupLiveDeploy(ctx context.Context, username string, slug string) (liveDeploy, error) {
+	var siteRoot string
+	err := app.db.QueryRow(ctx, `
+		select d.storage_prefix
+		from projects p
+		join users u on u.id = p.user_id
+		join deploys d on d.id = p.current_deploy_id
+		where u.username = $1 and p.slug = $2 and p.deleted_at is null
+	`, username, slug).Scan(&siteRoot)
+	if err != nil {
+		return liveDeploy{}, err
+	}
+
+	return liveDeploy{siteRoot: siteRoot}, nil
+}
+
+func resolveAssetPath(siteRoot string, requested string) (string, bool, error) {
+	if requested == "" {
+		return filepath.Join(siteRoot, "index.html"), false, nil
+	}
+
+	normalized, err := normalizeUploadPath(requested)
+	if err != nil {
+		return "", false, err
+	}
+
+	resolved := filepath.Join(siteRoot, filepath.FromSlash(normalized))
+	relativePath, err := filepath.Rel(siteRoot, resolved)
+	if err != nil {
+		return "", false, err
+	}
+	if strings.HasPrefix(relativePath, "..") || relativePath == "." {
+		return "", false, fs.ErrNotExist
+	}
+
+	info, err := os.Stat(resolved)
+	if err == nil && !info.IsDir() {
+		return resolved, false, nil
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", false, err
+	}
+
+	directoryIndex := filepath.Join(resolved, "index.html")
+	if directoryInfo, directoryErr := os.Stat(directoryIndex); directoryErr == nil && !directoryInfo.IsDir() {
+		return directoryIndex, false, nil
+	} else if directoryErr != nil && !errors.Is(directoryErr, fs.ErrNotExist) {
+		return "", false, directoryErr
+	}
+
+	if path.Ext(normalized) != "" {
+		return "", false, fs.ErrNotExist
+	}
+
+	return filepath.Join(siteRoot, "index.html"), true, nil
+}
+
+func serveFile(w http.ResponseWriter, r *http.Request, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	if contentType := mime.TypeByExtension(filepath.Ext(filePath)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+
+	if strings.EqualFold(filepath.Base(filePath), "index.html") {
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+	}
+
+	http.ServeContent(w, r, filepath.Base(filePath), info.ModTime(), file)
+	return nil
 }
 
 func exactNameMatches(ctx context.Context, tx pgx.Tx, userID string, name string) ([]projectRecord, error) {
@@ -773,7 +993,7 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 	return id, username, nil
 }
 
-func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username string, baseURL string, name string, slug string, deployCount int) error {
+func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string) error {
 	projectID := generateID("proj")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
 	if _, err := tx.Exec(ctx, `
@@ -787,10 +1007,14 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username s
 	for index := 0; index < deployCount; index++ {
 		deployID := generateID("dep")
 		deployTime := now.Add(time.Duration(index) * time.Hour)
+		seedRoot, err := createSeedDeployFiles(ingestRoot, username, slug, index)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `
 			insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at)
 			values ($1, $2, $3, $4, $5, $6, $7)
-		`, deployID, projectID, "seeded", int64(250000+index*12000), 5+index, fmt.Sprintf("seed/%s/%s", projectID, deployID), deployTime); err != nil {
+		`, deployID, projectID, "seeded", int64(250000+index*12000), 5+index, seedRoot, deployTime); err != nil {
 			return err
 		}
 		latestDeployID = deployID
@@ -804,9 +1028,74 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username s
 		return err
 	}
 
-	_ = username
-	_ = baseURL
+	_ = contentBaseURL
 	return nil
+}
+
+func createSeedDeployFiles(ingestRoot string, username string, slug string, version int) (string, error) {
+	seedRoot := filepath.Join(ingestRoot, "seed", username, slug, strconv.Itoa(version), "site")
+	if err := os.MkdirAll(filepath.Join(seedRoot, "docs"), 0o755); err != nil {
+		return "", err
+	}
+
+	accent := []string{"#ff8f52", "#0fb381", "#5ba8ff", "#f4b942"}[version%4]
+	title := nameFromSlug(slug)
+	indexHTML := fmt.Sprintf(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>%s</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Velori seed project</p>
+      <h1>%s</h1>
+      <p>Version %d of the locally seeded demo deploy.</p>
+      <a href="/docs">Open docs route</a>
+    </main>
+  </body>
+</html>
+`, title, title, version+1)
+
+	stylesCSS := fmt.Sprintf(`:root { color-scheme: light; }
+body { margin: 0; font-family: Inter, system-ui, sans-serif; background: linear-gradient(180deg, #f6f8fb, #eef2f7); color: #13202b; }
+main { max-width: 720px; margin: 80px auto; padding: 32px; border-radius: 24px; background: white; box-shadow: 0 24px 70px rgba(18, 24, 40, 0.08); }
+.eyebrow { color: %s; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; font-weight: 700; }
+h1 { margin: 8px 0 12px; font-size: 48px; }
+a { color: %s; font-weight: 600; }
+`, accent, accent)
+
+	docsHTML := fmt.Sprintf(`<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>%s Docs</title></head>
+  <body><main><h1>%s docs route</h1><p>This page verifies directory index serving.</p></main></body>
+</html>
+`, slug, slug)
+
+	if err := os.WriteFile(filepath.Join(seedRoot, "index.html"), []byte(indexHTML), 0o644); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(seedRoot, "styles.css"), []byte(stylesCSS), 0o644); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(seedRoot, "docs", "index.html"), []byte(docsHTML), 0o644); err != nil {
+		return "", err
+	}
+
+	return seedRoot, nil
+}
+
+func nameFromSlug(slug string) string {
+	parts := strings.Split(slug, "-")
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
 }
 
 func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -965,6 +1254,15 @@ func withCORS(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+func contentSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
 }
