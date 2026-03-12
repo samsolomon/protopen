@@ -93,7 +93,7 @@ func main() {
 	ingestRoot := getenv("INGEST_ROOT", filepath.Join(".data", "ingest"))
 	appListenAddr := getenv("APP_LISTEN_ADDR", ":8080")
 	contentListenAddr := getenv("CONTENT_LISTEN_ADDR", ":8081")
-	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://localhost:8081"), "/")
+	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://127.0.0.1:8081"), "/")
 	frontendOrigin := strings.TrimRight(getenv("FRONTEND_ORIGIN", "http://localhost:5173"), "/")
 
 	db, err := pgxpool.New(ctx, databaseURL)
@@ -774,7 +774,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 
 	payload := prepared.request
 
-	userID, username, err := ensureUserByEmail(ctx, tx, email)
+	userID, username, err := lookupUserByEmail(ctx, tx, email)
 	if err != nil {
 		return project{}, err
 	}
@@ -1152,7 +1152,7 @@ func (app *application) createSession(w http.ResponseWriter, ctx context.Context
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   30 * 24 * 60 * 60,
 	})
 	return nil
@@ -1164,7 +1164,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
 }
@@ -1228,12 +1228,17 @@ func ensureDemoUser(ctx context.Context, tx pgx.Tx) (string, string, error) {
 	return ensureUser(ctx, tx, demoUserEmail, demoUserName, demoUsername, demoPassword)
 }
 
-func ensureUserByEmail(ctx context.Context, tx pgx.Tx, email string) (string, string, error) {
-	if email == demoUserEmail {
-		return ensureDemoUser(ctx, tx)
+func lookupUserByEmail(ctx context.Context, tx pgx.Tx, email string) (string, string, error) {
+	var (
+		id       string
+		username string
+	)
+	err := tx.QueryRow(ctx, `select id, username from users where email = $1`, strings.ToLower(strings.TrimSpace(email))).Scan(&id, &username)
+	if err != nil {
+		return "", "", err
 	}
 
-	return "", "", fmt.Errorf("unknown user %q", email)
+	return id, username, nil
 }
 
 func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, username string, password string) (string, string, error) {
@@ -1268,7 +1273,7 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 	if _, err := tx.Exec(ctx, `
 		insert into users (id, email, auth_ref, username, name, password_hash, created_at)
 		values ($1, $2, $3, $4, $5, $6, $7)
-	`, id, email, "demo-auth", username, name, hashedPassword, time.Now().UTC()); err != nil {
+	`, id, strings.ToLower(strings.TrimSpace(email)), "demo-auth", username, name, hashedPassword, time.Now().UTC()); err != nil {
 		return "", "", err
 	}
 
@@ -1328,14 +1333,14 @@ func createSeedDeployFiles(ingestRoot string, username string, slug string, vers
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%s</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main>
       <p class="eyebrow">Velori seed project</p>
       <h1>%s</h1>
       <p>Version %d of the locally seeded demo deploy.</p>
-      <a href="/docs">Open docs route</a>
+      <a href="docs">Open docs route</a>
     </main>
   </body>
 </html>

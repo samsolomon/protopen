@@ -55,7 +55,7 @@ go test ./...
 
 The web app expects the API at `http://localhost:8080`.
 
-Local hosted prototype content is served separately at `http://localhost:8081`.
+Local hosted prototype content is served separately at `http://127.0.0.1:8081`.
 
 The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
 
@@ -68,4 +68,4 @@ The current upload flow now sends real multipart file uploads to the API for bot
 
 Use `INGEST_ROOT` to override the local staging directory. By default it uses `api/.data/ingest` when the API is started from `api/`.
 
-Successful staged deploys are now served from the content origin at URLs like `http://localhost:8081/~sam/product-teardown`.
+Successful staged deploys are now served from the content origin at URLs like `http://127.0.0.1:8081/~sam/product-teardown`.

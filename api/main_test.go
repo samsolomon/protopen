@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -135,5 +136,31 @@ func TestHashTokenIsDeterministic(t *testing.T) {
 	}
 	if len(first) != 64 {
 		t.Fatalf("expected sha256 hex hash length 64, got %d", len(first))
+	}
+}
+
+func TestCreateSeedDeployFilesUsesProjectRelativeLinks(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	siteRoot, err := createSeedDeployFiles(root, "sam", "product-teardown", 0)
+	if err != nil {
+		t.Fatalf("createSeedDeployFiles returned error: %v", err)
+	}
+
+	indexHTML, err := os.ReadFile(filepath.Join(siteRoot, "index.html"))
+	if err != nil {
+		t.Fatalf("read seeded index.html: %v", err)
+	}
+
+	markup := string(indexHTML)
+	if strings.Contains(markup, "href=\"/styles.css\"") {
+		t.Fatal("expected seeded CSS link to be project-relative")
+	}
+	if strings.Contains(markup, "href=\"/docs\"") {
+		t.Fatal("expected seeded docs link to be project-relative")
+	}
+	if !strings.Contains(markup, "href=\"styles.css\"") || !strings.Contains(markup, "href=\"docs\"") {
+		t.Fatal("expected seeded page to include project-relative links")
 	}
 }
