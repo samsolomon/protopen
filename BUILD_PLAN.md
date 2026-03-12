@@ -20,215 +20,6 @@ The MVP is testable when all of the following are true:
 - a second upload with the same exact project name updates the existing project
 - a second upload with a different name creates a new project
 
-## Milestone Order
-
-### Milestone 0 - Local Vertical Slice
-
-Purpose: get the repo into a working local-dev state with a visible UI and a reachable API.
-
-- [x] Create `web/` app scaffold
-- [x] Create `api/` app scaffold
-- [x] Add local quick-start instructions
-- [x] Add basic dashboard UI
-- [x] Add mock projects API
-- [x] Add mock upload endpoint
-
-Exit criteria:
-
-- [x] `npm run build` passes in `web/`
-- [x] `go build .` passes in `api/`
-
-### Milestone 1 - Real Upload Contract
-
-Purpose: make the upload flow behave like the real product, even before storage is implemented.
-
-- [x] Accept folder selection in the web app
-- [x] Accept zip selection in the web app
-- [x] Support drag-and-drop upload interaction
-- [x] Send file metadata to the API
-- [x] Validate `index.html` requirement for folder uploads
-- [x] Validate `100MB` max deploy size
-- [x] Validate `20MB` max individual file size
-- [x] Reject invalid zip upload shapes
-- [ ] Display server validation errors as structured UI states instead of inline text only
-- [ ] Add loading, success, and failure states for the full upload card experience
-
-Exit criteria:
-
-- [ ] Invalid uploads fail with explicit user-facing reasons
-- [ ] Valid uploads create or update a project through the API contract
-
-### Milestone 2 - Persistence and Project Model
-
-Purpose: replace the in-memory API with a durable project and deploy model.
-
-- [ ] Stand up PostgreSQL locally or via Supabase dev instance
-- [x] Add migration tooling
-- [x] Create `users` table
-- [x] Create `projects` table
-- [x] Create `deploys` table
-- [x] Add `current_deploy_id` on projects
-- [x] Add `status` on deploys
-- [x] Add `size_bytes` and `file_count` on deploys
-- [ ] Add soft delete support for projects
-- [x] Replace in-memory store with database-backed queries
-- [x] Implement exact-name match lookup per user
-- [x] Implement create-vs-update logic in the API layer
-
-Exit criteria:
-
-- [ ] Restarting the API does not lose projects or deploy history
-- [x] Uploading the same project name increments deploy count on the same project
-- [x] Uploading a different project name creates a new project row
-
-### Milestone 3 - Real File Ingest
-
-Purpose: move from metadata-only uploads to real file transfer and validation.
-
-- [x] Support multipart upload endpoint for zip uploads
-- [x] Support multipart upload endpoint for folder uploads
-- [x] Normalize uploaded file paths
-- [x] Store uploaded files in a temporary ingest area
-- [x] Extract zip uploads server-side
-- [ ] Guard against path traversal in archive extraction
-- [x] Guard against zip bombs and excessive file counts
-- [x] Reject symlinks and unsupported archive entries
-- [x] Re-run validation against extracted content
-- [x] Detect a usable site root containing `index.html`
-
-Exit criteria:
-
-- [x] The API receives actual files, not just metadata
-- [ ] Invalid archives are rejected safely
-- [ ] Valid folder and zip uploads produce the same internal deploy representation
-
-### Milestone 4 - Immutable Deploy Storage
-
-Purpose: make each deploy durable and safe to serve.
-
-- [ ] Define storage key structure for immutable deploy prefixes
-- [ ] Add local object storage strategy for development
-- [ ] Upload validated deploy contents into a unique deploy prefix
-- [ ] Store deploy metadata after successful write
-- [ ] Update `projects.current_deploy_id` only after deploy success
-- [ ] Preserve previous deploys internally
-- [ ] Add cleanup for failed temp uploads
-
-Exit criteria:
-
-- [ ] Each successful deploy has its own immutable storage location
-- [ ] A failed deploy never replaces the current live deploy
-
-### Milestone 5 - Serving and URL Resolution
-
-Purpose: serve the latest successful deploy at a stable public URL.
-
-- [x] Implement route resolution for `~username/project-slug`
-- [ ] Resolve project to current deploy
-- [x] Resolve project to current deploy
-- [x] Serve `index.html` for the project root
-- [x] Serve static asset files from the current deploy
-- [x] Support SPA fallback rules for unmatched routes
-- [x] Return 404 for missing assets
-- [ ] Ensure deleted files from older deploys do not leak into newer deploys
-- [x] Add cache headers appropriate for HTML vs static assets
-
-Exit criteria:
-
-- [x] A shared project URL renders the latest successful deploy
-- [x] A redeploy changes the served content without changing the URL
-
-### Milestone 6 - Origin Isolation
-
-Purpose: safely separate trusted app surfaces from untrusted uploaded code.
-
-- [x] Choose local-dev origin model for app vs content
-- [ ] Choose production origin model for app vs content
-- [ ] Serve dashboard/account UI from trusted app origin
-- [x] Serve uploaded prototype content from separate untrusted content origin
-- [ ] Confirm cookies or sessions do not flow to the content origin unnecessarily
-- [x] Add baseline security headers for hosted content
-- [ ] Explicitly disallow service workers in v1
-
-Exit criteria:
-
-- [x] Uploaded HTML runs on a different origin than the dashboard
-- [ ] A prototype cannot access trusted app session context by origin
-
-### Milestone 7 - Simple Account System
-
-Purpose: require sign-in for upload/manage while keeping viewing public.
-
-- [x] Choose auth implementation for the simple account system
-- [x] Implement account creation
-- [x] Implement sign-in
-- [x] Implement sign-out
-- [x] Protect dashboard and management APIs behind auth
-- [x] Keep project viewing public by link
-- [x] Associate projects with the signed-in user
-- [ ] Add basic password reset or account recovery path if needed by chosen auth approach
-
-Exit criteria:
-
-- [x] Anonymous users cannot access the dashboard
-- [x] Anonymous users can still view live project URLs
-- [x] Each user only sees and manages their own projects
-
-### Milestone 8 - Dashboard Polish for Testers
-
-Purpose: make the MVP usable enough for real tester feedback.
-
-- [ ] Show project empty state
-- [ ] Show recent-first sorting
-- [x] Add copy URL action
-- [x] Add delete project action
-- [ ] Add deploy status badges
-- [ ] Add upload progress and final status messaging
-- [ ] Add simple deploy guide copy for supported uploads
-- [ ] Improve error states for broken uploads
-
-Exit criteria:
-
-- [x] A non-technical tester can sign in, upload, copy a link, redeploy, and delete a project without help
-
-## Cross-Cutting Checklists
-
-### Supported Site Contract
-
-- [x] Require a usable `index.html`
-- [x] Support prebuilt static assets only
-- [ ] Reject or clearly fail unsupported backend assumptions
-- [ ] Document how root-relative asset paths are handled
-- [x] Document SPA fallback behavior
-- [ ] Document that service workers are not supported in v1
-
-### Security and Abuse
-
-- [x] Separate trusted app origin from untrusted content origin
-- [ ] Add upload rate limiting
-- [ ] Add per-user storage quota
-- [ ] Add per-user project cap
-- [ ] Add server-side request logging for upload failures
-- [x] Add archive safety checks
-- [ ] Define allowed and blocked file behaviors for v1
-
-### Observability
-
-- [ ] Add structured API logs
-- [ ] Add request IDs
-- [ ] Log deploy lifecycle state changes
-- [ ] Log validation failures with reason codes
-- [ ] Log serving resolution failures
-
-### Testing
-
-- [x] Add API tests for upload validation rules
-- [x] Add API tests for exact-name redeploy behavior
-- [ ] Add frontend tests for upload validation UI
-- [x] Add end-to-end test for folder upload flow
-- [ ] Add end-to-end test for zip upload flow
-- [x] Add end-to-end test for stable URL redeploy behavior
-
 ## First End-to-End Demo Target
 
 The first truly useful internal demo should support this script:
@@ -241,21 +32,96 @@ The first truly useful internal demo should support this script:
 6. redeploy a changed version of the same project name
 7. refresh the public URL and see the new version
 
-## Immediate Next Build Steps
+This demo script works locally today.
 
-These are the next items to build from the current repo state:
+## Completed Milestones
 
-- [x] replace the in-memory project store with a real database-backed project model
-- [x] implement real multipart upload handling in the API
-- [x] choose and document the local app-origin vs content-origin setup
-- [x] persist deploy metadata and introduce deploy lifecycle states
-- [x] serve stored deploys at stable project URLs
+These milestones are done or functionally complete. They are kept here as reference, not as active work.
+
+### Milestone 0 - Local Vertical Slice (done)
+
+- [x] Create `web/` app scaffold
+- [x] Create `api/` app scaffold
+- [x] Add local quick-start instructions
+- [x] Add basic dashboard UI
+- [x] Add mock projects API
+- [x] Add mock upload endpoint
+
+### Milestone 7 - Simple Account System (done)
+
+Built early because most other milestones depend on auth.
+
+- [x] Choose auth implementation (email/password + HTTP-only session cookie)
+- [x] Implement account creation
+- [x] Implement sign-in
+- [x] Implement sign-out
+- [x] Protect dashboard and management APIs behind auth
+- [x] Keep project viewing public by link
+- [x] Associate projects with the signed-in user
+
+Password reset is deferred — not needed for local testing. Revisit before broader access.
+
+### Milestone 2 - Persistence and Project Model (done)
+
+- [x] Stand up PostgreSQL locally via docker-compose
+- [x] Add migration tooling (auto-run on API startup)
+- [x] Create `users`, `projects`, and `deploys` tables
+- [x] Add `current_deploy_id` on projects
+- [x] Add `status`, `size_bytes`, `file_count` on deploys
+- [x] Replace in-memory store with database-backed queries
+- [x] Implement exact-name match lookup per user
+- [x] Implement create-vs-update logic in the API layer
+
+Soft delete: the `deleted_at` column exists on projects and the API supports DELETE, but there is no UI to restore deleted projects. Good enough for v1.
+
+### Milestone 1 - Real Upload Contract (done)
+
+- [x] Accept folder selection in the web app
+- [x] Accept zip selection in the web app
+- [x] Support drag-and-drop upload interaction
+- [x] Send real multipart file uploads to the API
+- [x] Validate `index.html` requirement for folder uploads
+- [x] Validate `100MB` max deploy size
+- [x] Validate `20MB` max individual file size
+- [x] Reject invalid zip upload shapes
+- [x] Basic upload states in UI (idle, dragging, uploading, success) and error banners
+
+Remaining polish (structured server error display, richer status messaging) is tracked under dashboard polish below.
+
+### Milestone 3 - Real File Ingest (done)
+
+- [x] Support multipart upload endpoint for zip and folder uploads
+- [x] Normalize uploaded file paths
+- [x] Store uploaded files in a temporary ingest area
+- [x] Extract zip uploads server-side
+- [x] Guard against zip bombs and excessive file counts
+- [x] Reject symlinks and unsupported archive entries
+- [x] Re-run validation against extracted content
+- [x] Detect a usable site root containing `index.html`
+- [x] Path traversal protection via `normalizeUploadPath()` (rejects `../` and absolute paths)
+
+### Milestone 5 - Serving and URL Resolution (done)
+
+- [x] Implement route resolution for `~username/project-slug`
+- [x] Resolve project to current deploy via `current_deploy_id`
+- [x] Serve `index.html` for the project root
+- [x] Serve static asset files from the current deploy
+- [x] Support SPA fallback rules for unmatched routes
+- [x] Return 404 for missing assets
+- [x] Add cache headers (no-store for HTML, 5-minute public cache for assets)
+
+### Milestone 6 - Origin Isolation (local done)
+
+- [x] Choose local-dev origin model (app on :8080, content on :8081)
+- [x] Serve uploaded prototype content from separate untrusted content origin
+- [x] Add baseline security headers for hosted content (CORP, X-Content-Type-Options, Referrer-Policy)
+- [x] Uploaded HTML runs on a different origin than the dashboard
+
+Production origin model and stronger isolation are deferred to pre-launch hardening.
 
 ## Current Status
 
-Velori is now at a real local testable checkpoint.
-
-Verified locally:
+Velori is at a real local testable checkpoint. The end-to-end demo script works:
 
 - sign in with the demo account
 - upload a static folder
@@ -264,20 +130,104 @@ Verified locally:
 - redeploy the same project name and keep the same URL
 - delete a project from the dashboard
 
-Still missing before broader external testing:
+## What to Build Next
 
-- zip-specific end-to-end smoke coverage
-- frontend automated tests
-- password reset or recovery flow
-- production origin model and stronger security hardening
-- more polished status/error UI
+These are ordered by priority. Each item is scoped to be completable independently.
 
-## Pick Up Next Time
+### 1. Code health
 
-Recommended next implementation order:
+The codebase needs splitting before it gets harder to change.
 
-- [ ] add zip end-to-end smoke coverage
-- [ ] add frontend tests for auth and upload states
-- [ ] improve dashboard polish: recent sorting, deploy badges, clearer upload states
-- [ ] add password reset or explicitly defer it in-product
-- [ ] harden quotas, logging, and security posture for broader testing
+- [ ] Split `api/main.go` (1628 lines) into packages: handlers, storage, auth, migrations
+- [ ] Split `web/src/App.tsx` (592 lines) into components: AuthPage, Dashboard, UploadPanel, ProjectCard
+- [ ] Remove dead "View deploy guide" button or wire it up
+- [ ] Remove or gate the "Simulate upload" button for non-dev builds
+
+### 2. Zip smoke test
+
+Quick win — extend the existing smoke test or add a second script.
+
+- [ ] Add end-to-end smoke test for zip upload flow
+- [ ] Verify zip and folder uploads produce the same served result
+
+### 3. Dashboard polish
+
+This is what testers will notice first.
+
+- [ ] Show project empty state (exists but could be stronger)
+- [ ] Sort projects recent-first
+- [ ] Add deploy status badges (deploy count is shown, status is not)
+- [ ] Add upload progress indicator and final success/failure messaging
+- [ ] Show structured server validation errors instead of generic error banner
+- [ ] Improve error recovery (retry button, clearer failure reasons)
+
+### 4. Frontend tests
+
+No frontend tests exist today. Start with the highest-value coverage.
+
+- [ ] Add test setup (Vitest + testing-library)
+- [ ] Test auth flow: sign-in form, sign-up form, session restore, sign-out
+- [ ] Test upload validation: file size limits, missing index.html, empty selection
+- [ ] Test project list rendering and delete action
+
+### 5. Ingest cleanup
+
+Failed or abandoned uploads leave directories in `.data/ingest/` forever.
+
+- [ ] Clean up temp ingest directories after successful deploy promotion
+- [ ] Add startup or periodic cleanup for orphaned ingest directories
+- [ ] Add expired session cleanup (sessions table grows indefinitely)
+
+### 6. Documentation
+
+- [ ] Document how root-relative asset paths are handled
+- [ ] Document that service workers are not supported in v1
+- [ ] Document allowed and blocked file types for v1
+
+## Deferred to Pre-Launch Hardening
+
+These items are not needed for local testing but must be done before broader access.
+
+### Production Storage
+
+The current filesystem-based storage under `.data/ingest/` works for local dev. Each deploy gets its own `storage_prefix` path and `current_deploy_id` only updates on success, so the deploy model is already effectively immutable. Before production:
+
+- [ ] Define a proper storage key structure for deploy prefixes
+- [ ] Add object storage backend (S3 or equivalent)
+- [ ] Ensure deleted files from older deploys do not leak into newer deploys
+
+### Production Origin Isolation
+
+- [ ] Choose production origin model for app vs content
+- [ ] Serve dashboard from trusted app origin with proper cookie scoping
+- [ ] Confirm session cookies do not flow to the content origin
+- [ ] Explicitly disallow service workers in v1
+
+### Security and Abuse Prevention
+
+- [ ] Add upload rate limiting
+- [ ] Add per-user storage quota
+- [ ] Add per-user project cap
+- [ ] Add server-side request logging for upload failures
+- [ ] Reject or clearly fail unsupported backend assumptions
+
+### Observability
+
+- [ ] Add structured API logs
+- [ ] Add request IDs
+- [ ] Log deploy lifecycle state changes
+- [ ] Log validation failures with reason codes
+- [ ] Log serving resolution failures
+
+### Auth Improvements
+
+- [ ] Add password reset or account recovery flow
+
+## Testing Checklist
+
+- [x] API tests for upload validation rules
+- [x] API tests for exact-name redeploy behavior
+- [x] End-to-end smoke test for folder upload and stable URL redeploy
+- [ ] End-to-end smoke test for zip upload flow
+- [ ] Frontend tests for auth flow
+- [ ] Frontend tests for upload validation UI
