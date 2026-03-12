@@ -319,6 +319,10 @@ a {
   padding: 10px 14px;
 }
 
+.destructive-button {
+  color: #ffd3bf;
+}
+
 .primary-button:disabled,
 .secondary-button:disabled,
 .ghost-button:disabled {

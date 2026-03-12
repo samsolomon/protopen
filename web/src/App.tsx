@@ -59,6 +59,7 @@ function App() {
   const [message, setMessage] = useState('Drop a folder or zip to deploy')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [deletingProjectID, setDeletingProjectID] = useState<string | null>(null)
   const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null)
   const zipInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
@@ -179,6 +180,34 @@ function App() {
     setUploadSummary(null)
     setMessage('Drop a folder or zip to deploy')
     setError(null)
+  }
+
+  const deleteProject = async (projectID: string) => {
+	  try {
+	    setDeletingProjectID(projectID)
+	    setError(null)
+
+	    const response = await fetch(`${API_BASE_URL}/api/projects/${projectID}`, {
+	      method: 'DELETE',
+	      credentials: 'include',
+	    })
+
+	    if (response.status === 401) {
+	      setUser(null)
+	      throw new Error('Your session expired. Sign in again to manage projects.')
+	    }
+
+	    if (!response.ok) {
+	      const body = (await response.json()) as { error?: string }
+	      throw new Error(body.error ?? 'Could not delete project')
+	    }
+
+	    setProjects((current) => current.filter((project) => project.id !== projectID))
+	  } catch (deleteError) {
+	    setError(deleteError instanceof Error ? deleteError.message : 'Could not delete project')
+	  } finally {
+	    setDeletingProjectID(null)
+	  }
   }
 
   const startUpload = async (summary: UploadSummary, files: UploadFile[]) => {
@@ -531,6 +560,13 @@ function App() {
                   <a href={project.liveUrl}>{project.liveUrl}</a>
                   <button className="ghost-button small" onClick={() => void navigator.clipboard.writeText(project.liveUrl)}>
                     Copy URL
+                  </button>
+                  <button
+                    className="ghost-button small destructive-button"
+                    disabled={deletingProjectID === project.id}
+                    onClick={() => void deleteProject(project.id)}
+                  >
+                    {deletingProjectID === project.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </article>

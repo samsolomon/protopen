@@ -122,6 +122,7 @@ func main() {
 	appMux.HandleFunc("/api/sign-up", app.signUpHandler)
 	appMux.HandleFunc("/api/sign-out", app.signOutHandler)
 	appMux.HandleFunc("/api/projects", app.projectsHandler)
+	appMux.HandleFunc("/api/projects/", app.projectByIDHandler)
 	appMux.HandleFunc("/api/uploads", app.uploadsHandler)
 
 	contentMux := http.NewServeMux()
@@ -253,6 +254,11 @@ func (app *application) signOutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -267,6 +273,39 @@ func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	projectID := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" || strings.Contains(projectID, "/") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid project id"})
+		return
+	}
+
+	deleted, err := app.deleteProject(r.Context(), user.Email, projectID)
+	if err != nil {
+		log.Printf("delete project: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+		return
+	}
+	if !deleted {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -763,6 +802,21 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 	}
 
 	return projects, rows.Err()
+}
+
+func (app *application) deleteProject(ctx context.Context, email string, projectID string) (bool, error) {
+	commandTag, err := app.db.Exec(ctx, `
+		update projects
+		set deleted_at = now(), current_deploy_id = null, updated_at = now()
+		where id = $1
+		  and deleted_at is null
+		  and user_id = (select id from users where email = $2)
+	`, projectID, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return false, err
+	}
+
+	return commandTag.RowsAffected() > 0, nil
 }
 
 func (app *application) upsertProjectFromUpload(ctx context.Context, email string, prepared preparedUpload) (project, error) {

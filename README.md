@@ -64,6 +64,8 @@ Local auth now uses email/password plus an HTTP-only session cookie on the app o
 - `sam@velori.dev`
 - `velori-demo`
 
+The dashboard now supports deleting your own projects, which helps keep local testing clean while iterating on upload and redeploy behavior.
+
 The current upload flow now sends real multipart file uploads to the API for both folder and zip selections. Folder uploads are normalized into a temporary ingest directory, and zip uploads are extracted server-side into that same staging area before validation.
 
 Use `INGEST_ROOT` to override the local staging directory. By default it uses `api/.data/ingest` when the API is started from `api/`.

@@ -180,7 +180,7 @@ Purpose: make the MVP usable enough for real tester feedback.
 - [ ] Show project empty state
 - [ ] Show recent-first sorting
 - [ ] Add copy URL action
-- [ ] Add delete project action
+- [x] Add delete project action
 - [ ] Add deploy status badges
 - [ ] Add upload progress and final status messaging
 - [ ] Add simple deploy guide copy for supported uploads
