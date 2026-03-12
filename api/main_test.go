@@ -139,6 +139,48 @@ func TestHashTokenIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestCountForMatchReturnsOneForNewProject(t *testing.T) {
+	t.Parallel()
+
+	got := countForMatch(nil)
+	if got != 1 {
+		t.Fatalf("expected new project deploy count 1, got %d", got)
+	}
+}
+
+func TestCountForMatchIncrementsExistingProjectDeploys(t *testing.T) {
+	t.Parallel()
+
+	got := countForMatch([]projectRecord{{Deploys: 4}})
+	if got != 5 {
+		t.Fatalf("expected redeploy count 5, got %d", got)
+	}
+}
+
+func TestValidateProjectMatchCountAllowsZeroAndOneMatch(t *testing.T) {
+	t.Parallel()
+
+	if err := validateProjectMatchCount(nil, "Prototype"); err != nil {
+		t.Fatalf("expected zero matches to be allowed, got %v", err)
+	}
+
+	if err := validateProjectMatchCount([]projectRecord{{ID: "proj_1"}}, "Prototype"); err != nil {
+		t.Fatalf("expected one exact match to be allowed, got %v", err)
+	}
+}
+
+func TestValidateProjectMatchCountRejectsMultipleMatches(t *testing.T) {
+	t.Parallel()
+
+	err := validateProjectMatchCount([]projectRecord{{ID: "proj_1"}, {ID: "proj_2"}}, "Prototype")
+	if err == nil {
+		t.Fatal("expected multiple exact matches to be rejected")
+	}
+	if !strings.Contains(err.Error(), "multiple existing projects match") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCreateSeedDeployFilesUsesProjectRelativeLinks(t *testing.T) {
 	t.Parallel()
 

@@ -53,6 +53,16 @@ cd api
 go test ./...
 ```
 
+### Smoke test
+
+With Postgres, the API, and the web app running locally:
+
+```bash
+./scripts/local-smoke-test.sh
+```
+
+This signs in with the seeded demo account, uploads a small static prototype, then redeploys the same project name and verifies that the stable live URL serves the updated HTML.
+
 The web app expects the API at `http://localhost:8080`.
 
 Local hosted prototype content is served separately at `http://127.0.0.1:8081`.

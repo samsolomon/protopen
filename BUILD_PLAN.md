@@ -125,6 +125,7 @@ Purpose: serve the latest successful deploy at a stable public URL.
 
 - [x] Implement route resolution for `~username/project-slug`
 - [ ] Resolve project to current deploy
+- [x] Resolve project to current deploy
 - [x] Serve `index.html` for the project root
 - [x] Serve static asset files from the current deploy
 - [x] Support SPA fallback rules for unmatched routes
@@ -135,7 +136,7 @@ Purpose: serve the latest successful deploy at a stable public URL.
 Exit criteria:
 
 - [x] A shared project URL renders the latest successful deploy
-- [ ] A redeploy changes the served content without changing the URL
+- [x] A redeploy changes the served content without changing the URL
 
 ### Milestone 6 - Origin Isolation
 
@@ -179,7 +180,7 @@ Purpose: make the MVP usable enough for real tester feedback.
 
 - [ ] Show project empty state
 - [ ] Show recent-first sorting
-- [ ] Add copy URL action
+- [x] Add copy URL action
 - [x] Add delete project action
 - [ ] Add deploy status badges
 - [ ] Add upload progress and final status messaging
@@ -188,27 +189,27 @@ Purpose: make the MVP usable enough for real tester feedback.
 
 Exit criteria:
 
-- [ ] A non-technical tester can sign in, upload, copy a link, redeploy, and delete a project without help
+- [x] A non-technical tester can sign in, upload, copy a link, redeploy, and delete a project without help
 
 ## Cross-Cutting Checklists
 
 ### Supported Site Contract
 
-- [ ] Require a usable `index.html`
-- [ ] Support prebuilt static assets only
+- [x] Require a usable `index.html`
+- [x] Support prebuilt static assets only
 - [ ] Reject or clearly fail unsupported backend assumptions
 - [ ] Document how root-relative asset paths are handled
-- [ ] Document SPA fallback behavior
+- [x] Document SPA fallback behavior
 - [ ] Document that service workers are not supported in v1
 
 ### Security and Abuse
 
-- [ ] Separate trusted app origin from untrusted content origin
+- [x] Separate trusted app origin from untrusted content origin
 - [ ] Add upload rate limiting
 - [ ] Add per-user storage quota
 - [ ] Add per-user project cap
 - [ ] Add server-side request logging for upload failures
-- [ ] Add archive safety checks
+- [x] Add archive safety checks
 - [ ] Define allowed and blocked file behaviors for v1
 
 ### Observability
@@ -222,11 +223,11 @@ Exit criteria:
 ### Testing
 
 - [x] Add API tests for upload validation rules
-- [ ] Add API tests for exact-name redeploy behavior
+- [x] Add API tests for exact-name redeploy behavior
 - [ ] Add frontend tests for upload validation UI
-- [ ] Add end-to-end test for folder upload flow
+- [x] Add end-to-end test for folder upload flow
 - [ ] Add end-to-end test for zip upload flow
-- [ ] Add end-to-end test for stable URL redeploy behavior
+- [x] Add end-to-end test for stable URL redeploy behavior
 
 ## First End-to-End Demo Target
 
@@ -245,7 +246,38 @@ The first truly useful internal demo should support this script:
 These are the next items to build from the current repo state:
 
 - [x] replace the in-memory project store with a real database-backed project model
-- [ ] implement real multipart upload handling in the API
-- [ ] choose and document the local app-origin vs content-origin setup
+- [x] implement real multipart upload handling in the API
+- [x] choose and document the local app-origin vs content-origin setup
 - [x] persist deploy metadata and introduce deploy lifecycle states
-- [ ] serve stored deploys at stable project URLs
+- [x] serve stored deploys at stable project URLs
+
+## Current Status
+
+Velori is now at a real local testable checkpoint.
+
+Verified locally:
+
+- sign in with the demo account
+- upload a static folder
+- receive a live URL on the content origin
+- open the hosted prototype without signing in
+- redeploy the same project name and keep the same URL
+- delete a project from the dashboard
+
+Still missing before broader external testing:
+
+- zip-specific end-to-end smoke coverage
+- frontend automated tests
+- password reset or recovery flow
+- production origin model and stronger security hardening
+- more polished status/error UI
+
+## Pick Up Next Time
+
+Recommended next implementation order:
+
+- [ ] add zip end-to-end smoke coverage
+- [ ] add frontend tests for auth and upload states
+- [ ] improve dashboard polish: recent sorting, deploy badges, clearer upload states
+- [ ] add password reset or explicitly defer it in-product
+- [ ] harden quotas, logging, and security posture for broader testing

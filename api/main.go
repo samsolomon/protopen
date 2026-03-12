@@ -838,8 +838,8 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 		return project{}, err
 	}
 
-	if len(matches) > 1 {
-		return project{}, fmt.Errorf("multiple existing projects match %q", payload.Name)
+	if err := validateProjectMatchCount(matches, payload.Name); err != nil {
+		return project{}, err
 	}
 
 	totalSize := int64(0)
@@ -1536,6 +1536,13 @@ func countForMatch(matches []projectRecord) int {
 		return matches[0].Deploys + 1
 	}
 	return 1
+}
+
+func validateProjectMatchCount(matches []projectRecord, name string) error {
+	if len(matches) > 1 {
+		return fmt.Errorf("multiple existing projects match %q", name)
+	}
+	return nil
 }
 
 func slugify(value string) string {
