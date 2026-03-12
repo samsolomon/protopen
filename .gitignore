@@ -5,3 +5,4 @@ web/node_modules/
 web/dist/
 api/velori-api
 api/api
+api/.data/

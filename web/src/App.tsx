@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 type Project = {
   id: string
@@ -7,6 +7,13 @@ type Project = {
   updatedAt: string
   deployCount: number
   liveUrl: string
+}
+
+type SessionUser = {
+  id: string
+  email: string
+  name: string
+  username: string
 }
 
 type UploadMode = 'files' | 'zip'
@@ -26,6 +33,14 @@ type UploadSummary = {
   includesIndexHtml: boolean
 }
 
+type AuthMode = 'sign-in' | 'sign-up'
+
+type AuthFormState = {
+  name: string
+  email: string
+  password: string
+}
+
 const API_BASE_URL = 'http://localhost:8080'
 const MAX_DEPLOY_BYTES = 100 * 1024 * 1024
 const MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -34,34 +49,80 @@ type UploadState = 'idle' | 'dragging' | 'uploading' | 'success'
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [user, setUser] = useState<SessionUser | null>(null)
+  const [authMode, setAuthMode] = useState<AuthMode>('sign-in')
+  const [authForm, setAuthForm] = useState<AuthFormState>({ name: '', email: demoEmail, password: demoPassword })
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authPending, setAuthPending] = useState(false)
+  const [sessionLoading, setSessionLoading] = useState(true)
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [message, setMessage] = useState('Drop a folder or zip to deploy')
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null)
   const zipInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    void loadProjects()
+    void loadSession()
   }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setProjects([])
+      setIsLoading(false)
+      return
+    }
+
+    void loadProjects()
+  }, [user])
 
   const stats = useMemo(
     () => [
       { label: 'Projects', value: projects.length.toString().padStart(2, '0') },
-      {
-        label: 'Fastest publish',
-        value: '<10s',
-      },
-      { label: 'Deploys this week', value: projects.reduce((sum, p) => sum + p.deployCount, 0).toString() },
+      { label: 'Fastest publish', value: '<10s' },
+      { label: 'Deploys this week', value: projects.reduce((sum, project) => sum + project.deployCount, 0).toString() },
     ],
     [projects],
   )
 
+  const loadSession = async () => {
+    try {
+      setSessionLoading(true)
+      const response = await fetch(`${API_BASE_URL}/api/session`, {
+        credentials: 'include',
+      })
+
+      if (response.status === 401) {
+        setUser(null)
+        return
+      }
+
+      if (!response.ok) {
+        throw new Error('Could not load session')
+      }
+
+      const data = (await response.json()) as { user: SessionUser }
+      setUser(data.user)
+      setAuthError(null)
+    } catch (loadError) {
+      setAuthError(loadError instanceof Error ? loadError.message : 'Could not load session')
+    } finally {
+      setSessionLoading(false)
+    }
+  }
+
   const loadProjects = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch(`${API_BASE_URL}/api/projects`)
+      const response = await fetch(`${API_BASE_URL}/api/projects`, {
+        credentials: 'include',
+      })
+
+      if (response.status === 401) {
+        setUser(null)
+        return
+      }
 
       if (!response.ok) {
         throw new Error('Could not load projects')
@@ -69,11 +130,55 @@ function App() {
 
       const data = (await response.json()) as { projects: Project[] }
       setProjects(data.projects)
+      setError(null)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load projects')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuthPending(true)
+    setAuthError(null)
+
+    try {
+      const endpoint = authMode === 'sign-in' ? '/api/sign-in' : '/api/sign-up'
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(authForm),
+      })
+
+      const data = (await response.json()) as { error?: string; user?: SessionUser }
+      if (!response.ok || !data.user) {
+        throw new Error(data.error ?? 'Could not authenticate')
+      }
+
+      setUser(data.user)
+      setAuthForm((current) => ({ ...current, password: authMode === 'sign-up' ? '' : current.password }))
+    } catch (authFailure) {
+      setAuthError(authFailure instanceof Error ? authFailure.message : 'Could not authenticate')
+    } finally {
+      setAuthPending(false)
+    }
+  }
+
+  const signOut = async () => {
+    await fetch(`${API_BASE_URL}/api/sign-out`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+
+    setUser(null)
+    setProjects([])
+    setUploadSummary(null)
+    setMessage('Drop a folder or zip to deploy')
+    setError(null)
   }
 
   const startUpload = async (summary: UploadSummary, files: UploadFile[]) => {
@@ -95,7 +200,13 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/uploads`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       })
+
+      if (response.status === 401) {
+        setUser(null)
+        throw new Error('Your session expired. Sign in again to upload.')
+      }
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: string }
@@ -104,7 +215,7 @@ function App() {
 
       await loadProjects()
       setUploadState('success')
-      setMessage(`Live soon - ${summary.name} added to the queue`)
+      setMessage(`Live now - ${summary.name} was deployed`) 
     } catch (uploadError) {
       setUploadState('idle')
       setMessage('Drop a folder or zip to deploy')
@@ -195,6 +306,89 @@ function App() {
     await handleSelection(event.dataTransfer.files)
   }
 
+  if (sessionLoading) {
+    return <div className="app-shell loading-shell">Checking session...</div>
+  }
+
+  if (!user) {
+    return (
+      <div className="app-shell auth-shell">
+        <div className="hero-glow hero-glow-left" />
+        <div className="hero-glow hero-glow-right" />
+
+        <main className="auth-layout">
+          <section className="auth-copy-card">
+            <p className="eyebrow">Velori v1</p>
+            <h1>Publish static prototypes in seconds.</h1>
+            <p>
+              Sign in to upload and manage your projects. Live prototype links stay public on the separate content
+              origin.
+            </p>
+            <div className="auth-tips">
+              <span>Demo account</span>
+              <strong>{demoEmail}</strong>
+              <strong>{demoPassword}</strong>
+            </div>
+          </section>
+
+          <section className="auth-form-card">
+            <div className="auth-toggle">
+              <button
+                className={authMode === 'sign-in' ? 'primary-button' : 'ghost-button'}
+                onClick={() => setAuthMode('sign-in')}
+                type="button"
+              >
+                Sign in
+              </button>
+              <button
+                className={authMode === 'sign-up' ? 'primary-button' : 'ghost-button'}
+                onClick={() => setAuthMode('sign-up')}
+                type="button"
+              >
+                Create account
+              </button>
+            </div>
+
+            <form className="auth-form" onSubmit={(event) => void submitAuth(event)}>
+              {authMode === 'sign-up' ? (
+                <label>
+                  <span>Name</span>
+                  <input
+                    value={authForm.name}
+                    onChange={(event) => setAuthForm((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Taylor Prototype"
+                  />
+                </label>
+              ) : null}
+              <label>
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="sam@velori.dev"
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={authForm.password}
+                  onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="At least 8 characters"
+                />
+              </label>
+              {authError ? <p className="error-banner">{authError}</p> : null}
+              <button className="primary-button auth-submit" disabled={authPending} type="submit">
+                {authPending ? 'Working...' : authMode === 'sign-in' ? 'Sign in' : 'Create account'}
+              </button>
+            </form>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <div className="hero-glow hero-glow-left" />
@@ -205,7 +399,12 @@ function App() {
           <p className="eyebrow">Velori v1</p>
           <h1>Publish static prototypes in seconds.</h1>
         </div>
-        <button className="ghost-button">Simple account</button>
+        <div className="topbar-user">
+          <span>{user.name}</span>
+          <button className="ghost-button" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="layout">
@@ -228,7 +427,7 @@ function App() {
           >
             <div className="dropzone-ring" />
             <p className="dropzone-title">{message}</p>
-            <p className="dropzone-subtitle">Static assets only: HTML, CSS, JavaScript, images, fonts</p>
+            <p className="dropzone-subtitle">Signed in as {user.email}. Static assets only: HTML, CSS, JavaScript, images, fonts</p>
             {uploadSummary ? (
               <div className="upload-summary">
                 <span>{uploadSummary.fileCount} files</span>
@@ -315,6 +514,7 @@ function App() {
 
           <div className="project-grid">
             {isLoading ? <article className="project-card project-card-empty">Loading projects...</article> : null}
+            {!isLoading && projects.length === 0 ? <article className="project-card project-card-empty">No projects yet. Upload your first static prototype.</article> : null}
             {projects.map((project) => (
               <article key={project.id} className="project-card">
                 <div className="project-preview">
@@ -329,7 +529,9 @@ function App() {
                 </div>
                 <div className="project-actions">
                   <a href={project.liveUrl}>{project.liveUrl}</a>
-                  <button className="ghost-button small">Copy URL</button>
+                  <button className="ghost-button small" onClick={() => void navigator.clipboard.writeText(project.liveUrl)}>
+                    Copy URL
+                  </button>
                 </div>
               </article>
             ))}
@@ -347,5 +549,8 @@ function formatBytes(bytes: number) {
 
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+const demoEmail = 'sam@velori.dev'
+const demoPassword = 'velori-demo'
 
 export default App

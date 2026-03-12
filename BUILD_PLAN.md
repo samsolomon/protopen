@@ -158,20 +158,20 @@ Exit criteria:
 
 Purpose: require sign-in for upload/manage while keeping viewing public.
 
-- [ ] Choose auth implementation for the simple account system
-- [ ] Implement account creation
-- [ ] Implement sign-in
-- [ ] Implement sign-out
-- [ ] Protect dashboard and management APIs behind auth
-- [ ] Keep project viewing public by link
-- [ ] Associate projects with the signed-in user
+- [x] Choose auth implementation for the simple account system
+- [x] Implement account creation
+- [x] Implement sign-in
+- [x] Implement sign-out
+- [x] Protect dashboard and management APIs behind auth
+- [x] Keep project viewing public by link
+- [x] Associate projects with the signed-in user
 - [ ] Add basic password reset or account recovery path if needed by chosen auth approach
 
 Exit criteria:
 
-- [ ] Anonymous users cannot access the dashboard
-- [ ] Anonymous users can still view live project URLs
-- [ ] Each user only sees and manages their own projects
+- [x] Anonymous users cannot access the dashboard
+- [x] Anonymous users can still view live project URLs
+- [x] Each user only sees and manages their own projects
 
 ### Milestone 8 - Dashboard Polish for Testers
 
@@ -221,7 +221,7 @@ Exit criteria:
 
 ### Testing
 
-- [ ] Add API tests for upload validation rules
+- [x] Add API tests for upload validation rules
 - [ ] Add API tests for exact-name redeploy behavior
 - [ ] Add frontend tests for upload validation UI
 - [ ] Add end-to-end test for folder upload flow

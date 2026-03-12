@@ -46,11 +46,23 @@ cd api
 go run .
 ```
 
+### Tests
+
+```bash
+cd api
+go test ./...
+```
+
 The web app expects the API at `http://localhost:8080`.
 
 Local hosted prototype content is served separately at `http://localhost:8081`.
 
 The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
+
+Local auth now uses email/password plus an HTTP-only session cookie on the app origin. Use the seeded demo account:
+
+- `sam@velori.dev`
+- `velori-demo`
 
 The current upload flow now sends real multipart file uploads to the API for both folder and zip selections. Folder uploads are normalized into a temporary ingest directory, and zip uploads are extracted server-side into that same staging area before validation.
 
