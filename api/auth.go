@@ -99,7 +99,7 @@ func (app *application) signOutHandler(w http.ResponseWriter, r *http.Request) {
 		_, _ = app.db.Exec(r.Context(), `delete from sessions where token_hash = $1`, hashed)
 	}
 
-	clearSessionCookie(w)
+	app.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -189,26 +189,28 @@ func (app *application) createSession(w http.ResponseWriter, ctx context.Context
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   30 * 24 * 60 * 60,
-	})
+	http.SetCookie(w, app.newSessionCookie(token, 30*24*60*60))
 	return nil
 }
 
-func clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+func (app *application) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, app.newSessionCookie("", -1))
+}
+
+func (app *application) newSessionCookie(value string, maxAge int) *http.Cookie {
+	cookie := &http.Cookie{
 		Name:     sessionCookie,
-		Value:    "",
+		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   -1,
-	})
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	}
+	if app.appOrigin != "" && strings.HasPrefix(app.appOrigin, "https://") {
+		cookie.Secure = true
+		cookie.Domain = strings.TrimPrefix(app.appOrigin, "https://")
+	}
+	return cookie
 }
 
 func uniqueUsername(ctx context.Context, db *pgxpool.Pool, email string) (string, error) {

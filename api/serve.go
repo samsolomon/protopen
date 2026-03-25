@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"log"
 	"mime"
@@ -38,14 +39,91 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resolvedPath, fallbackToIndex, err := resolveAssetPath(deployment.siteRoot, assetPath)
+	if app.store != nil {
+		app.serveFromR2(w, r, deployment.siteRoot, assetPath)
+	} else {
+		app.serveFromFilesystem(w, r, deployment.siteRoot, assetPath)
+	}
+}
+
+func (app *application) serveFromR2(w http.ResponseWriter, r *http.Request, prefix string, assetPath string) {
+	prefix = strings.TrimSuffix(prefix, "/")
+
+	// Determine the R2 key to fetch
+	key := prefix + "/index.html"
+	if assetPath != "" {
+		normalized, err := normalizeUploadPath(assetPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		key = prefix + "/" + normalized
+	}
+
+	// Try exact key
+	body, contentType, err := app.store.download(r.Context(), key)
+	if err != nil && !isNotFound(err) {
+		log.Printf("r2 download error: %v", err)
+		http.Error(w, "could not serve file", http.StatusInternalServerError)
+		return
+	}
+
+	if err == nil {
+		defer body.Close()
+		serveR2Response(w, key, contentType, body)
+		return
+	}
+
+	if assetPath != "" && path.Ext(assetPath) == "" {
+		dirKey := key + "/index.html"
+		body, contentType, err = app.store.download(r.Context(), dirKey)
+		if err == nil {
+			defer body.Close()
+			serveR2Response(w, dirKey, contentType, body)
+			return
+		}
+
+		indexKey := prefix + "/index.html"
+		body, contentType, err = app.store.download(r.Context(), indexKey)
+		if err == nil {
+			defer body.Close()
+			w.Header().Set("Cache-Control", "no-store")
+			if contentType != "" {
+				w.Header().Set("Content-Type", contentType)
+			}
+			io.Copy(w, body)
+			return
+		}
+	}
+
+	http.NotFound(w, r)
+}
+
+func serveR2Response(w http.ResponseWriter, key string, contentType string, body io.Reader) {
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	} else if ct := mime.TypeByExtension(filepath.Ext(key)); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+
+	if strings.HasSuffix(key, "index.html") {
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+	}
+
+	io.Copy(w, body)
+}
+
+func (app *application) serveFromFilesystem(w http.ResponseWriter, r *http.Request, siteRoot string, assetPath string) {
+	resolvedPath, fallbackToIndex, err := resolveAssetPath(siteRoot, assetPath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	if fallbackToIndex {
-		resolvedPath = filepath.Join(deployment.siteRoot, "index.html")
+		resolvedPath = filepath.Join(siteRoot, "index.html")
 	}
 
 	if err := serveFile(w, r, resolvedPath); err != nil {

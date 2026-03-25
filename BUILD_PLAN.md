@@ -134,21 +134,18 @@ Velori is at a real local testable checkpoint. The end-to-end demo script works:
 
 These are ordered by priority. Each item is scoped to be completable independently.
 
-### 1. Code health
+### 1. Code health (done)
 
-The codebase needs splitting before it gets harder to change.
+- [x] Split `api/main.go` into domain files: auth.go, handlers.go, httputil.go, upload.go, storage.go, serve.go, seed.go, migrate/
+- [x] Split `web/src/App.tsx` into components: AuthPage, Dashboard, UploadPanel, ProjectCard + types, constants, api, upload-helpers
+- [x] Remove dead "View deploy guide" button
+- [x] Gate the "Simulate upload" button behind `import.meta.env.DEV`
+- [x] Migrate frontend to shadcn/ui + Tailwind CSS
 
-- [ ] Split `api/main.go` (1628 lines) into packages: handlers, storage, auth, migrations
-- [ ] Split `web/src/App.tsx` (592 lines) into components: AuthPage, Dashboard, UploadPanel, ProjectCard
-- [ ] Remove dead "View deploy guide" button or wire it up
-- [ ] Remove or gate the "Simulate upload" button for non-dev builds
+### 2. Zip smoke test (done)
 
-### 2. Zip smoke test
-
-Quick win — extend the existing smoke test or add a second script.
-
-- [ ] Add end-to-end smoke test for zip upload flow
-- [ ] Verify zip and folder uploads produce the same served result
+- [x] Add end-to-end smoke test for zip upload flow (`scripts/zip-smoke-test.sh`)
+- [x] Verify zip and folder uploads produce the same served result
 
 ### 3. Dashboard polish
 
@@ -228,6 +225,6 @@ The current filesystem-based storage under `.data/ingest/` works for local dev. 
 - [x] API tests for upload validation rules
 - [x] API tests for exact-name redeploy behavior
 - [x] End-to-end smoke test for folder upload and stable URL redeploy
-- [ ] End-to-end smoke test for zip upload flow
+- [x] End-to-end smoke test for zip upload flow
 - [ ] Frontend tests for auth flow
 - [ ] Frontend tests for upload validation UI

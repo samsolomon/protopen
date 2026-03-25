@@ -2,10 +2,12 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -40,6 +42,17 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if app.store != nil && prepared.normalizedTo != "" {
+		r2Prefix, uploadErr := app.uploadToR2(r.Context(), prepared)
+		if uploadErr != nil {
+			cleanupPreparedUpload(prepared)
+			log.Printf("r2 upload: %v", uploadErr)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not store uploaded files"})
+			return
+		}
+		prepared.normalizedTo = r2Prefix
+	}
+
 	result, err := app.upsertProjectFromUpload(r.Context(), user.Email, prepared)
 	if err != nil {
 		cleanupPreparedUpload(prepared)
@@ -53,10 +66,13 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if app.store != nil {
+		cleanupPreparedUpload(prepared)
+	}
+
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"message": "Upload staged and recorded.",
 		"status":  "queued",
-		"ingest":  prepared.normalizedTo,
 		"project": result,
 	})
 }
@@ -454,4 +470,43 @@ func validateUpload(payload uploadRequest) error {
 	}
 
 	return nil
+}
+
+func (app *application) uploadToR2(ctx context.Context, prepared preparedUpload) (string, error) {
+	prefix := generateID("deploy")
+	siteRoot := prepared.normalizedTo
+
+	err := filepath.WalkDir(siteRoot, func(pathname string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+
+		relativePath, relErr := filepath.Rel(siteRoot, pathname)
+		if relErr != nil {
+			return relErr
+		}
+
+		key := prefix + "/" + filepath.ToSlash(relativePath)
+
+		file, openErr := os.Open(pathname)
+		if openErr != nil {
+			return openErr
+		}
+		defer file.Close()
+
+		contentType := mime.TypeByExtension(filepath.Ext(pathname))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		return app.store.upload(ctx, key, file, contentType)
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return prefix, nil
 }
