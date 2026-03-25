@@ -3,6 +3,7 @@ import type { Project, SessionUser } from './types'
 import { fetchSession, fetchProjects, postSignOut, deleteProjectById, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
 import { Dashboard } from './Dashboard'
+import { Toaster } from '@/components/ui/sonner'
 
 function App() {
   const [user, setUser] = useState<SessionUser | null>(null)
@@ -82,27 +83,37 @@ function App() {
     setUser(null)
   }
 
+  let content
   if (sessionLoading) {
-    return <div className="app-shell loading-shell">Checking session...</div>
-  }
-
-  if (!user) {
-    return <AuthPage onLogin={setUser} />
+    content = (
+      <div className="flex min-h-svh items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking session...</p>
+      </div>
+    )
+  } else if (!user) {
+    content = <AuthPage onLogin={setUser} />
+  } else {
+    content = (
+      <Dashboard
+        user={user}
+        projects={projects}
+        isLoading={isLoading}
+        deletingProjectID={deletingProjectID}
+        error={error}
+        setError={setError}
+        onSignOut={() => void signOut()}
+        onDeleteProject={(id) => void deleteProject(id)}
+        onProjectsChanged={() => void loadProjects()}
+        onSessionExpired={handleSessionExpired}
+      />
+    )
   }
 
   return (
-    <Dashboard
-      user={user}
-      projects={projects}
-      isLoading={isLoading}
-      deletingProjectID={deletingProjectID}
-      error={error}
-      setError={setError}
-      onSignOut={() => void signOut()}
-      onDeleteProject={(id) => void deleteProject(id)}
-      onProjectsChanged={() => void loadProjects()}
-      onSessionExpired={handleSessionExpired}
-    />
+    <>
+      {content}
+      <Toaster />
+    </>
   )
 }
 

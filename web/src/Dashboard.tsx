@@ -1,6 +1,8 @@
 import type { Project, SessionUser } from './types'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 type DashboardProps = {
   user: SessionUser
@@ -28,56 +30,58 @@ export function Dashboard({
   onSessionExpired,
 }: DashboardProps) {
   return (
-    <div className="app-shell">
-      <div className="hero-glow hero-glow-left" />
-      <div className="hero-glow hero-glow-right" />
-
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Velori v1</p>
-          <h1>Publish static prototypes in seconds.</h1>
-        </div>
-        <div className="topbar-user">
-          <span>{user.name}</span>
-          <button className="ghost-button" onClick={() => void onSignOut()}>
-            Sign out
-          </button>
+    <div className="min-h-svh bg-background">
+      <header className="border-b">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
+          <h1 className="text-lg font-bold tracking-tight">Velori</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{user.name}</span>
+            <Button variant="ghost" size="sm" onClick={() => void onSignOut()}>
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="layout">
-        <UploadPanel
-          user={user}
-          projects={projects}
-          error={error}
-          setError={setError}
-          onProjectsChanged={onProjectsChanged}
-          onSessionExpired={onSessionExpired}
-        />
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        <div className="flex flex-col gap-8">
+          <UploadPanel
+            user={user}
+            projects={projects}
+            error={error}
+            setError={setError}
+            onProjectsChanged={onProjectsChanged}
+            onSessionExpired={onSessionExpired}
+          />
 
-        <section className="projects-panel">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Your projects</p>
-              <h2>Stable URLs, instant redeploys</h2>
-            </div>
-          </div>
-
-          <div className="project-grid">
-            {isLoading ? <article className="project-card project-card-empty">Loading projects...</article> : null}
-            {!isLoading && projects.length === 0 ? (
-              <article className="project-card project-card-empty">No projects yet. Upload your first static prototype.</article>
-            ) : null}
-            {projects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                isDeleting={deletingProjectID === project.id}
-                onDelete={onDeleteProject}
-              />
-            ))}
-          </div>
-        </section>
+          <section>
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">Your projects</h2>
+            {isLoading ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  Loading projects...
+                </CardContent>
+              </Card>
+            ) : projects.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No projects yet. Upload your first static prototype.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {projects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    isDeleting={deletingProjectID === project.id}
+                    onDelete={onDeleteProject}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     </div>
   )
