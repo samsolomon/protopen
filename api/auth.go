@@ -234,7 +234,9 @@ func (app *application) newSessionCookie(value string, maxAge int) *http.Cookie 
 	}
 	if app.appOrigin != "" && strings.HasPrefix(app.appOrigin, "https://") {
 		cookie.Secure = true
-		cookie.Domain = strings.TrimPrefix(app.appOrigin, "https://")
+	}
+	if app.cookieDomain != "" {
+		cookie.Domain = app.cookieDomain
 	}
 	return cookie
 }

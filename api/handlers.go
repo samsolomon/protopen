@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -51,27 +52,69 @@ func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if r.Method != http.MethodDelete {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
+	switch r.Method {
+	case http.MethodDelete:
+		user, err := app.requireSessionUser(r)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
 
+		deleted, err := app.deleteProject(r.Context(), user.Email, projectID)
+		if err != nil {
+			log.Printf("delete project: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+			return
+		}
+		if !deleted {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+
+	case http.MethodPatch:
+		app.updateProjectHandler(w, r, projectID)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Request, projectID string) {
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	deleted, err := app.deleteProject(r.Context(), user.Email, projectID)
-	if err != nil {
-		log.Printf("delete project: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+	var payload struct {
+		IsPublic *bool `json:"isPublic"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
 	}
-	if !deleted {
+
+	if payload.IsPublic == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "isPublic is required"})
+		return
+	}
+
+	commandTag, err := app.db.Exec(r.Context(), `
+		update projects set is_public = $1, updated_at = now()
+		where id = $2 and deleted_at is null
+		  and user_id = (select id from users where email = $3)
+	`, *payload.IsPublic, projectID, user.Email)
+	if err != nil {
+		log.Printf("update project visibility: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update project"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "isPublic": *payload.IsPublic})
 }

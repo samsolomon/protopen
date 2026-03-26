@@ -18,7 +18,8 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 			p.slug,
 			p.updated_at,
 			coalesce(count(d.id), 0) as deploy_count,
-			u.username
+			u.username,
+			p.is_public
 		from projects p
 		join users u on u.id = p.user_id
 		left join deploys d on d.project_id = p.id
@@ -40,7 +41,7 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 			deployCount int64
 		)
 
-		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &username); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &username, &entry.IsPublic); err != nil {
 			return nil, err
 		}
 
@@ -160,6 +161,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 		UpdatedAt:   relativeTime(now),
 		DeployCount: countForMatch(matches),
 		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, username, entry.Slug),
+		IsPublic:    true,
 	}, nil
 }
 

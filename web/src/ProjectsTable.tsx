@@ -11,13 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ChevronDown, ChevronUp, Copy, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Globe, Lock, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ProjectsTableProps = {
   projects: Project[]
   deletingProjectID: string | null
   onDelete: (projectID: string) => void
+  onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
 }
@@ -26,6 +27,7 @@ export function ProjectsTable({
   projects,
   deletingProjectID,
   onDelete,
+  onVisibilityToggle,
   onProjectsChanged,
   onSessionExpired,
 }: ProjectsTableProps) {
@@ -84,6 +86,14 @@ export function ProjectsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
+                        aria-label={project.isPublic ? 'Make private' : 'Make public'}
+                      >
+                        {project.isPublic ? <Globe /> : <Lock />}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon-xs"

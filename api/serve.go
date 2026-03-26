@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -15,6 +16,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 )
+
+const privateSiteHTML = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Private Site</title></head>
+<body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<p>This site is private. <a href="%s">Sign in</a> to view it.</p>
+</body></html>`
 
 func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
@@ -37,6 +44,15 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		log.Printf("lookup live deploy: %v", err)
 		http.Error(w, "could not load project", http.StatusInternalServerError)
 		return
+	}
+
+	if !deployment.isPublic {
+		if _, err := app.requireSessionUser(r); err != nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
+			return
+		}
 	}
 
 	if app.store != nil {
@@ -158,18 +174,19 @@ func parseProjectPath(rawPath string) (username string, slug string, assetPath s
 
 func (app *application) lookupLiveDeploy(ctx context.Context, username string, slug string) (liveDeploy, error) {
 	var siteRoot string
+	var isPublic bool
 	err := app.db.QueryRow(ctx, `
-		select d.storage_prefix
+		select d.storage_prefix, p.is_public
 		from projects p
 		join users u on u.id = p.user_id
 		join deploys d on d.id = p.current_deploy_id
 		where u.username = $1 and p.slug = $2 and p.deleted_at is null
-	`, username, slug).Scan(&siteRoot)
+	`, username, slug).Scan(&siteRoot, &isPublic)
 	if err != nil {
 		return liveDeploy{}, err
 	}
 
-	return liveDeploy{siteRoot: siteRoot}, nil
+	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic}, nil
 }
 
 func resolveAssetPath(siteRoot string, requested string) (string, bool, error) {

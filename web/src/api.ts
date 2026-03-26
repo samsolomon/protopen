@@ -101,6 +101,24 @@ export async function deleteProjectById(projectID: string): Promise<void> {
   }
 }
 
+export async function updateProjectVisibility(projectId: string, isPublic: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isPublic }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string }
+    throw new Error(body.error ?? 'Could not update project')
+  }
+}
+
 export async function fetchDeploys(projectId: string): Promise<Deploy[]> {
   const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/deploys`, {
     credentials: 'include',

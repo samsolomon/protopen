@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Project, SessionUser } from './types'
-import { fetchSession, fetchProjects, postSignOut, deleteProjectById, SessionExpiredError } from './api'
+import { fetchSession, fetchProjects, postSignOut, deleteProjectById, updateProjectVisibility, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
 import { CLIAuthPage } from './CLIAuthPage'
 import { Dashboard } from './Dashboard'
@@ -82,6 +82,20 @@ function App() {
     }
   }
 
+  const toggleVisibility = async (projectID: string, isPublic: boolean) => {
+    setProjects((current) => current.map((p) => (p.id === projectID ? { ...p, isPublic } : p)))
+    try {
+      await updateProjectVisibility(projectID, isPublic)
+    } catch (toggleError) {
+      if (toggleError instanceof SessionExpiredError) {
+        setUser(null)
+        return
+      }
+      setProjects((current) => current.map((p) => (p.id === projectID ? { ...p, isPublic: !isPublic } : p)))
+      setError(toggleError instanceof Error ? toggleError.message : 'Could not update project')
+    }
+  }
+
   const handleSessionExpired = () => {
     setUser(null)
   }
@@ -109,6 +123,7 @@ function App() {
         onSignOut={() => void signOut()}
         onUserUpdated={setUser}
         onDeleteProject={(id) => void deleteProject(id)}
+        onVisibilityToggle={(id, isPublic) => void toggleVisibility(id, isPublic)}
         onProjectsChanged={() => void loadProjects()}
         onSessionExpired={handleSessionExpired}
       />

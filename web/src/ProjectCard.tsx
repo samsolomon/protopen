@@ -10,11 +10,12 @@ type ProjectCardProps = {
   project: Project
   isDeleting: boolean
   onDelete: (projectID: string) => void
+  onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
 }
 
-export function ProjectCard({ project, isDeleting, onDelete, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
+export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
   const [showHistory, setShowHistory] = useState(false)
 
   return (
@@ -46,6 +47,9 @@ export function ProjectCard({ project, isDeleting, onDelete, onProjectsChanged, 
         ) : null}
       </CardContent>
       <CardFooter className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onVisibilityToggle(project.id, !project.isPublic)}>
+          {project.isPublic ? 'Public' : 'Private'}
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)}>
           {showHistory ? 'Hide history' : 'History'}
         </Button>

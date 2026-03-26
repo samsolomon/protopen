@@ -40,6 +40,7 @@ type DashboardProps = {
   onSignOut: () => void
   onUserUpdated: (user: SessionUser) => void
   onDeleteProject: (projectID: string) => void
+  onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
 }
@@ -54,6 +55,7 @@ export function Dashboard({
   onSignOut,
   onUserUpdated,
   onDeleteProject,
+  onVisibilityToggle,
   onProjectsChanged,
   onSessionExpired,
 }: DashboardProps) {
@@ -246,6 +248,7 @@ export function Dashboard({
                       projects={projects}
                       deletingProjectID={deletingProjectID}
                       onDelete={onDeleteProject}
+                      onVisibilityToggle={onVisibilityToggle}
                       onProjectsChanged={onProjectsChanged}
                       onSessionExpired={onSessionExpired}
                     />
@@ -257,6 +260,7 @@ export function Dashboard({
                         project={project}
                         isDeleting={deletingProjectID === project.id}
                         onDelete={onDeleteProject}
+                        onVisibilityToggle={onVisibilityToggle}
                         onProjectsChanged={onProjectsChanged}
                         onSessionExpired={onSessionExpired}
                       />

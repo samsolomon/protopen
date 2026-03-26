@@ -31,6 +31,7 @@ type application struct {
 	frontendOrigin string
 	appOrigin      string
 	contentOrigin  string
+	cookieDomain   string
 }
 
 type sessionUser struct {
@@ -53,6 +54,7 @@ type project struct {
 	UpdatedAt   string `json:"updatedAt"`
 	DeployCount int    `json:"deployCount"`
 	LiveURL     string `json:"liveUrl"`
+	IsPublic    bool   `json:"isPublic"`
 }
 
 type uploadRequest struct {
@@ -85,6 +87,7 @@ type projectRecord struct {
 
 type liveDeploy struct {
 	siteRoot string
+	isPublic bool
 }
 
 func main() {
@@ -126,6 +129,8 @@ func main() {
 		log.Printf("using local filesystem storage (%s)", ingestRoot)
 	}
 
+	cookieDomain := getenv("COOKIE_DOMAIN", "")
+
 	app := &application{
 		db:             db,
 		store:          store,
@@ -134,6 +139,7 @@ func main() {
 		frontendOrigin: frontendOrigin,
 		appOrigin:      appOrigin,
 		contentOrigin:  contentOrigin,
+		cookieDomain:   cookieDomain,
 	}
 	if err := app.seedDemoData(ctx); err != nil {
 		log.Fatalf("seed demo data: %v", err)

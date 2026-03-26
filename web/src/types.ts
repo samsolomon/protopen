@@ -5,6 +5,7 @@ export type Project = {
   updatedAt: string
   deployCount: number
   liveUrl: string
+  isPublic: boolean
 }
 
 export type SessionUser = {
