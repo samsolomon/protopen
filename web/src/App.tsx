@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import type { Project, SessionUser } from './types'
 import { fetchSession, fetchProjects, postSignOut, deleteProjectById, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
+import { CLIAuthPage } from './CLIAuthPage'
 import { Dashboard } from './Dashboard'
 import { Toaster } from '@/components/ui/sonner'
+
+const isCLIAuth = new URLSearchParams(window.location.search).has('cli-auth')
 
 function App() {
   const [user, setUser] = useState<SessionUser | null>(null)
@@ -92,6 +95,8 @@ function App() {
     )
   } else if (!user) {
     content = <AuthPage onLogin={setUser} />
+  } else if (isCLIAuth) {
+    content = <CLIAuthPage onSessionExpired={handleSessionExpired} />
   } else {
     content = (
       <Dashboard

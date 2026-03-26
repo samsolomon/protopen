@@ -91,7 +91,7 @@ const deployFlags = [
 ]
 
 const quickStartSteps = [
-  { title: 'Build the CLI', code: 'cd cli && make build' },
+  { title: 'Install the CLI', code: 'go install github.com/samsolomon/velori/cli@latest' },
   { title: 'Log in', code: 'velori login' },
   { title: 'Deploy', code: 'velori deploy my-site' },
 ]
@@ -197,13 +197,13 @@ export function CLIDocs() {
               <TabsContent value="login" className="pt-4">
                 <CommandTab
                   usage="velori login [--token TOKEN] [--url URL]"
-                  description="Authenticate and save your API token. Without --token, prompts you to paste a token interactively. Validates the token against the API and saves it to ~/.velori/config.json."
+                  description="Authenticate and save your API token. Opens your browser to generate a token, then prompts you to paste it. Use --token to skip the browser and provide a token directly (useful for CI/CD)."
                   flags={[
-                    { flag: '--token', description: 'API token (skip interactive prompt)' },
+                    { flag: '--token', description: 'API token (skip browser flow)' },
                     { flag: '--url', description: 'API base URL (overrides VELORI_URL)' },
                   ]}
-                  example="velori login --token vtk_your_token_here"
-                  output={`Authenticated as Sam Solomon (sam@velori.dev)\nToken saved to ~/.velori/config.json\n\nYou're ready to deploy:\n  velori deploy ./my-site`}
+                  example="velori login"
+                  output={`Press Enter to open your browser and log in.\nIf the browser didn't open, visit: https://app.velori.dev?cli-auth\n\nPaste your API token: vtk_...\n\nAuthenticated as Sam Solomon (sam@velori.dev)\nToken saved to ~/.velori/config.json\n\nYou're ready to deploy:\n  velori deploy ./my-site`}
                 />
               </TabsContent>
 

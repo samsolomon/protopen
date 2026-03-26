@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -277,8 +279,22 @@ func cmdLogin(args []string) {
 
 	t := *token
 	if t == "" {
+		baseURL := strings.TrimRight(resolveURL(*url), "/")
+		browserURL := baseURL + "?cli-auth"
+
+		reader := bufio.NewReader(os.Stdin)
+
+		fmt.Println("Press Enter to open your browser and log in.")
+		reader.ReadString('\n')
+
+		if err := openBrowser(browserURL); err != nil {
+			fmt.Printf("Open this URL in your browser: %s\n\n", browserURL)
+		} else {
+			fmt.Println()
+		}
+
 		fmt.Print("Paste your API token: ")
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading input: %v\n", err)
 			os.Exit(1)
@@ -305,10 +321,23 @@ func cmdLogin(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Authenticated as %s (%s)\n", user.Name, user.Email)
+	fmt.Printf("\nAuthenticated as %s (%s)\n", user.Name, user.Email)
 	fmt.Printf("Token saved to %s\n", configPath())
 	fmt.Println("\nYou're ready to deploy:")
 	fmt.Println("  velori deploy ./my-site")
+}
+
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "linux":
+		return exec.Command("xdg-open", url).Start()
+	case "windows":
+		return exec.Command("cmd", "/c", "start", url).Start()
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
 }
 
 func cmdLogout(args []string) {
