@@ -10,14 +10,25 @@ import (
 //go:embed all:dist
 var frontendFS embed.FS
 
-func serveFrontend(mux *http.ServeMux) {
+func serveFrontend(mux *http.ServeMux, frontendOrigin string) {
 	distFS, err := fs.Sub(frontendFS, "dist")
 	if err != nil {
 		return
 	}
 
-	entries, err := fs.ReadDir(distFS, ".")
-	if err != nil || len(entries) == 0 {
+	// Check for a built frontend
+	if _, err := fs.Stat(distFS, "index.html"); err != nil {
+		// No built frontend — redirect to the frontend dev server
+		if frontendOrigin != "" {
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/~") {
+					http.NotFound(w, r)
+					return
+				}
+				target := frontendOrigin + r.URL.RequestURI()
+				http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+			})
+		}
 		return
 	}
 
