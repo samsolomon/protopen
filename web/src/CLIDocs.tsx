@@ -93,7 +93,7 @@ const deployFlags = [
 const quickStartSteps = [
   { title: 'Build the CLI', code: 'cd cli && go build -o velori' },
   { title: 'Set your token', code: 'export VELORI_TOKEN=vtk_your_token_here' },
-  { title: 'Deploy', code: 'velori deploy ./my-site' },
+  { title: 'Deploy', code: 'velori deploy my-site' },
 ]
 
 export function CLIDocs() {
@@ -149,7 +149,7 @@ export function CLIDocs() {
                   usage="velori deploy <path> [flags]"
                   description="Deploy a folder or zip file. Directories are zipped automatically before upload. The project name defaults to the directory or zip filename (.zip extension is stripped)."
                   flags={deployFlags}
-                  example='velori deploy ./landing-page --name my-site --label "v3 redesign"'
+                  example='velori deploy landing-page --name my-site --label "v3 redesign"'
                   output="https://velori.dev/~sam/my-site"
                 />
               </TabsContent>
