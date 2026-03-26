@@ -6,6 +6,14 @@ import { TokensPanel } from './TokensPanel'
 import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { User, Settings, LogOut } from 'lucide-react'
 
 type DashboardView = 'dashboard' | 'docs'
 
@@ -66,12 +74,31 @@ export function Dashboard({
               </Button>
             </nav>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{user.name}</span>
-            <Button variant="ghost" size="sm" onClick={() => void onSignOut()}>
-              Sign out
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex cursor-pointer items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm font-medium outline-none hover:bg-muted"
+            >
+              <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+              {user.name}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem>
+                <User />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void onSignOut()}>
+                <LogOut />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
