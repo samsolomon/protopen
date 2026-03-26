@@ -6,6 +6,7 @@ import { TokensPanel } from './TokensPanel'
 import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -20,9 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, User, Settings, LogOut } from 'lucide-react'
+import { Plus, User, Settings, LogOut, Terminal, Upload, FolderOpen } from 'lucide-react'
 
-type DashboardView = 'dashboard' | 'docs'
+type DashboardView = 'dashboard' | 'docs' | 'settings'
 
 type DashboardProps = {
   user: SessionUser
@@ -51,10 +52,16 @@ export function Dashboard({
 }: DashboardProps) {
   const [view, setView] = useState<DashboardView>('dashboard')
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
 
   const switchView = (next: DashboardView) => {
     setView(next)
     window.scrollTo(0, 0)
+  }
+
+  const handleUploadOpenChange = (open: boolean) => {
+    setUploadOpen(open)
+    if (!open) setPendingFiles(null)
   }
 
   return (
@@ -80,6 +87,14 @@ export function Dashboard({
               >
                 CLI
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={view === 'settings' ? 'bg-muted' : ''}
+                onClick={() => switchView('settings')}
+              >
+                Settings
+              </Button>
             </nav>
           </div>
           <div className="flex items-center gap-2">
@@ -101,7 +116,7 @@ export function Dashboard({
                 <User />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => switchView('settings')}>
                 <Settings />
                 Settings
               </DropdownMenuItem>
@@ -116,7 +131,7 @@ export function Dashboard({
         </div>
       </header>
 
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      <Dialog open={uploadOpen} onOpenChange={handleUploadOpenChange}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Deploy</DialogTitle>
@@ -127,14 +142,32 @@ export function Dashboard({
             setError={setError}
             onProjectsChanged={onProjectsChanged}
             onSessionExpired={onSessionExpired}
-            onClose={() => setUploadOpen(false)}
+            onClose={() => handleUploadOpenChange(false)}
+            initialFiles={pendingFiles}
           />
         </DialogContent>
       </Dialog>
 
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main
+        className="mx-auto max-w-4xl px-4 py-8"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (e.dataTransfer.files.length > 0) {
+            setPendingFiles(e.dataTransfer.files)
+            setUploadOpen(true)
+          }
+        }}
+      >
         {view === 'docs' ? (
           <CLIDocs />
+        ) : view === 'settings' ? (
+          <div className="flex flex-col gap-8">
+            <TokensPanel
+              onSessionExpired={onSessionExpired}
+              onViewDocs={() => switchView('docs')}
+            />
+          </div>
         ) : (
           <div className="flex flex-col gap-8">
             <section>
@@ -147,8 +180,45 @@ export function Dashboard({
                 </Card>
               ) : projects.length === 0 ? (
                 <Card>
-                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                    No projects yet. Upload your first static prototype.
+                  <CardContent className="py-8">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Terminal className="size-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">Tell the agent</p>
+                            <Badge variant="secondary" className="text-[10px]">Easiest</Badge>
+                          </div>
+                          <p className="mt-0.5 text-sm text-muted-foreground">
+                            Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori deploy my-site</code> from your terminal.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Upload className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Drag and drop</p>
+                          <p className="mt-0.5 text-sm text-muted-foreground">
+                            Drag a folder or zip file onto this page.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <FolderOpen className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Select a folder</p>
+                          <p className="mt-0.5 text-sm text-muted-foreground">
+                            Click <span className="font-medium text-foreground">Create project</span> above to browse your files.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
