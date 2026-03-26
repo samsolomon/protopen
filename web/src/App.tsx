@@ -25,7 +25,7 @@ function App() {
     }
 
     void loadProjects()
-  }, [user])
+  }, [user?.id])
 
   const loadSession = async () => {
     try {
@@ -102,6 +102,7 @@ function App() {
         error={error}
         setError={setError}
         onSignOut={() => void signOut()}
+        onUserUpdated={setUser}
         onDeleteProject={(id) => void deleteProject(id)}
         onProjectsChanged={() => void loadProjects()}
         onSessionExpired={handleSessionExpired}

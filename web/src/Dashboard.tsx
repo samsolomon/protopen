@@ -2,7 +2,12 @@ import { useState } from 'react'
 import type { Project, SessionUser } from './types'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
+import { ProjectsTable } from './ProjectsTable'
 import { TokensPanel } from './TokensPanel'
+import { ProfilePanel } from './ProfilePanel'
+import { PasswordPanel } from './PasswordPanel'
+import { AppearancePanel } from './AppearancePanel'
+import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -33,6 +38,7 @@ type DashboardProps = {
   error: string | null
   setError: (error: string | null) => void
   onSignOut: () => void
+  onUserUpdated: (user: SessionUser) => void
   onDeleteProject: (projectID: string) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
@@ -46,6 +52,7 @@ export function Dashboard({
   error,
   setError,
   onSignOut,
+  onUserUpdated,
   onDeleteProject,
   onProjectsChanged,
   onSessionExpired,
@@ -67,7 +74,7 @@ export function Dashboard({
   return (
     <div className="min-h-svh bg-background">
       <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-bold tracking-tight">Velori</h1>
             <nav className="flex items-center gap-1">
@@ -112,7 +119,7 @@ export function Dashboard({
               {user.name}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => switchView('settings')}>
                 <User />
                 Profile
               </DropdownMenuItem>
@@ -149,7 +156,7 @@ export function Dashboard({
       </Dialog>
 
       <main
-        className="mx-auto max-w-4xl px-4 py-8"
+        className="mx-auto max-w-[1440px] px-4 py-8"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault()
@@ -163,9 +170,20 @@ export function Dashboard({
           <CLIDocs />
         ) : view === 'settings' ? (
           <div className="flex flex-col gap-8">
+            <ProfilePanel
+              user={user}
+              onUserUpdated={onUserUpdated}
+              onSessionExpired={onSessionExpired}
+            />
+            <PasswordPanel onSessionExpired={onSessionExpired} />
+            <AppearancePanel />
             <TokensPanel
               onSessionExpired={onSessionExpired}
               onViewDocs={() => switchView('docs')}
+            />
+            <DeleteAccountPanel
+              onAccountDeleted={onSignOut}
+              onSessionExpired={onSessionExpired}
             />
           </div>
         ) : (
@@ -222,18 +240,29 @@ export function Dashboard({
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {projects.map((project) => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      isDeleting={deletingProjectID === project.id}
+                <>
+                  <div className="hidden sm:block">
+                    <ProjectsTable
+                      projects={projects}
+                      deletingProjectID={deletingProjectID}
                       onDelete={onDeleteProject}
                       onProjectsChanged={onProjectsChanged}
                       onSessionExpired={onSessionExpired}
                     />
-                  ))}
-                </div>
+                  </div>
+                  <div className="flex flex-col gap-4 sm:hidden">
+                    {projects.map((project) => (
+                      <ProjectCard
+                        key={project.id}
+                        project={project}
+                        isDeleting={deletingProjectID === project.id}
+                        onDelete={onDeleteProject}
+                        onProjectsChanged={onProjectsChanged}
+                        onSessionExpired={onSessionExpired}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </section>
 

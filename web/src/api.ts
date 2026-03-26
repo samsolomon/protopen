@@ -200,3 +200,59 @@ export async function deleteToken(tokenId: string): Promise<void> {
     throw new Error(body.error ?? 'Could not delete token')
   }
 }
+
+export async function updateProfile(name: string, email: string): Promise<SessionUser> {
+  const response = await fetch(`${API_BASE_URL}/api/account/profile`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  const data = (await response.json()) as { error?: string; user?: SessionUser }
+  if (!response.ok || !data.user) {
+    throw new Error(data.error ?? 'Could not update profile')
+  }
+
+  return data.user
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/account/password`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not change password')
+  }
+}
+
+export async function deleteAccount(password: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/account/delete`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not delete account')
+  }
+}
