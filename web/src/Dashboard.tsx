@@ -237,10 +237,6 @@ export function Dashboard({
               )}
             </section>
 
-            <TokensPanel
-              onSessionExpired={onSessionExpired}
-              onViewDocs={() => switchView('docs')}
-            />
           </div>
         )}
       </main>
