@@ -77,6 +77,8 @@ export function Dashboard({
                     project={project}
                     isDeleting={deletingProjectID === project.id}
                     onDelete={onDeleteProject}
+                    onProjectsChanged={onProjectsChanged}
+                    onSessionExpired={onSessionExpired}
                   />
                 ))}
               </div>

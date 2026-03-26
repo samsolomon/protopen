@@ -130,10 +130,14 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 	if prepared.normalizedTo != "" {
 		storagePrefix = prepared.normalizedTo
 	}
+	var label *string
+	if payload.Label != "" {
+		label = &payload.Label
+	}
 	if _, err := tx.Exec(ctx, `
-		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at)
-		values ($1, $2, $3, $4, $5, $6, $7)
-	`, deployID, entry.ID, "validated", totalSize, len(payload.Files), storagePrefix, now); err != nil {
+		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at, label)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, deployID, entry.ID, "validated", totalSize, len(payload.Files), storagePrefix, now, label); err != nil {
 		return project{}, err
 	}
 

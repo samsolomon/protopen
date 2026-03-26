@@ -1,4 +1,4 @@
-import type { AuthFormState, AuthMode, Project, SessionUser, UploadFile, UploadSummary } from './types'
+import type { AuthFormState, AuthMode, Deploy, Project, SessionUser, UploadFile, UploadSummary } from './types'
 import { API_BASE_URL } from './constants'
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -32,7 +32,7 @@ export async function fetchProjects(): Promise<Project[]> {
   }
 
   const data = (await response.json()) as { projects: Project[] }
-  return data.projects
+  return data.projects ?? []
 }
 
 export async function postAuth(mode: AuthMode, form: AuthFormState): Promise<SessionUser> {
@@ -98,6 +98,41 @@ export async function deleteProjectById(projectID: string): Promise<void> {
   if (!response.ok) {
     const body = (await response.json()) as { error?: string }
     throw new Error(body.error ?? 'Could not delete project')
+  }
+}
+
+export async function fetchDeploys(projectId: string): Promise<Deploy[]> {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/deploys`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    throw new Error('Could not load deploys')
+  }
+
+  const data = (await response.json()) as { deploys: Deploy[] }
+  return data.deploys ?? []
+}
+
+export async function rollbackDeploy(projectId: string, deployId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/rollback`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deployId }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string }
+    throw new Error(body.error ?? 'Could not rollback')
   }
 }
 

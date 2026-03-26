@@ -1,16 +1,22 @@
+import { useState } from 'react'
 import type { Project } from './types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { DeployHistory } from './DeployHistory'
 import { toast } from 'sonner'
 
 type ProjectCardProps = {
   project: Project
   isDeleting: boolean
   onDelete: (projectID: string) => void
+  onProjectsChanged: () => void
+  onSessionExpired: () => void
 }
 
-export function ProjectCard({ project, isDeleting, onDelete }: ProjectCardProps) {
+export function ProjectCard({ project, isDeleting, onDelete, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
+  const [showHistory, setShowHistory] = useState(false)
+
   return (
     <Card>
       <CardHeader>
@@ -29,8 +35,20 @@ export function ProjectCard({ project, isDeleting, onDelete }: ProjectCardProps)
         >
           {project.liveUrl}
         </a>
+        {showHistory ? (
+          <div className="mt-2">
+            <DeployHistory
+              projectId={project.id}
+              onRollback={onProjectsChanged}
+              onSessionExpired={onSessionExpired}
+            />
+          </div>
+        ) : null}
       </CardContent>
       <CardFooter className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)}>
+          {showHistory ? 'Hide history' : 'History'}
+        </Button>
         <Button
           variant="ghost"
           size="sm"

@@ -98,8 +98,9 @@ func (app *application) prepareMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	payload := uploadRequest{
-		Name: strings.TrimSpace(r.FormValue("name")),
-		Mode: strings.TrimSpace(r.FormValue("mode")),
+		Name:  strings.TrimSpace(r.FormValue("name")),
+		Mode:  strings.TrimSpace(r.FormValue("mode")),
+		Label: strings.TrimSpace(r.FormValue("label")),
 	}
 
 	paths := []string{}

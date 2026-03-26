@@ -29,6 +29,28 @@ func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+	path = strings.TrimSpace(path)
+
+	parts := strings.SplitN(path, "/", 2)
+	projectID := parts[0]
+	if projectID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid project id"})
+		return
+	}
+
+	if len(parts) == 2 {
+		switch strings.TrimRight(parts[1], "/") {
+		case "deploys":
+			app.listDeploysHandler(w, r, projectID)
+		case "rollback":
+			app.rollbackHandler(w, r, projectID)
+		default:
+			http.NotFound(w, r)
+		}
+		return
+	}
+
 	if r.Method != http.MethodDelete {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -37,13 +59,6 @@ func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Reques
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	projectID := strings.TrimPrefix(r.URL.Path, "/api/projects/")
-	projectID = strings.TrimSpace(projectID)
-	if projectID == "" || strings.Contains(projectID, "/") {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid project id"})
 		return
 	}
 

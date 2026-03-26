@@ -1,0 +1,106 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
+)
+
+type deployRecord struct {
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	Label     *string `json:"label"`
+	SizeBytes int64   `json:"sizeBytes"`
+	FileCount int     `json:"fileCount"`
+	CreatedAt string  `json:"createdAt"`
+	IsCurrent bool    `json:"isCurrent"`
+}
+
+func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Request, projectID string) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	rows, err := app.db.Query(r.Context(), `
+		select d.id, d.status, d.label, d.size_bytes, d.file_count, d.created_at, (d.id = p.current_deploy_id) as is_current
+		from deploys d
+		join projects p on p.id = d.project_id
+		where d.project_id = $1 and p.user_id = $2 and p.deleted_at is null
+		order by d.created_at desc
+	`, projectID, user.ID)
+	if err != nil {
+		log.Printf("list deploys: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load deploys"})
+		return
+	}
+	defer rows.Close()
+
+	var deploys []deployRecord
+	for rows.Next() {
+		var entry deployRecord
+		var createdAt time.Time
+		if err := rows.Scan(&entry.ID, &entry.Status, &entry.Label, &entry.SizeBytes, &entry.FileCount, &createdAt, &entry.IsCurrent); err != nil {
+			log.Printf("scan deploy: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load deploys"})
+			return
+		}
+		entry.CreatedAt = relativeTime(createdAt)
+		deploys = append(deploys, entry)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"deploys": deploys})
+}
+
+func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, projectID string) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var payload struct {
+		DeployID string `json:"deployId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.DeployID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "deployId is required"})
+		return
+	}
+
+	var valid bool
+	err = app.db.QueryRow(r.Context(), `
+		select exists(
+			select 1 from deploys d
+			join projects p on p.id = d.project_id
+			where p.id = $1 and p.user_id = $2 and d.id = $3 and p.deleted_at is null
+		)
+	`, projectID, user.ID, payload.DeployID).Scan(&valid)
+	if err != nil || !valid {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project or deploy not found"})
+		return
+	}
+
+	now := time.Now().UTC()
+	_, err = app.db.Exec(r.Context(), `
+		update projects set current_deploy_id = $2, updated_at = $3 where id = $1
+	`, projectID, payload.DeployID, now)
+	if err != nil {
+		log.Printf("rollback: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not rollback"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "currentDeployId": payload.DeployID})
+}

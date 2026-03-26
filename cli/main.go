@@ -20,6 +20,10 @@ func main() {
 		cmdDeploy(args)
 	case "list":
 		cmdList(args)
+	case "deploys":
+		cmdDeploys(args)
+	case "rollback":
+		cmdRollback(args)
 	case "token":
 		cmdToken(args)
 	case "help", "--help", "-h":
@@ -37,6 +41,8 @@ func printUsage() {
 Commands:
   deploy <path>   Deploy a folder or zip to Velori
   list            List your projects
+  deploys <name>  Show deploy history for a project
+  rollback <name> <deploy-id>  Roll back to a previous deploy
   token           Show current token info
 
 Environment:
@@ -47,6 +53,7 @@ Environment:
 func cmdDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	name := fs.String("name", "", "Project name (defaults to directory/zip name)")
+	label := fs.String("label", "", "Deploy label (e.g. 'v2 with new header')")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	jsonOutput := fs.Bool("json", false, "Output JSON response")
@@ -76,9 +83,9 @@ func cmdDeploy(args []string) {
 
 	var result deployResult
 	if info.IsDir() {
-		result, err = client.deployDirectory(path, projectName)
+		result, err = client.deployDirectory(path, projectName, *label)
 	} else {
-		result, err = client.deployZip(path, projectName)
+		result, err = client.deployZip(path, projectName, *label)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -113,6 +120,75 @@ func cmdList(args []string) {
 	for _, p := range projects {
 		fmt.Printf("%-24s %3d deploys  %s\n", p.Name, p.DeployCount, p.LiveURL)
 	}
+}
+
+func cmdDeploys(args []string) {
+	fs := flag.NewFlagSet("deploys", flag.ExitOnError)
+	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	fs.Parse(args)
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "usage: velori deploys <project-name>")
+		os.Exit(1)
+	}
+
+	client := newClient(resolveToken(*token), resolveURL(*url))
+	proj, err := client.findProject(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	deploys, err := client.listDeploys(proj.ID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(deploys) == 0 {
+		fmt.Fprintln(os.Stderr, "no deploys")
+		return
+	}
+
+	for _, d := range deploys {
+		current := "  "
+		if d.IsCurrent {
+			current = "* "
+		}
+		label := ""
+		if d.Label != nil && *d.Label != "" {
+			label = "  " + *d.Label
+		}
+		fmt.Printf("%s%-20s %4d files  %s%s\n", current, d.ID, d.FileCount, d.CreatedAt, label)
+	}
+}
+
+func cmdRollback(args []string) {
+	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
+	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		fmt.Fprintln(os.Stderr, "usage: velori rollback <project-name> <deploy-id>")
+		os.Exit(1)
+	}
+
+	client := newClient(resolveToken(*token), resolveURL(*url))
+	proj, err := client.findProject(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = client.rollback(proj.ID, fs.Arg(1))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Rolled back %s to %s\n", proj.Name, fs.Arg(1))
 }
 
 func cmdToken(args []string) {

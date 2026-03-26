@@ -58,6 +58,7 @@ type project struct {
 type uploadRequest struct {
 	Name  string     `json:"name"`
 	Mode  string     `json:"mode"`
+	Label string     `json:"label,omitempty"`
 	Files []fileMeta `json:"files"`
 }
 

@@ -40,3 +40,13 @@ export type AuthFormState = {
 }
 
 export type UploadState = 'idle' | 'dragging' | 'uploading' | 'success'
+
+export type Deploy = {
+  id: string
+  status: string
+  label: string | null
+  sizeBytes: number
+  fileCount: number
+  createdAt: string
+  isCurrent: boolean
+}

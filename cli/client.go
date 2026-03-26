@@ -24,10 +24,20 @@ type deployResult struct {
 }
 
 type projectInfo struct {
+	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
 	DeployCount int    `json:"deployCount"`
 	LiveURL     string `json:"liveUrl"`
+}
+
+type deployInfo struct {
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	Label     *string `json:"label"`
+	FileCount int     `json:"fileCount"`
+	CreatedAt string  `json:"createdAt"`
+	IsCurrent bool    `json:"isCurrent"`
 }
 
 type userInfo struct {
@@ -43,30 +53,33 @@ func newClient(token string, baseURL string) *client {
 	}
 }
 
-func (c *client) deployDirectory(dirPath string, name string) (deployResult, error) {
+func (c *client) deployDirectory(dirPath string, name string, label string) (deployResult, error) {
 	zipData, err := zipDirectory(dirPath)
 	if err != nil {
 		return deployResult{}, fmt.Errorf("create zip: %w", err)
 	}
 
-	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData)
+	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label)
 }
 
-func (c *client) deployZip(zipPath string, name string) (deployResult, error) {
+func (c *client) deployZip(zipPath string, name string, label string) (deployResult, error) {
 	data, err := os.ReadFile(zipPath)
 	if err != nil {
 		return deployResult{}, err
 	}
 
-	return c.upload(name, "zip", filepath.Base(zipPath), data)
+	return c.upload(name, "zip", filepath.Base(zipPath), data, label)
 }
 
-func (c *client) upload(name string, mode string, filename string, data []byte) (deployResult, error) {
+func (c *client) upload(name string, mode string, filename string, data []byte, label string) (deployResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
 	writer.WriteField("name", name)
 	writer.WriteField("mode", mode)
+	if label != "" {
+		writer.WriteField("label", label)
+	}
 
 	part, err := writer.CreateFormFile("files", filename)
 	if err != nil {
@@ -167,6 +180,82 @@ func (c *client) getSession() (userInfo, error) {
 	}
 
 	return result.User, nil
+}
+
+func (c *client) findProject(nameOrSlug string) (projectInfo, error) {
+	projects, err := c.listProjects()
+	if err != nil {
+		return projectInfo{}, err
+	}
+
+	nameOrSlug = strings.ToLower(strings.TrimSpace(nameOrSlug))
+	for _, p := range projects {
+		if strings.ToLower(p.Name) == nameOrSlug || strings.ToLower(p.Slug) == nameOrSlug {
+			return p, nil
+		}
+	}
+
+	return projectInfo{}, fmt.Errorf("project %q not found", nameOrSlug)
+}
+
+func (c *client) listDeploys(projectID string) ([]deployInfo, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/api/projects/"+projectID+"/deploys", nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+	}
+
+	var result struct {
+		Deploys []deployInfo `json:"deploys"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Deploys, nil
+}
+
+func (c *client) rollback(projectID string, deployID string) error {
+	body, _ := json.Marshal(map[string]string{"deployId": deployID})
+	req, err := http.NewRequest("POST", c.baseURL+"/api/projects/"+projectID+"/rollback", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+	}
+	if resp.StatusCode != http.StatusOK {
+		var errResp struct{ Error string `json:"error"` }
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		if errResp.Error != "" {
+			return fmt.Errorf("%s", errResp.Error)
+		}
+		return fmt.Errorf("rollback failed (HTTP %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (c *client) setAuth(req *http.Request) {

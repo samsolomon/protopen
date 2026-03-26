@@ -37,7 +37,7 @@ func TestDeployDirectorySuccess(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>test</h1>"), 0o644)
 
 	c := newClient("vtk_testtoken", server.URL)
-	result, err := c.deployDirectory(dir, "test-site")
+	result, err := c.deployDirectory(dir, "test-site", "")
 	if err != nil {
 		t.Fatalf("deployDirectory: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestDeployReturnsErrorOnUnauthorized(t *testing.T) {
 	defer server.Close()
 
 	c := newClient("vtk_bad", server.URL)
-	_, err := c.upload("test", "zip", "test.zip", []byte("fake"))
+	_, err := c.upload("test", "zip", "test.zip", []byte("fake"), "")
 	if err == nil {
 		t.Fatal("expected error for 401")
 	}
@@ -85,7 +85,7 @@ func TestDeployReturnsErrorMessage(t *testing.T) {
 	defer server.Close()
 
 	c := newClient("vtk_test", server.URL)
-	_, err := c.upload("test", "zip", "test.zip", []byte("fake"))
+	_, err := c.upload("test", "zip", "test.zip", []byte("fake"), "")
 	if err == nil {
 		t.Fatal("expected error for 400")
 	}
