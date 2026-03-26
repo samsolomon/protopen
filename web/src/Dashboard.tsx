@@ -7,13 +7,20 @@ import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { User, Settings, LogOut } from 'lucide-react'
+import { Plus, User, Settings, LogOut } from 'lucide-react'
 
 type DashboardView = 'dashboard' | 'docs'
 
@@ -43,6 +50,7 @@ export function Dashboard({
   onSessionExpired,
 }: DashboardProps) {
   const [view, setView] = useState<DashboardView>('dashboard')
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   const switchView = (next: DashboardView) => {
     setView(next)
@@ -62,7 +70,7 @@ export function Dashboard({
                 className={view === 'dashboard' ? 'bg-muted' : ''}
                 onClick={() => switchView('dashboard')}
               >
-                Dashboard
+                Projects
               </Button>
               <Button
                 variant="ghost"
@@ -74,6 +82,11 @@ export function Dashboard({
               </Button>
             </nav>
           </div>
+          <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setUploadOpen(true)}>
+            <Plus />
+            Create project
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex cursor-pointer items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm font-medium outline-none hover:bg-muted"
@@ -99,23 +112,31 @@ export function Dashboard({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </header>
+
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Deploy</DialogTitle>
+            <DialogDescription>Upload a folder or zip of static files to get a live URL.</DialogDescription>
+          </DialogHeader>
+          <UploadPanel
+            error={error}
+            setError={setError}
+            onProjectsChanged={onProjectsChanged}
+            onSessionExpired={onSessionExpired}
+            onClose={() => setUploadOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
         {view === 'docs' ? (
           <CLIDocs />
         ) : (
           <div className="flex flex-col gap-8">
-            <UploadPanel
-              user={user}
-              projects={projects}
-              error={error}
-              setError={setError}
-              onProjectsChanged={onProjectsChanged}
-              onSessionExpired={onSessionExpired}
-            />
-
             <section>
               <h2 className="mb-4 text-lg font-semibold tracking-tight">Your projects</h2>
               {isLoading ? (
