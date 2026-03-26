@@ -91,8 +91,8 @@ const deployFlags = [
 ]
 
 const quickStartSteps = [
-  { title: 'Build the CLI', code: 'cd cli && go build -o velori' },
-  { title: 'Set your token', code: 'export VELORI_TOKEN=vtk_your_token_here' },
+  { title: 'Build the CLI', code: 'cd cli && make build' },
+  { title: 'Log in', code: 'velori login' },
   { title: 'Deploy', code: 'velori deploy my-site' },
 ]
 
@@ -142,6 +142,8 @@ export function CLIDocs() {
                 <TabsTrigger value="deploys">deploys</TabsTrigger>
                 <TabsTrigger value="rollback">rollback</TabsTrigger>
                 <TabsTrigger value="token">token</TabsTrigger>
+                <TabsTrigger value="login">login</TabsTrigger>
+                <TabsTrigger value="config">config</TabsTrigger>
               </TabsList>
 
               <TabsContent value="deploy" className="pt-4">
@@ -191,6 +193,29 @@ export function CLIDocs() {
                   output={`Token:    vtk_test...2345\nUser:     Sam Solomon (sam@velori.dev)\nAPI:      https://velori.dev`}
                 />
               </TabsContent>
+
+              <TabsContent value="login" className="pt-4">
+                <CommandTab
+                  usage="velori login [--token TOKEN] [--url URL]"
+                  description="Authenticate and save your API token. Without --token, prompts you to paste a token interactively. Validates the token against the API and saves it to ~/.velori/config.json."
+                  flags={[
+                    { flag: '--token', description: 'API token (skip interactive prompt)' },
+                    { flag: '--url', description: 'API base URL (overrides VELORI_URL)' },
+                  ]}
+                  example="velori login --token vtk_your_token_here"
+                  output={`Authenticated as Sam Solomon (sam@velori.dev)\nToken saved to ~/.velori/config.json\n\nYou're ready to deploy:\n  velori deploy ./my-site`}
+                />
+              </TabsContent>
+
+              <TabsContent value="config" className="pt-4">
+                <CommandTab
+                  usage="velori config <show | set key value>"
+                  description="View or update CLI configuration. Settings are saved to ~/.velori/config.json."
+                  flags={[]}
+                  example="velori config set url https://velori.dev"
+                  output="Saved url to ~/.velori/config.json"
+                />
+              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
@@ -200,37 +225,50 @@ export function CLIDocs() {
         <h2 className="mb-4 text-lg font-semibold tracking-tight">Configuration</h2>
         <Card>
           <CardHeader>
-            <CardTitle>Environment Variables</CardTitle>
+            <CardTitle>Configuration</CardTitle>
             <CardDescription>
-              Configure the CLI via environment variables or command flags. Flags take precedence over environment variables.
+              The CLI resolves settings from flags, environment variables, the config file, then defaults — in that order.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <code className="font-mono text-xs font-medium">VELORI_TOKEN</code>
-                  <Badge variant="outline" className="text-[10px]">required</Badge>
-                </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Config File</p>
+              <div className="rounded-lg border p-3">
                 <p className="text-sm text-muted-foreground">
-                  API token for authentication. Created in the dashboard. Tokens use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">vtk_</code> prefix and are sent as <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;token&gt;</code>.
+                  Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori login</code> to save your token, or edit <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">~/.velori/config.json</code> directly.
                 </p>
               </div>
-              <div className="border-t" />
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <code className="font-mono text-xs font-medium">VELORI_URL</code>
-                  <Badge variant="outline" className="text-[10px]">optional</Badge>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">Environment Variables</p>
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono text-xs font-medium">VELORI_TOKEN</code>
+                    <Badge variant="outline" className="text-[10px]">optional</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    API token for authentication. Overrides the config file. Tokens use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">vtk_</code> prefix.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  API base URL. Defaults to <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">http://localhost:8080</code>.
-                </p>
+                <div className="border-t" />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono text-xs font-medium">VELORI_URL</code>
+                    <Badge variant="outline" className="text-[10px]">optional</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    API base URL. Defaults to <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">http://localhost:8080</code>.
+                  </p>
+                </div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
               Precedence: <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">--flag</code>
               {' > '}
               <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">ENV_VAR</code>
+              {' > '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">config file</code>
               {' > '}
               <span>default value</span>
             </p>

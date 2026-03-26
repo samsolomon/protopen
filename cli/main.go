@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -26,6 +28,12 @@ func main() {
 		cmdRollback(args)
 	case "token":
 		cmdToken(args)
+	case "login":
+		cmdLogin(args)
+	case "logout":
+		cmdLogout(args)
+	case "config":
+		cmdConfig(args)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -39,15 +47,18 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: velori <command> [options]
 
 Commands:
-  deploy <path>   Deploy a folder or zip to Velori
-  list            List your projects
-  deploys <name>  Show deploy history for a project
+  deploy <path>                Deploy a folder or zip to Velori
+  list                         List your projects
+  deploys <name>               Show deploy history for a project
   rollback <name> <deploy-id>  Roll back to a previous deploy
-  token           Show current token info
+  token                        Show current token info
+  login                        Authenticate and save your API token
+  logout                       Remove saved token
+  config                       View and update CLI configuration
 
-Environment:
-  VELORI_TOKEN    API token for authentication
-  VELORI_URL      API base URL (default: http://localhost:8080)`)
+Configuration:
+  Config file: ~/.velori/config.json
+  Priority:    --flag > VELORI_TOKEN/VELORI_URL > config file > default`)
 }
 
 func cmdDeploy(args []string) {
@@ -65,7 +76,7 @@ func cmdDeploy(args []string) {
 	}
 
 	path := fs.Arg(0)
-	client := newClient(resolveToken(*token), resolveURL(*url))
+	client := newClient(requireToken(*token), resolveURL(*url))
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -105,7 +116,7 @@ func cmdList(args []string) {
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	fs.Parse(args)
 
-	client := newClient(resolveToken(*token), resolveURL(*url))
+	client := newClient(requireToken(*token), resolveURL(*url))
 	projects, err := client.listProjects()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -133,7 +144,7 @@ func cmdDeploys(args []string) {
 		os.Exit(1)
 	}
 
-	client := newClient(resolveToken(*token), resolveURL(*url))
+	client := newClient(requireToken(*token), resolveURL(*url))
 	proj, err := client.findProject(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -175,7 +186,7 @@ func cmdRollback(args []string) {
 		os.Exit(1)
 	}
 
-	client := newClient(resolveToken(*token), resolveURL(*url))
+	client := newClient(requireToken(*token), resolveURL(*url))
 	proj, err := client.findProject(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -197,9 +208,86 @@ func cmdToken(args []string) {
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	fs.Parse(args)
 
-	t := resolveToken(*token)
+	t := requireToken(*token)
+	apiURL := resolveURL(*url)
+	client := newClient(t, apiURL)
+	user, err := client.getSession()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Token:    %s\n", maskToken(t))
+	fmt.Printf("User:     %s (%s)\n", user.Name, user.Email)
+	fmt.Printf("API:      %s\n", apiURL)
+}
+
+func resolveToken(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	if env := os.Getenv("VELORI_TOKEN"); env != "" {
+		return env
+	}
+	return loadConfig().Token
+}
+
+func resolveURL(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	if env := os.Getenv("VELORI_URL"); env != "" {
+		return env
+	}
+	if cfg := loadConfig().URL; cfg != "" {
+		return cfg
+	}
+	return "http://localhost:8080"
+}
+
+func maskToken(t string) string {
+	if len(t) <= 12 {
+		return t
+	}
+	return t[:8] + "..." + t[len(t)-4:]
+}
+
+func requireToken(flag string) string {
+	t := resolveToken(flag)
 	if t == "" {
-		fmt.Fprintln(os.Stderr, "no token set (VELORI_TOKEN or --token)")
+		fmt.Fprintln(os.Stderr, `Error: no API token configured.
+
+Set up authentication:
+  velori login
+
+Or provide a token directly:
+  velori deploy --token vtk_your_token_here
+
+Create tokens in the Velori dashboard under Settings > API Tokens.`)
+		os.Exit(1)
+	}
+	return t
+}
+
+func cmdLogin(args []string) {
+	fs := flag.NewFlagSet("login", flag.ExitOnError)
+	token := fs.String("token", "", "API token")
+	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	fs.Parse(args)
+
+	t := *token
+	if t == "" {
+		fmt.Print("Paste your API token: ")
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading input: %v\n", err)
+			os.Exit(1)
+		}
+		t = strings.TrimSpace(line)
+	}
+
+	if t == "" {
+		fmt.Fprintln(os.Stderr, "no token provided")
 		os.Exit(1)
 	}
 
@@ -210,27 +298,77 @@ func cmdToken(args []string) {
 		os.Exit(1)
 	}
 
-	masked := t[:8] + "..." + t[len(t)-4:]
-	fmt.Printf("Token:    %s\n", masked)
-	fmt.Printf("User:     %s (%s)\n", user.Name, user.Email)
-	fmt.Printf("API:      %s\n", resolveURL(*url))
+	cfg := loadConfig()
+	cfg.Token = t
+	if err := saveConfig(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "error saving config: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Authenticated as %s (%s)\n", user.Name, user.Email)
+	fmt.Printf("Token saved to %s\n", configPath())
+	fmt.Println("\nYou're ready to deploy:")
+	fmt.Println("  velori deploy ./my-site")
 }
 
-func resolveToken(flag string) string {
-	if flag != "" {
-		return flag
+func cmdLogout(args []string) {
+	fs := flag.NewFlagSet("logout", flag.ExitOnError)
+	fs.Parse(args)
+
+	cfg := loadConfig()
+	cfg.Token = ""
+	if err := saveConfig(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "error saving config: %v\n", err)
+		os.Exit(1)
 	}
-	return os.Getenv("VELORI_TOKEN")
+
+	fmt.Println("Token removed from", configPath())
 }
 
-func resolveURL(flag string) string {
-	if flag != "" {
-		return flag
+func cmdConfig(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, `Usage: velori config <subcommand>
+
+Subcommands:
+  show               Show current configuration
+  set token <value>  Save API token
+  set url <value>    Save API base URL`)
+		os.Exit(1)
 	}
-	if env := os.Getenv("VELORI_URL"); env != "" {
-		return env
+
+	switch args[0] {
+	case "show":
+		cfg := loadConfig()
+		url := resolveURL("")
+		fmt.Printf("Token:   %s\n", maskToken(cfg.Token))
+		fmt.Printf("URL:     %s\n", url)
+		fmt.Printf("Config:  %s\n", configPath())
+
+	case "set":
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: velori config set <key> <value>")
+			os.Exit(1)
+		}
+		cfg := loadConfig()
+		switch args[1] {
+		case "token":
+			cfg.Token = args[2]
+		case "url":
+			cfg.URL = args[2]
+		default:
+			fmt.Fprintf(os.Stderr, "unknown config key: %s\n", args[1])
+			os.Exit(1)
+		}
+		if err := saveConfig(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "error saving config: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Saved %s to %s\n", args[1], configPath())
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown config subcommand: %s\n", args[0])
+		os.Exit(1)
 	}
-	return "http://localhost:8080"
 }
 
 func stripZipExt(name string) string {

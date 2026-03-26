@@ -7,3 +7,4 @@ api/velori-api
 api/api
 api/.data/
 cli/cli
+cli/velori

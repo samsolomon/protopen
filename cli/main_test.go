@@ -3,6 +3,8 @@ package main
 import "testing"
 
 func TestResolveTokenPrefersFlag(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_TOKEN", "env-token")
 
 	got := resolveToken("flag-token")
@@ -12,6 +14,8 @@ func TestResolveTokenPrefersFlag(t *testing.T) {
 }
 
 func TestResolveTokenFallsToEnv(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_TOKEN", "env-token")
 
 	got := resolveToken("")
@@ -21,6 +25,8 @@ func TestResolveTokenFallsToEnv(t *testing.T) {
 }
 
 func TestResolveTokenReturnsEmpty(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_TOKEN", "")
 
 	got := resolveToken("")
@@ -30,6 +36,8 @@ func TestResolveTokenReturnsEmpty(t *testing.T) {
 }
 
 func TestResolveURLDefaults(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_URL", "")
 
 	got := resolveURL("")
@@ -39,6 +47,8 @@ func TestResolveURLDefaults(t *testing.T) {
 }
 
 func TestResolveURLPrefersFlag(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_URL", "https://env.example.com")
 
 	got := resolveURL("https://flag.example.com")
@@ -48,6 +58,8 @@ func TestResolveURLPrefersFlag(t *testing.T) {
 }
 
 func TestResolveURLFallsToEnv(t *testing.T) {
+	configHome = t.TempDir()
+	defer func() { configHome = "" }()
 	t.Setenv("VELORI_URL", "https://env.example.com")
 
 	got := resolveURL("")

@@ -2,10 +2,11 @@
 
 Velori is a hosted static prototype platform for non-engineers.
 
-This repo starts with two apps:
+This repo starts with three apps:
 
 - `web/` - React dashboard for uploads and project management
 - `api/` - Go API for health checks, projects, and mock uploads
+- `cli/` - Command-line tool for deploying from the terminal
 
 ## Build plan
 
@@ -45,6 +46,27 @@ npm run dev
 cd api
 go run .
 ```
+
+### CLI
+
+```bash
+cd cli
+make build
+```
+
+Authenticate with an API token (create one in the dashboard under Settings > API Tokens):
+
+```bash
+./velori login
+```
+
+Deploy a static site:
+
+```bash
+./velori deploy ./my-site
+```
+
+Run `./velori help` for all commands.
 
 ### Tests
 
