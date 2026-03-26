@@ -104,6 +104,10 @@ func (app *application) signOutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) requireSessionUser(r *http.Request) (sessionUser, error) {
+	if user, err := app.authenticateBearer(r); err == nil {
+		return user, nil
+	}
+
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return sessionUser{}, fmt.Errorf("missing session")
@@ -116,6 +120,28 @@ func (app *application) requireSessionUser(r *http.Request) (sessionUser, error)
 		from sessions s
 		join users u on u.id = s.user_id
 		where s.token_hash = $1 and s.expires_at > now()
+	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username)
+	if err != nil {
+		return sessionUser{}, err
+	}
+
+	return user, nil
+}
+
+func (app *application) authenticateBearer(r *http.Request) (sessionUser, error) {
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, "Bearer vtk_") {
+		return sessionUser{}, fmt.Errorf("no bearer token")
+	}
+
+	token := strings.TrimPrefix(header, "Bearer ")
+	hashed := hashToken(token)
+	var user sessionUser
+	err := app.db.QueryRow(r.Context(), `
+		select u.id, u.email, u.name, u.username
+		from api_tokens t
+		join users u on u.id = t.user_id
+		where t.token_hash = $1
 	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username)
 	if err != nil {
 		return sessionUser{}, err

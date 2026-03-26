@@ -106,3 +106,62 @@ export class SessionExpiredError extends Error {
     super('Your session expired. Sign in again.')
   }
 }
+
+export type ApiToken = {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export async function fetchTokens(): Promise<ApiToken[]> {
+  const response = await fetch(`${API_BASE_URL}/api/tokens`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    throw new Error('Could not load tokens')
+  }
+
+  const data = (await response.json()) as { tokens: ApiToken[] }
+  return data.tokens ?? []
+}
+
+export async function createToken(name: string): Promise<{ id: string; name: string; token: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/tokens`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string }
+    throw new Error(body.error ?? 'Could not create token')
+  }
+
+  return (await response.json()) as { id: string; name: string; token: string }
+}
+
+export async function deleteToken(tokenId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/tokens/${tokenId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string }
+    throw new Error(body.error ?? 'Could not delete token')
+  }
+}

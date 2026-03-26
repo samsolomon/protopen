@@ -1,6 +1,7 @@
 import type { Project, SessionUser } from './types'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
+import { TokensPanel } from './TokensPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -81,6 +82,8 @@ export function Dashboard({
               </div>
             )}
           </section>
+
+          <TokensPanel onSessionExpired={onSessionExpired} />
         </div>
       </main>
     </div>

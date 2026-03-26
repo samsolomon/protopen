@@ -147,6 +147,8 @@ func main() {
 	appMux.HandleFunc("/api/projects", app.projectsHandler)
 	appMux.HandleFunc("/api/projects/", app.projectByIDHandler)
 	appMux.HandleFunc("/api/uploads", app.uploadsHandler)
+	appMux.HandleFunc("/api/tokens", app.tokensHandler)
+	appMux.HandleFunc("/api/tokens/", app.tokenByIDHandler)
 	serveFrontend(appMux)
 
 	contentMux := http.NewServeMux()
