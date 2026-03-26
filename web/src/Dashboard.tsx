@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import type { Project, SessionUser } from './types'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
 import { TokensPanel } from './TokensPanel'
+import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+
+type DashboardView = 'dashboard' | 'docs'
 
 type DashboardProps = {
   user: SessionUser
@@ -30,11 +34,38 @@ export function Dashboard({
   onProjectsChanged,
   onSessionExpired,
 }: DashboardProps) {
+  const [view, setView] = useState<DashboardView>('dashboard')
+
+  const switchView = (next: DashboardView) => {
+    setView(next)
+    window.scrollTo(0, 0)
+  }
+
   return (
     <div className="min-h-svh bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
-          <h1 className="text-lg font-bold tracking-tight">Velori</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-bold tracking-tight">Velori</h1>
+            <nav className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={view === 'dashboard' ? 'bg-muted' : ''}
+                onClick={() => switchView('dashboard')}
+              >
+                Dashboard
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={view === 'docs' ? 'bg-muted' : ''}
+                onClick={() => switchView('docs')}
+              >
+                CLI
+              </Button>
+            </nav>
+          </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{user.name}</span>
             <Button variant="ghost" size="sm" onClick={() => void onSignOut()}>
@@ -45,48 +76,55 @@ export function Dashboard({
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="flex flex-col gap-8">
-          <UploadPanel
-            user={user}
-            projects={projects}
-            error={error}
-            setError={setError}
-            onProjectsChanged={onProjectsChanged}
-            onSessionExpired={onSessionExpired}
-          />
+        {view === 'docs' ? (
+          <CLIDocs />
+        ) : (
+          <div className="flex flex-col gap-8">
+            <UploadPanel
+              user={user}
+              projects={projects}
+              error={error}
+              setError={setError}
+              onProjectsChanged={onProjectsChanged}
+              onSessionExpired={onSessionExpired}
+            />
 
-          <section>
-            <h2 className="mb-4 text-lg font-semibold tracking-tight">Your projects</h2>
-            {isLoading ? (
-              <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  Loading projects...
-                </CardContent>
-              </Card>
-            ) : projects.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No projects yet. Upload your first static prototype.
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {projects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    isDeleting={deletingProjectID === project.id}
-                    onDelete={onDeleteProject}
-                    onProjectsChanged={onProjectsChanged}
-                    onSessionExpired={onSessionExpired}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+            <section>
+              <h2 className="mb-4 text-lg font-semibold tracking-tight">Your projects</h2>
+              {isLoading ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                    Loading projects...
+                  </CardContent>
+                </Card>
+              ) : projects.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                    No projects yet. Upload your first static prototype.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {projects.map((project) => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      isDeleting={deletingProjectID === project.id}
+                      onDelete={onDeleteProject}
+                      onProjectsChanged={onProjectsChanged}
+                      onSessionExpired={onSessionExpired}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
 
-          <TokensPanel onSessionExpired={onSessionExpired} />
-        </div>
+            <TokensPanel
+              onSessionExpired={onSessionExpired}
+              onViewDocs={() => switchView('docs')}
+            />
+          </div>
+        )}
       </main>
     </div>
   )

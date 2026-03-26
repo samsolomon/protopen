@@ -7,9 +7,10 @@ import { toast } from 'sonner'
 
 type TokensPanelProps = {
   onSessionExpired: () => void
+  onViewDocs?: () => void
 }
 
-export function TokensPanel({ onSessionExpired }: TokensPanelProps) {
+export function TokensPanel({ onSessionExpired, onViewDocs }: TokensPanelProps) {
   const [tokens, setTokens] = useState<ApiToken[]>([])
   const [newTokenName, setNewTokenName] = useState('')
   const [revealedToken, setRevealedToken] = useState<string | null>(null)
@@ -69,7 +70,17 @@ export function TokensPanel({ onSessionExpired }: TokensPanelProps) {
       <Card>
         <CardHeader>
           <CardTitle>Deploy from the command line</CardTitle>
-          <CardDescription>Create a token to deploy with the Velori CLI or curl.</CardDescription>
+          <CardDescription>
+            Create a token to deploy with the Velori CLI or curl.
+            {onViewDocs ? (
+              <>
+                {' '}
+                <Button variant="link" className="inline h-auto p-0" onClick={onViewDocs}>
+                  View CLI documentation &rarr;
+                </Button>
+              </>
+            ) : null}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {revealedToken ? (
