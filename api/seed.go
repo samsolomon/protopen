@@ -192,45 +192,101 @@ func createSeedDeployFiles(ingestRoot string, username string, slug string, vers
 	}
 
 	accent := []string{"#ff8f52", "#0fb381", "#5ba8ff", "#f4b942"}[version%4]
+	accentLight := []string{"#fff3ec", "#ecfdf5", "#eff6ff", "#fef9ee"}[version%4]
 	title := nameFromSlug(slug)
+
+	stylesCSS := fmt.Sprintf(`:root { color-scheme: light; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Inter, system-ui, -apple-system, sans-serif; background: #fafafa; color: #18181b; -webkit-font-smoothing: antialiased; }
+nav { border-bottom: 1px solid #e4e4e7; background: white; }
+.nav-inner { max-width: 960px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px; }
+.nav-brand { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.nav-links { display: flex; gap: 20px; flex: 1; }
+.nav-links a { color: #71717a; text-decoration: none; font-size: 14px; font-weight: 500; }
+.nav-links a:hover { color: #18181b; }
+.btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none; transition: all 0.15s; cursor: pointer; border: none; }
+.btn-sm { padding: 6px 14px; background: #f4f4f5; color: #18181b; }
+.btn-sm:hover { background: #e4e4e7; }
+.btn-primary { padding: 10px 20px; background: %s; color: white; font-weight: 600; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-ghost { padding: 10px 20px; color: #71717a; }
+.btn-ghost:hover { color: #18181b; }
+.hero { max-width: 960px; margin: 0 auto; padding: 80px 24px 64px; text-align: center; }
+.eyebrow { color: %s; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; font-weight: 700; margin-bottom: 16px; }
+h1 { font-size: 52px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 20px; }
+.subtitle { color: #71717a; font-size: 18px; line-height: 1.6; max-width: 480px; margin: 0 auto 32px; }
+.hero-actions { display: flex; gap: 12px; justify-content: center; }
+.features { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.feature { background: white; border: 1px solid #e4e4e7; border-radius: 16px; padding: 28px; }
+.feature-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: %s; margin-bottom: 16px; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.feature p { color: #71717a; font-size: 14px; line-height: 1.6; }
+footer { border-top: 1px solid #e4e4e7; padding: 24px; text-align: center; color: #a1a1aa; font-size: 13px; }
+@media (max-width: 640px) { h1 { font-size: 32px; } .features { grid-template-columns: 1fr; } }
+`, accent, accent, accent)
+
 	indexHTML := fmt.Sprintf(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>%s</title>
-    <link rel="stylesheet" href="styles.css" />
+    <style>%s</style>
   </head>
   <body>
-    <main>
-      <p class="eyebrow">Velori seed project</p>
-      <h1>%s</h1>
-      <p>Version %d of the locally seeded demo deploy.</p>
-      <a href="docs">Open docs route</a>
-    </main>
+    <nav>
+      <div class="nav-inner">
+        <span class="nav-brand">%s</span>
+        <div class="nav-links">
+          <a href="#">Features</a>
+          <a href="#">Pricing</a>
+          <a href="docs">Docs</a>
+        </div>
+        <a href="#" class="btn btn-sm">Sign in</a>
+      </div>
+    </nav>
+    <section class="hero">
+      <p class="eyebrow">Version %d</p>
+      <h1>Ship prototypes<br>your team will love</h1>
+      <p class="subtitle">Share interactive prototypes with your team. Get feedback, iterate, and ship faster.</p>
+      <div class="hero-actions">
+        <a href="#" class="btn btn-primary">Get started</a>
+        <a href="docs" class="btn btn-ghost">Read the docs</a>
+      </div>
+    </section>
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon" style="background:%s">&#9672;</div>
+        <h3>Instant deploys</h3>
+        <p>Push your prototype and get a live URL in seconds. No build step required.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background:%s">&#9830;</div>
+        <h3>Team feedback</h3>
+        <p>Invite your team to review prototypes and leave comments directly on the page.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon" style="background:%s">&#9733;</div>
+        <h3>Version history</h3>
+        <p>Every deploy is preserved. Compare versions side by side to track progress.</p>
+      </div>
+    </section>
+    <footer>
+      <p>%s &middot; Seed project v%d</p>
+    </footer>
   </body>
 </html>
-`, title, title, version+1)
-
-	stylesCSS := fmt.Sprintf(`:root { color-scheme: light; }
-body { margin: 0; font-family: Inter, system-ui, sans-serif; background: linear-gradient(180deg, #f6f8fb, #eef2f7); color: #13202b; }
-main { max-width: 720px; margin: 80px auto; padding: 32px; border-radius: 24px; background: white; box-shadow: 0 24px 70px rgba(18, 24, 40, 0.08); }
-.eyebrow { color: %s; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; font-weight: 700; }
-h1 { margin: 8px 0 12px; font-size: 48px; }
-a { color: %s; font-weight: 600; }
-`, accent, accent)
+`, title, stylesCSS, title, version+1, accentLight, accentLight, accentLight, title, version+1)
 
 	docsHTML := fmt.Sprintf(`<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>%s Docs</title></head>
-  <body><main><h1>%s docs route</h1><p>This page verifies directory index serving.</p></main></body>
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>%s Docs</title>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: Inter, system-ui, sans-serif; background: #fafafa; color: #18181b; -webkit-font-smoothing: antialiased; } main { max-width: 640px; margin: 0 auto; padding: 64px 24px; } h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; } p { color: #71717a; line-height: 1.7; } a { color: %s; font-weight: 500; }</style></head>
+  <body><main><h1>%s</h1><p>This page verifies directory index serving. <a href="/">Back to home</a></p></main></body>
 </html>
-`, slug, slug)
+`, slug, accent, nameFromSlug(slug)+" Docs")
 
 	if err := os.WriteFile(filepath.Join(seedRoot, "index.html"), []byte(indexHTML), 0o644); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(seedRoot, "styles.css"), []byte(stylesCSS), 0o644); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(seedRoot, "docs", "index.html"), []byte(docsHTML), 0o644); err != nil {

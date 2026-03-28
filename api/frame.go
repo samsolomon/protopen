@@ -13,13 +13,11 @@ func frameSnippet(projectName string, appOrigin string) string {
 	origin := html.EscapeString(appOrigin)
 
 	return fmt.Sprintf(`<script data-velori-frame>(function(){
-if(sessionStorage.getItem('velori-frame-dismissed'))return;
 var h=document.createElement('div');
 h.id='velori-frame';
 var s=h.attachShadow({mode:'closed'});
-s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:36px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:36px;background:#18181b;color:#fff;padding:0 12px;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.3)}.logo{color:#fff;text-decoration:none;font-weight:600;letter-spacing:.02em;margin-right:8px}.logo:hover{opacity:.85}.name{flex:1;text-align:center;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.close{background:none;border:none;color:#fff;cursor:pointer;opacity:.4;font-size:18px;padding:4px 0 4px 8px;line-height:1}.close:hover{opacity:1}</style><div class="bar"><a class="logo" href="%s">Velori</a><span class="name">%s</span><button class="close" aria-label="Dismiss toolbar" title="Dismiss">&#x2715;</button></div>';
-var om=document.body.style.marginTop;s.querySelector('.close').onclick=function(){sessionStorage.setItem('velori-frame-dismissed','1');document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)-36+'px';h.remove()};
-document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+36+'px';
+s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:24px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:24px;background:color-mix(in oklab,#18181b 70%%,transparent);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);color:#fff;padding:0 10px;font-size:11px}.logo{color:#fff;text-decoration:none;font-weight:600;letter-spacing:.02em;margin-right:8px}.logo:hover{opacity:.85}.name{flex:1;text-align:center;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}</style><div class="bar"><a class="logo" href="%s">Velori</a><span class="name">%s</span></div>';
+document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+24+'px';
 document.body.appendChild(h);
 })();</script>`, origin, name)
 }
