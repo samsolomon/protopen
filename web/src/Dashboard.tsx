@@ -10,7 +10,6 @@ import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
 import { CLIDocs } from './CLIDocs'
-import { VersionViewer } from './VersionViewer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -89,41 +88,37 @@ export function Dashboard({
         />
       )}
       <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-[40px] backdrop-saturate-150">
-        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold tracking-tight">Velori</h1>
-            <nav className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={view === 'dashboard' ? 'bg-muted' : ''}
-                onClick={() => switchView('dashboard')}
-              >
-                Projects
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={view === 'docs' ? 'bg-muted' : ''}
-                onClick={() => switchView('docs')}
-              >
-                CLI
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={view === 'settings' ? 'bg-muted' : ''}
-                onClick={() => switchView('settings')}
-              >
-                Settings
-              </Button>
-            </nav>
+        <div className="mx-auto grid h-14 max-w-[1440px] grid-cols-3 items-center px-4">
+          <div className="flex items-center">
+            <h1 className="text-xl font-semibold tracking-tight">Velori</h1>
           </div>
-          <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setUploadOpen(true)}>
-            <Plus />
-            Create project
-          </Button>
+          <nav className="flex items-center justify-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={view === 'dashboard' ? 'bg-muted' : ''}
+              onClick={() => switchView('dashboard')}
+            >
+              Projects
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={view === 'docs' ? 'bg-muted' : ''}
+              onClick={() => switchView('docs')}
+            >
+              CLI
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={view === 'settings' ? 'bg-muted' : ''}
+              onClick={() => switchView('settings')}
+            >
+              Settings
+            </Button>
+          </nav>
+          <div className="flex items-center justify-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex cursor-pointer items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm font-medium outline-none hover:bg-muted"
@@ -227,7 +222,13 @@ export function Dashboard({
         ) : (
           <div className="flex flex-col gap-8">
             <section>
-              <h2 className="mb-4 text-lg font-semibold tracking-tight">Your projects</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold tracking-tight">Your projects</h2>
+                <Button size="sm" onClick={() => setUploadOpen(true)}>
+                  <Plus />
+                  Create project
+                </Button>
+              </div>
               {isLoading ? (
                 <Card>
                   <CardContent className="py-8 text-center text-sm text-muted-foreground">

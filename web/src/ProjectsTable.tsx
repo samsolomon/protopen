@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ChevronDown, ChevronUp, Copy, Globe, Layers, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, Globe, Layers, Lock, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ProjectsTableProps = {
@@ -68,7 +68,17 @@ export function ProjectsTable({
               <Fragment key={project.id}>
                 <TableRow>
                   <TableCell className="font-medium">
-                    <span className="block max-w-[200px] truncate">{project.name}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => toggleExpand(project.id)}
+                        aria-label={isExpanded ? 'Hide history' : 'Show history'}
+                      >
+                        {isExpanded ? <ChevronDown /> : <ChevronRight />}
+                      </Button>
+                      <span className="block max-w-[200px] truncate">{project.name}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <a
@@ -95,14 +105,6 @@ export function ProjectsTable({
                         aria-label={project.isPublic ? 'Make private' : 'Make public'}
                       >
                         {project.isPublic ? <Globe /> : <Lock />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => toggleExpand(project.id)}
-                        aria-label={isExpanded ? 'Hide history' : 'Show history'}
-                      >
-                        {isExpanded ? <ChevronUp /> : <ChevronDown />}
                       </Button>
                       <Button
                         variant="ghost"
