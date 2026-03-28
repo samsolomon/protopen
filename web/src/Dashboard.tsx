@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, User, Settings, LogOut, Terminal, Upload, FolderOpen } from 'lucide-react'
+import { Plus, Terminal, Upload, FolderOpen } from 'lucide-react'
 
 type DashboardView = 'dashboard' | 'docs' | 'settings'
 
@@ -111,26 +111,18 @@ export function Dashboard({
           </nav>
           <div className="flex items-center justify-end gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger
-              className="flex cursor-pointer items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm font-medium outline-none hover:bg-muted"
-            >
-              <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                {user.name.charAt(0).toUpperCase()}
-              </span>
-              {user.name}
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost">{user.name}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={() => { setSettingsTab('account'); setView('settings') }}>
-                <User />
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => switchView('settings')}>
-                <Settings />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onSignOut()}>
-                <LogOut />
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
