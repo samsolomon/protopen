@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,6 +201,298 @@ func TestValidateProjectMatchCountRejectsMultipleMatches(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "multiple existing projects match") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNormalizeUploadPathRejectsTraversal(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		desc  string
+	}{
+		{"../etc/passwd", "parent directory traversal"},
+		{"foo/../../bar", "embedded traversal"},
+		{"..", "bare dotdot"},
+		{"a/../../../etc/shadow", "deep traversal"},
+	}
+	for _, tc := range cases {
+		if _, err := normalizeUploadPath(tc.input); err == nil {
+			t.Errorf("expected error for %s (%q)", tc.desc, tc.input)
+		}
+	}
+}
+
+func TestNormalizeUploadPathRejectsReservedPrefix(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{"_v/something", "_v"} {
+		if _, err := normalizeUploadPath(input); err == nil {
+			t.Errorf("expected error for reserved prefix %q", input)
+		}
+	}
+}
+
+func TestNormalizeUploadPathRejectsEmptyAndDot(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{"", "  ", "."} {
+		if _, err := normalizeUploadPath(input); err == nil {
+			t.Errorf("expected error for empty/dot input %q", input)
+		}
+	}
+}
+
+func TestNormalizeUploadPathAcceptsValidPaths(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"index.html", "index.html"},
+		{"docs/page.html", "docs/page.html"},
+		{"assets/css/styles.css", "assets/css/styles.css"},
+		{"/index.html", "index.html"},
+		{"  index.html  ", "index.html"},
+	}
+	for _, tc := range cases {
+		got, err := normalizeUploadPath(tc.input)
+		if err != nil {
+			t.Errorf("normalizeUploadPath(%q) unexpected error: %v", tc.input, err)
+		} else if got != tc.want {
+			t.Errorf("normalizeUploadPath(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"My Cool Project", "my-cool-project"},
+		{"site.zip", "site"},
+		{"test@#$%project", "test-project"},
+		{"", "prototype"},
+		{"   ", "prototype"},
+		{"--hello--", "hello"},
+		{"hello_world", "hello-world"},
+		{"Lots   Of   Spaces", "lots-of-spaces"},
+		{"UPPERCASE", "uppercase"},
+		{"123numbers", "123numbers"},
+		{"@@@", "prototype"},
+	}
+	for _, tc := range cases {
+		got := slugify(tc.input)
+		if got != tc.want {
+			t.Errorf("slugify(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestValidateUploadRejectsEmptyName(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{
+		Name:  "   ",
+		Mode:  "files",
+		Files: []fileMeta{{Name: "index.html", Path: "index.html", Size: 128}},
+	}
+	if err := validateUpload(payload); err == nil {
+		t.Fatal("expected empty name to be rejected")
+	}
+}
+
+func TestValidateUploadRejectsEmptyFiles(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{Name: "Test", Mode: "files", Files: nil}
+	if err := validateUpload(payload); err == nil {
+		t.Fatal("expected empty files to be rejected")
+	}
+}
+
+func TestValidateUploadRejectsOversizedFile(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{
+		Name: "Test",
+		Mode: "files",
+		Files: []fileMeta{
+			{Name: "index.html", Path: "index.html", Size: 128},
+			{Name: "huge.bin", Path: "huge.bin", Size: 21 * 1024 * 1024},
+		},
+	}
+	err := validateUpload(payload)
+	if err == nil {
+		t.Fatal("expected oversized file to be rejected")
+	}
+	if !strings.Contains(err.Error(), "huge.bin") {
+		t.Fatalf("expected error to mention filename, got: %v", err)
+	}
+}
+
+func TestValidateUploadRejectsTotalOverLimit(t *testing.T) {
+	t.Parallel()
+
+	files := make([]fileMeta, 0, 11)
+	for i := 0; i < 11; i++ {
+		files = append(files, fileMeta{Name: "chunk.bin", Path: "chunk.bin", Size: 10 * 1024 * 1024})
+	}
+	files = append(files, fileMeta{Name: "index.html", Path: "index.html", Size: 128})
+
+	payload := uploadRequest{Name: "Test", Mode: "files", Files: files}
+	err := validateUpload(payload)
+	if err == nil {
+		t.Fatal("expected total size over 100MB to be rejected")
+	}
+	if !strings.Contains(err.Error(), "100MB") {
+		t.Fatalf("expected error to mention 100MB limit, got: %v", err)
+	}
+}
+
+func TestValidateUploadZipModeSingleZipPasses(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{
+		Name:  "My Site",
+		Mode:  "zip",
+		Files: []fileMeta{{Name: "site.zip", Path: "site.zip", Size: 5000}},
+	}
+	if err := validateUpload(payload); err != nil {
+		t.Fatalf("expected single zip upload to pass, got: %v", err)
+	}
+}
+
+func TestValidateUploadZipModeRejectsMultipleZips(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{
+		Name: "My Site",
+		Mode: "zip",
+		Files: []fileMeta{
+			{Name: "a.zip", Path: "a.zip", Size: 1000},
+			{Name: "b.zip", Path: "b.zip", Size: 1000},
+		},
+	}
+	if err := validateUpload(payload); err == nil {
+		t.Fatal("expected multiple zip files to be rejected")
+	}
+}
+
+func TestWithCORSAllowsMatchingOrigin(t *testing.T) {
+	t.Parallel()
+
+	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:5173" {
+		t.Fatal("expected matching origin to be reflected")
+	}
+	if rec.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatal("expected credentials header for matching origin")
+	}
+}
+
+func TestWithCORSRejectsNonMatchingOrigin(t *testing.T) {
+	t.Parallel()
+
+	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+	req.Header.Set("Origin", "http://evil.com")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("expected no Allow-Origin header for non-matching origin")
+	}
+	if rec.Header().Get("Access-Control-Allow-Credentials") != "" {
+		t.Fatal("expected no credentials header for non-matching origin")
+	}
+	if rec.Header().Get("Access-Control-Allow-Methods") == "" {
+		t.Fatal("expected Allow-Methods to always be set")
+	}
+}
+
+func TestWithCORSOptionsReturnNoContent(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/projects", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for OPTIONS, got %d", rec.Code)
+	}
+	if called {
+		t.Fatal("expected OPTIONS to short-circuit without calling next handler")
+	}
+}
+
+func TestResolveAssetPathRejectsTraversal(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := resolveAssetPath(root, "../../../etc/passwd")
+	if err == nil {
+		t.Fatal("expected path traversal to be rejected")
+	}
+}
+
+func TestResolveAssetPathReturnErrorForMissingFileWithExtension(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := resolveAssetPath(root, "missing.css")
+	if err == nil {
+		t.Fatal("expected error for missing file with extension")
+	}
+}
+
+func TestResolveAssetPathEmptyReturnsRootIndex(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, fallback, err := resolveAssetPath(root, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fallback {
+		t.Fatal("expected no SPA fallback for empty path")
+	}
+	want := filepath.Join(root, "index.html")
+	if resolved != want {
+		t.Fatalf("expected %q, got %q", want, resolved)
 	}
 }
 
