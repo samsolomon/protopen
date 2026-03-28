@@ -3,6 +3,14 @@ import type { Project } from './types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { DeployHistory } from './DeployHistory'
 import { toast } from 'sonner'
 
@@ -17,6 +25,7 @@ type ProjectCardProps = {
 
 export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
   const [showHistory, setShowHistory] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
     <Card>
@@ -67,11 +76,33 @@ export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle,
           variant="destructive"
           size="sm"
           disabled={isDeleting}
-          onClick={() => void onDelete(project.id)}
+          onClick={() => setConfirmDelete(true)}
         >
           {isDeleting ? 'Deleting...' : 'Delete'}
         </Button>
       </CardFooter>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-medium text-foreground">{project.name}</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                void onDelete(project.id)
+                setConfirmDelete(false)
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

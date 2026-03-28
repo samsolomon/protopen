@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { Project } from './types'
 import { DeployHistory } from './DeployHistory'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Globe, Lock, Tras
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -33,7 +35,8 @@ function CopyButton({ text }: { text: string }) {
           onClick={() => {
             void navigator.clipboard.writeText(text)
             setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
+            if (timerRef.current) clearTimeout(timerRef.current)
+            timerRef.current = setTimeout(() => setCopied(false), 2000)
           }}
           aria-label="Copy URL"
         >

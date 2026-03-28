@@ -204,7 +204,9 @@ func main() {
 	}
 
 	// Local dev mode: serve content on app port so session cookie works for private projects
-	app.contentBaseURL = "http://localhost" + appListenAddr
+	if os.Getenv("PUBLIC_CONTENT_URL") == "" {
+		app.contentBaseURL = "http://localhost" + appListenAddr
+	}
 	appMux.Handle("/~", contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	// Local dev mode: two separate servers

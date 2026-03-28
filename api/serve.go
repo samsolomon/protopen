@@ -55,13 +55,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 
 	if !deployment.isPublic {
 		user, err := app.requireSessionUser(r)
-		if err != nil {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
-			return
-		}
-		if !userInOrg(user, orgSlug) {
+		if err != nil || !userInOrg(user, orgSlug) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
