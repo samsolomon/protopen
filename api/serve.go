@@ -55,10 +55,14 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	snippet := frameSnippet(deployment.projectName, app.frontendOrigin)
+	fw := newFrameWriter(w, snippet)
+	defer fw.Close()
+
 	if app.store != nil {
-		app.serveFromR2(w, r, deployment.siteRoot, assetPath)
+		app.serveFromR2(fw, r, deployment.siteRoot, assetPath)
 	} else {
-		app.serveFromFilesystem(w, r, deployment.siteRoot, assetPath)
+		app.serveFromFilesystem(fw, r, deployment.siteRoot, assetPath)
 	}
 }
 
@@ -106,6 +110,8 @@ func (app *application) serveFromR2(w http.ResponseWriter, r *http.Request, pref
 			w.Header().Set("Cache-Control", "no-store")
 			if contentType != "" {
 				w.Header().Set("Content-Type", contentType)
+			} else {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			}
 			io.Copy(w, body)
 			return
@@ -175,18 +181,19 @@ func parseProjectPath(rawPath string) (orgSlug string, slug string, assetPath st
 func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, slug string) (liveDeploy, error) {
 	var siteRoot string
 	var isPublic bool
+	var projectName string
 	err := app.db.QueryRow(ctx, `
-		select d.storage_prefix, p.is_public
+		select d.storage_prefix, p.is_public, p.name
 		from projects p
 		join organizations o on o.id = p.org_id
 		join deploys d on d.id = p.current_deploy_id
 		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-	`, orgSlug, slug).Scan(&siteRoot, &isPublic)
+	`, orgSlug, slug).Scan(&siteRoot, &isPublic, &projectName)
 	if err != nil {
 		return liveDeploy{}, err
 	}
 
-	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic}, nil
+	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic, projectName: projectName}, nil
 }
 
 func resolveAssetPath(siteRoot string, requested string) (string, bool, error) {
@@ -248,10 +255,11 @@ func serveFile(w http.ResponseWriter, r *http.Request, filePath string) error {
 
 	if strings.EqualFold(filepath.Base(filePath), "index.html") {
 		w.Header().Set("Cache-Control", "no-store")
-	} else {
-		w.Header().Set("Cache-Control", "public, max-age=300")
+		io.Copy(w, file)
+		return nil
 	}
 
+	w.Header().Set("Cache-Control", "public, max-age=300")
 	http.ServeContent(w, r, filepath.Base(filePath), info.ModTime(), file)
 	return nil
 }

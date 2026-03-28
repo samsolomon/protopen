@@ -95,8 +95,9 @@ type projectRecord struct {
 }
 
 type liveDeploy struct {
-	siteRoot string
-	isPublic bool
+	siteRoot    string
+	isPublic    bool
+	projectName string
 }
 
 func main() {
