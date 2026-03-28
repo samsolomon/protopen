@@ -4,6 +4,14 @@ import { DeployHistory } from './DeployHistory'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Table,
   TableBody,
   TableCell,
@@ -55,6 +63,7 @@ export function ProjectsTable({
   onSessionExpired,
 }: ProjectsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
 
   const toggleExpand = (id: string) => {
     setExpandedRows((prev) => {
@@ -141,9 +150,9 @@ export function ProjectsTable({
                           <Button
                             variant="ghost"
                             size="icon-xs"
-                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            className="hover:bg-destructive/10 hover:text-destructive"
                             disabled={isDeleting}
-                            onClick={() => void onDelete(project.id)}
+                            onClick={() => setDeleteTarget(project)}
                             aria-label="Delete project"
                           >
                             <Trash2 />
@@ -170,6 +179,28 @@ export function ProjectsTable({
           })}
         </TableBody>
       </Table>
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.name}</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteTarget) void onDelete(deleteTarget.id)
+                setDeleteTarget(null)
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
