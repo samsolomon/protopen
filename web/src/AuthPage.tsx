@@ -74,8 +74,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
               <CardHeader>
                 <CardTitle>Sign in</CardTitle>
                 <CardDescription>Enter your credentials to access your projects.</CardDescription>
-                <div className="mt-2 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-500">
+                <div className="mt-2 rounded-lg border border-dashed border-brand/40 bg-brand/5 p-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-brand">
                     <FlaskConical className="size-3.5" />
                     Demo accounts
                   </p>
@@ -86,7 +86,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="flex-1 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                        className="flex-1 border-brand/30 text-brand hover:bg-brand/10 hover:text-brand/80"
                         disabled={authPending}
                         onClick={() => void quickLogin(account.email)}
                       >
