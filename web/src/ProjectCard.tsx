@@ -13,9 +13,10 @@ type ProjectCardProps = {
   onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
+  onViewVersions: (project: Project) => void
 }
 
-export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
+export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired, onViewVersions }: ProjectCardProps) {
   const [showHistory, setShowHistory] = useState(false)
 
   return (
@@ -52,6 +53,9 @@ export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle,
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)}>
           {showHistory ? 'Hide history' : 'History'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onViewVersions(project)}>
+          Frames
         </Button>
         <Button
           variant="ghost"

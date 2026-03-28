@@ -10,6 +10,7 @@ import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
 import { CLIDocs } from './CLIDocs'
+import { VersionViewer } from './VersionViewer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -65,6 +66,7 @@ export function Dashboard({
   const [settingsTab, setSettingsTab] = useState('account')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
+  const [viewerProject, setViewerProject] = useState<Project | null>(null)
 
   const switchView = (next: DashboardView) => {
     if (next === 'settings') setSettingsTab('account')
@@ -79,7 +81,14 @@ export function Dashboard({
 
   return (
     <div className="min-h-svh bg-background">
-      <header className="border-b">
+      {viewerProject && (
+        <VersionViewer
+          project={viewerProject}
+          onClose={() => setViewerProject(null)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+      <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-[40px] backdrop-saturate-150">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-bold tracking-tight">Velori</h1>
@@ -278,6 +287,7 @@ export function Dashboard({
                       onVisibilityToggle={onVisibilityToggle}
                       onProjectsChanged={onProjectsChanged}
                       onSessionExpired={onSessionExpired}
+                      onViewVersions={(project) => setViewerProject(project)}
                     />
                   </div>
                   <div className="flex flex-col gap-4 sm:hidden">
@@ -290,6 +300,7 @@ export function Dashboard({
                         onVisibilityToggle={onVisibilityToggle}
                         onProjectsChanged={onProjectsChanged}
                         onSessionExpired={onSessionExpired}
+                        onViewVersions={(project) => setViewerProject(project)}
                       />
                     ))}
                   </div>
