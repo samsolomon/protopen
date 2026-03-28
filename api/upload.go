@@ -254,6 +254,9 @@ func normalizeUploadPath(value string) (string, error) {
 	if strings.HasPrefix(cleaned, "../") || cleaned == ".." || strings.Contains(cleaned, "/../") {
 		return "", fmt.Errorf("unsafe file path: %s", value)
 	}
+	if strings.HasPrefix(cleaned, "_v/") || cleaned == "_v" {
+		return "", fmt.Errorf("reserved path prefix")
+	}
 	return cleaned, nil
 }
 

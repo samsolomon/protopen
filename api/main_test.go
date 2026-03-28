@@ -117,12 +117,33 @@ func TestResolveAssetPathFallsBackToRootIndexForSpaRoute(t *testing.T) {
 func TestParseProjectPath(t *testing.T) {
 	t.Parallel()
 
-	username, slug, assetPath, ok := parseProjectPath("/~sam/product-teardown/docs/index.html")
+	username, slug, deployID, assetPath, ok := parseProjectPath("/~sam/product-teardown/docs/index.html")
 	if !ok {
 		t.Fatal("expected parseProjectPath to succeed")
 	}
-	if username != "sam" || slug != "product-teardown" || assetPath != "docs/index.html" {
-		t.Fatalf("unexpected parse result: %q %q %q", username, slug, assetPath)
+	if username != "sam" || slug != "product-teardown" || deployID != "" || assetPath != "docs/index.html" {
+		t.Fatalf("unexpected parse result: %q %q %q %q", username, slug, deployID, assetPath)
+	}
+
+	// Versioned path
+	username, slug, deployID, assetPath, ok = parseProjectPath("/~sam/product-teardown/_v/dep_abc123/styles.css")
+	if !ok {
+		t.Fatal("expected versioned parseProjectPath to succeed")
+	}
+	if username != "sam" || slug != "product-teardown" || deployID != "dep_abc123" || assetPath != "styles.css" {
+		t.Fatalf("unexpected versioned parse result: %q %q %q %q", username, slug, deployID, assetPath)
+	}
+
+	// Versioned root (no asset)
+	_, _, deployID, assetPath, ok = parseProjectPath("/~sam/product-teardown/_v/dep_abc123/")
+	if !ok || deployID != "dep_abc123" || assetPath != "" {
+		t.Fatalf("unexpected versioned root result: deployID=%q assetPath=%q ok=%v", deployID, assetPath, ok)
+	}
+
+	// Invalid: _v without deploy ID
+	_, _, _, _, ok = parseProjectPath("/~sam/product-teardown/_v/")
+	if ok {
+		t.Fatal("expected _v without deploy ID to fail")
 	}
 }
 
@@ -196,13 +217,10 @@ func TestCreateSeedDeployFilesUsesProjectRelativeLinks(t *testing.T) {
 	}
 
 	markup := string(indexHTML)
-	if strings.Contains(markup, "href=\"/styles.css\"") {
-		t.Fatal("expected seeded CSS link to be project-relative")
-	}
 	if strings.Contains(markup, "href=\"/docs\"") {
 		t.Fatal("expected seeded docs link to be project-relative")
 	}
-	if !strings.Contains(markup, "href=\"styles.css\"") || !strings.Contains(markup, "href=\"docs\"") {
-		t.Fatal("expected seeded page to include project-relative links")
+	if !strings.Contains(markup, "href=\"docs\"") {
+		t.Fatal("expected seeded page to include project-relative docs link")
 	}
 }

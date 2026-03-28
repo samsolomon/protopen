@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -29,19 +30,25 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	orgSlug, slug, assetPath, ok := parseProjectPath(r.URL.Path)
+	orgSlug, slug, deployID, assetPath, ok := parseProjectPath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
-	deployment, err := app.lookupLiveDeploy(r.Context(), orgSlug, slug)
+	var deployment liveDeploy
+	var err error
+	if deployID != "" {
+		deployment, err = app.lookupDeployByID(r.Context(), orgSlug, slug, deployID)
+	} else {
+		deployment, err = app.lookupLiveDeploy(r.Context(), orgSlug, slug)
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.NotFound(w, r)
 			return
 		}
-		log.Printf("lookup live deploy: %v", err)
+		log.Printf("lookup deploy: %v", err)
 		http.Error(w, "could not load project", http.StatusInternalServerError)
 		return
 	}
@@ -55,7 +62,9 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	snippet := frameSnippet(deployment.projectName, app.frontendOrigin)
+	deploys := app.listToolbarDeploys(r.Context(), orgSlug, slug)
+	baseURL := fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, slug)
+	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployID, baseURL)
 	fw := newFrameWriter(w, snippet)
 	defer fw.Close()
 
@@ -158,24 +167,89 @@ func (app *application) serveFromFilesystem(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func parseProjectPath(rawPath string) (orgSlug string, slug string, assetPath string, ok bool) {
+func parseProjectPath(rawPath string) (orgSlug string, slug string, deployID string, assetPath string, ok bool) {
 	trimmed := strings.Trim(rawPath, "/")
 	parts := strings.Split(trimmed, "/")
 	if len(parts) < 2 || !strings.HasPrefix(parts[0], "~") {
-		return "", "", "", false
+		return "", "", "", "", false
 	}
 
 	orgSlug = strings.TrimPrefix(parts[0], "~")
 	slug = parts[1]
 	if orgSlug == "" || slug == "" {
-		return "", "", "", false
+		return "", "", "", "", false
 	}
 
-	if len(parts) > 2 {
+	if len(parts) > 2 && parts[2] == "_v" {
+		if len(parts) < 4 || parts[3] == "" {
+			return "", "", "", "", false
+		}
+		deployID = parts[3]
+		if len(parts) > 4 {
+			assetPath = strings.Join(parts[4:], "/")
+		}
+	} else if len(parts) > 2 {
 		assetPath = strings.Join(parts[2:], "/")
 	}
 
-	return orgSlug, slug, assetPath, true
+	return orgSlug, slug, deployID, assetPath, true
+}
+
+func (app *application) lookupDeployByID(ctx context.Context, orgSlug string, slug string, deployID string) (liveDeploy, error) {
+	var siteRoot string
+	var isPublic bool
+	var projectName string
+	err := app.db.QueryRow(ctx, `
+		select d.storage_prefix, p.is_public, p.name
+		from projects p
+		join organizations o on o.id = p.org_id
+		join deploys d on d.id = $3 and d.project_id = p.id
+		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
+	`, orgSlug, slug, deployID).Scan(&siteRoot, &isPublic, &projectName)
+	if err != nil {
+		return liveDeploy{}, err
+	}
+
+	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic, projectName: projectName}, nil
+}
+
+type toolbarDeploy struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Time      string `json:"time"`
+	IsCurrent bool   `json:"isCurrent"`
+}
+
+func (app *application) listToolbarDeploys(ctx context.Context, orgSlug string, slug string) []toolbarDeploy {
+	rows, err := app.db.Query(ctx, `
+		select d.id, d.label, d.created_at, (d.id = p.current_deploy_id) as is_current
+		from deploys d
+		join projects p on p.id = d.project_id
+		join organizations o on o.id = p.org_id
+		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
+		order by d.created_at asc
+		limit 50
+	`, orgSlug, slug)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var deploys []toolbarDeploy
+	for rows.Next() {
+		var d toolbarDeploy
+		var label *string
+		var createdAt time.Time
+		if err := rows.Scan(&d.ID, &label, &createdAt, &d.IsCurrent); err != nil {
+			return nil
+		}
+		if label != nil {
+			d.Label = *label
+		}
+		d.Time = relativeTime(createdAt)
+		deploys = append(deploys, d)
+	}
+	return deploys
 }
 
 func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, slug string) (liveDeploy, error) {
