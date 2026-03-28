@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, Copy, Globe, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, ExternalLink, Globe, Lock, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ProjectsTableProps = {
@@ -80,14 +80,33 @@ export function ProjectsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <a
-                      href={project.liveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block max-w-[260px] truncate text-primary underline-offset-4 hover:underline"
-                    >
-                      {project.liveUrl}
-                    </a>
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={project.liveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 max-w-[260px] truncate text-primary underline-offset-4 hover:underline"
+                      >
+                        <span className="truncate">{project.liveUrl}</span>
+                        <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                      </a>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(project.liveUrl)
+                              toast('URL copied to clipboard')
+                            }}
+                            aria-label="Copy URL"
+                          >
+                            <Copy />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy URL</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary">{project.deployCount}</Badge>
@@ -109,22 +128,6 @@ export function ProjectsTable({
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>{project.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(project.liveUrl)
-                              toast('URL copied to clipboard')
-                            }}
-                            aria-label="Copy URL"
-                          >
-                            <Copy />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copy URL</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
