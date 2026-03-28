@@ -14,7 +14,16 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu'
-import { UserPlus, X, ChevronDown } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { UserPlus, Trash2, ChevronDown } from 'lucide-react'
 
 type OrgMembersPanelProps = {
   user: SessionUser
@@ -27,6 +36,8 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
   const [loading, setLoading] = useState(true)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [removingMember, setRemovingMember] = useState<{ id: string; name: string } | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const orgId = personalOrg?.id ?? ''
   const isAdmin = personalOrg?.role === 'admin'
@@ -83,15 +94,19 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
     }
   }
 
-  const handleRemove = async (memberId: string, memberName: string) => {
-    if (!orgId) return
+  const handleRemove = async () => {
+    if (!orgId || !removingMember) return
+    setRemoving(true)
     try {
-      await removeOrgMember(orgId, memberId)
-      setMembers((prev) => prev.filter((m) => m.id !== memberId))
-      toast.success(`Removed ${memberName}`)
+      await removeOrgMember(orgId, removingMember.id)
+      setMembers((prev) => prev.filter((m) => m.id !== removingMember.id))
+      toast.success(`Removed ${removingMember.name}`)
+      setRemovingMember(null)
     } catch (err) {
       if (err instanceof SessionExpiredError) return onSessionExpired()
       toast.error(err instanceof Error ? err.message : 'Could not remove member')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -147,14 +162,20 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
                     </Badge>
                   )}
                   {isAdmin && member.userId !== user.id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => handleRemove(member.id, member.name)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setRemovingMember({ id: member.id, name: member.name })}
+                          aria-label="Remove member"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove member</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -183,6 +204,23 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
           </form>
         )}
       </CardContent>
+
+      <Dialog open={removingMember !== null} onOpenChange={(open) => { if (!open) setRemovingMember(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove member?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove {removingMember?.name} from this workspace?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemovingMember(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void handleRemove()} disabled={removing}>
+              {removing ? 'Removing...' : 'Remove'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
