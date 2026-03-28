@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ChevronDown, ChevronRight, Copy, Globe, Layers, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, Globe, Lock, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ProjectsTableProps = {
@@ -21,7 +21,6 @@ type ProjectsTableProps = {
   onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
-  onViewVersions: (project: Project) => void
 }
 
 export function ProjectsTable({
@@ -31,7 +30,6 @@ export function ProjectsTable({
   onVisibilityToggle,
   onProjectsChanged,
   onSessionExpired,
-  onViewVersions,
 }: ProjectsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
@@ -105,14 +103,6 @@ export function ProjectsTable({
                         aria-label={project.isPublic ? 'Make private' : 'Make public'}
                       >
                         {project.isPublic ? <Globe /> : <Lock />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => onViewVersions(project)}
-                        aria-label="View versions"
-                      >
-                        <Layers />
                       </Button>
                       <Button
                         variant="ghost"

@@ -65,8 +65,6 @@ export function Dashboard({
   const [settingsTab, setSettingsTab] = useState('account')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
-  const [viewerProject, setViewerProject] = useState<Project | null>(null)
-
   const switchView = (next: DashboardView) => {
     if (next === 'settings') setSettingsTab('account')
     setView(next)
@@ -80,13 +78,6 @@ export function Dashboard({
 
   return (
     <div className="min-h-svh bg-background">
-      {viewerProject && (
-        <VersionViewer
-          project={viewerProject}
-          onClose={() => setViewerProject(null)}
-          onSessionExpired={onSessionExpired}
-        />
-      )}
       <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-[40px] backdrop-saturate-150">
         <div className="mx-auto grid h-14 max-w-[1440px] grid-cols-3 items-center px-4">
           <div className="flex items-center">
@@ -95,7 +86,7 @@ export function Dashboard({
           <nav className="flex items-center justify-center gap-1">
             <Button
               variant="ghost"
-              size="sm"
+              size="default"
               className={view === 'dashboard' ? 'bg-muted' : ''}
               onClick={() => switchView('dashboard')}
             >
@@ -103,7 +94,7 @@ export function Dashboard({
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="default"
               className={view === 'docs' ? 'bg-muted' : ''}
               onClick={() => switchView('docs')}
             >
@@ -111,7 +102,7 @@ export function Dashboard({
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="default"
               className={view === 'settings' ? 'bg-muted' : ''}
               onClick={() => switchView('settings')}
             >
@@ -224,7 +215,7 @@ export function Dashboard({
             <section>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold tracking-tight">Your projects</h2>
-                <Button size="sm" onClick={() => setUploadOpen(true)}>
+                <Button onClick={() => setUploadOpen(true)}>
                   <Plus />
                   Create project
                 </Button>
@@ -288,7 +279,6 @@ export function Dashboard({
                       onVisibilityToggle={onVisibilityToggle}
                       onProjectsChanged={onProjectsChanged}
                       onSessionExpired={onSessionExpired}
-                      onViewVersions={(project) => setViewerProject(project)}
                     />
                   </div>
                   <div className="flex flex-col gap-4 sm:hidden">
@@ -301,7 +291,6 @@ export function Dashboard({
                         onVisibilityToggle={onVisibilityToggle}
                         onProjectsChanged={onProjectsChanged}
                         onSessionExpired={onSessionExpired}
-                        onViewVersions={(project) => setViewerProject(project)}
                       />
                     ))}
                   </div>
