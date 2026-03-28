@@ -1,5 +1,6 @@
 import { Copy, Terminal, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -11,17 +12,22 @@ function CodeBlock({ children }: { children: string }) {
       <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
         <code>{children}</code>
       </pre>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/code:opacity-100"
-        onClick={() => {
-          void navigator.clipboard.writeText(children)
-          toast('Copied to clipboard')
-        }}
-      >
-        <Copy />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/code:opacity-100"
+            onClick={() => {
+              void navigator.clipboard.writeText(children)
+              toast('Copied to clipboard')
+            }}
+          >
+            <Copy />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Copy</TooltipContent>
+      </Tooltip>
     </div>
   )
 }

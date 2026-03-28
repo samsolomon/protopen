@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronRight, Copy, Globe, Lock, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -96,35 +97,50 @@ export function ProjectsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
-                        aria-label={project.isPublic ? 'Make private' : 'Make public'}
-                      >
-                        {project.isPublic ? <Globe /> : <Lock />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(project.liveUrl)
-                          toast('URL copied to clipboard')
-                        }}
-                        aria-label="Copy URL"
-                      >
-                        <Copy />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        disabled={isDeleting}
-                        onClick={() => void onDelete(project.id)}
-                        aria-label="Delete project"
-                      >
-                        <Trash2 />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
+                            aria-label={project.isPublic ? 'Make private' : 'Make public'}
+                          >
+                            {project.isPublic ? <Globe /> : <Lock />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{project.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(project.liveUrl)
+                              toast('URL copied to clipboard')
+                            }}
+                            aria-label="Copy URL"
+                          >
+                            <Copy />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy URL</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            disabled={isDeleting}
+                            onClick={() => void onDelete(project.id)}
+                            aria-label="Delete project"
+                          >
+                            <Trash2 />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
+                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>
