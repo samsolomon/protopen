@@ -15,7 +15,7 @@ func frameSnippet(projectName string, appOrigin string, deploys []toolbarDeploy,
 
 	// Build the template with fmt.Sprintf for the two original %s values only
 	tpl := fmt.Sprintf(`<script data-velori-frame>(function(){
-if(window!==window.top)return;
+var inFrame=window!==window.top;
 var D=/*DEPLOYS*/[];var A='/*ACTIVE*/';var B='/*BASE*/';
 var h=document.createElement('div');
 h.id='velori-frame';
@@ -33,29 +33,29 @@ var activeIdx=A?D.findIndex(function(d){return d.id===A}):D.findIndex(function(d
 if(activeIdx<0)activeIdx=D.length-1;
 var sel=mksel(vn,activeIdx);
 sel.onchange=function(){window.location.href=deployUrl(sel.value)};
+if(!inFrame){
 var splitBtn=document.createElement("button");
 splitBtn.textContent="Split";
 vn.appendChild(splitBtn);
-var splitEl=null;var rsel=null;
+var splitEl=null;
 splitBtn.onclick=function(){
-if(splitEl){splitEl.remove();splitEl=null;if(rsel){rsel.remove();rsel=null}splitBtn.textContent="Split";document.body.style.overflow="";return}
+if(splitEl){splitEl.remove();splitEl=null;splitBtn.textContent="Split";sel.style.display="";document.body.style.overflow="";return}
 splitBtn.textContent="Exit";
+sel.style.display="none";
 document.body.style.overflow="hidden";
 var ci=sel.selectedIndex;
 var rightIdx=ci>0?ci-1:(ci<D.length-1?ci+1:ci);
-rsel=mksel(vn,rightIdx);
-vn.insertBefore(rsel,splitBtn);
 var ifs="flex:1;border:0;height:100%%";
 splitEl=document.createElement("div");
 splitEl.id="velori-split";
 splitEl.style.cssText="position:fixed;top:40px;left:0;right:0;bottom:0;display:flex;z-index:2147483646;background:#fff";
 var lf=document.createElement("iframe");lf.src=window.location.href;lf.style.cssText=ifs;
 var div=document.createElement("div");div.style.cssText="width:1px;background:#e4e4e7";
-var rf=document.createElement("iframe");rf.src=deployUrl(rsel.value);rf.style.cssText=ifs;
+var rf=document.createElement("iframe");rf.src=deployUrl(D[rightIdx].isCurrent?"":D[rightIdx].id);rf.style.cssText=ifs;
 splitEl.appendChild(lf);splitEl.appendChild(div);splitEl.appendChild(rf);
 document.body.appendChild(splitEl);
-rsel.onchange=function(){rf.src=deployUrl(rsel.value)};
 };
+}
 }
 document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+40+'px';
 document.body.appendChild(h);
