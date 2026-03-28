@@ -12,8 +12,30 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, Copy, ExternalLink, Globe, Lock, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Globe, Lock, Trash2 } from 'lucide-react'
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => {
+            void navigator.clipboard.writeText(text)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }}
+          aria-label="Copy URL"
+        >
+          {copied ? <Check className="text-muted-foreground" /> : <Copy />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{copied ? 'Copied!' : 'Copy URL'}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 type ProjectsTableProps = {
   projects: Project[]
@@ -90,22 +112,7 @@ export function ProjectsTable({
                         <span className="truncate">{project.liveUrl}</span>
                         <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                       </a>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(project.liveUrl)
-                              toast('URL copied to clipboard')
-                            }}
-                            aria-label="Copy URL"
-                          >
-                            <Copy />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copy URL</TooltipContent>
-                      </Tooltip>
+                      <CopyButton text={project.liveUrl} />
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
