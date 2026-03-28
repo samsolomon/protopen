@@ -33,28 +33,36 @@ var activeIdx=A?D.findIndex(function(d){return d.id===A}):D.findIndex(function(d
 if(activeIdx<0)activeIdx=D.length-1;
 var sel=mksel(vn,activeIdx);
 sel.onchange=function(){window.location.href=deployUrl(sel.value)};
-if(!inFrame){
+if(inFrame){
+var exitBtn=document.createElement("button");
+exitBtn.textContent="Exit";
+vn.appendChild(exitBtn);
+exitBtn.onclick=function(){window.top.postMessage("velori-exit-split","*")};
+}else{
 var splitBtn=document.createElement("button");
 splitBtn.textContent="Split";
 vn.appendChild(splitBtn);
 var splitEl=null;
+function exitSplit(){if(splitEl){splitEl.remove();splitEl=null;h.style.display="";splitBtn.textContent="Split";sel.style.display="";document.body.style.overflow=""}}
 splitBtn.onclick=function(){
-if(splitEl){splitEl.remove();splitEl=null;splitBtn.textContent="Split";sel.style.display="";document.body.style.overflow="";return}
+if(splitEl){exitSplit();return}
 splitBtn.textContent="Exit";
 sel.style.display="none";
+h.style.display="none";
 document.body.style.overflow="hidden";
 var ci=sel.selectedIndex;
 var rightIdx=ci>0?ci-1:(ci<D.length-1?ci+1:ci);
 var ifs="flex:1;border:0;height:100%%";
 splitEl=document.createElement("div");
 splitEl.id="velori-split";
-splitEl.style.cssText="position:fixed;top:40px;left:0;right:0;bottom:0;display:flex;z-index:2147483646;background:#fff";
+splitEl.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;z-index:2147483646;background:#fff";
 var lf=document.createElement("iframe");lf.src=window.location.href;lf.style.cssText=ifs;
 var div=document.createElement("div");div.style.cssText="width:1px;background:#e4e4e7";
 var rf=document.createElement("iframe");rf.src=deployUrl(D[rightIdx].isCurrent?"":D[rightIdx].id);rf.style.cssText=ifs;
 splitEl.appendChild(lf);splitEl.appendChild(div);splitEl.appendChild(rf);
 document.body.appendChild(splitEl);
 };
+window.addEventListener("message",function(e){if(e.data==="velori-exit-split")exitSplit()});
 }
 }
 document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+40+'px';
