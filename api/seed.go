@@ -31,6 +31,30 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		return err
 	}
 
+	teammates := []struct {
+		email, name, username, role string
+	}{
+		{"jane@velori.dev", "Jane Chen", "jane", roleAdmin},
+		{"alex@velori.dev", "Alex Rivera", "alex", roleMember},
+		{"morgan@velori.dev", "Morgan Lee", "morgan", roleMember},
+	}
+	for _, t := range teammates {
+		tmID, _, tmErr := ensureUser(ctx, tx, t.email, t.name, t.username, demoPassword)
+		if tmErr != nil {
+			return tmErr
+		}
+		if _, tmErr = ensurePersonalOrg(ctx, tx, tmID, t.username, t.name); tmErr != nil {
+			return tmErr
+		}
+		if _, tmErr = tx.Exec(ctx, `
+			insert into org_members (id, org_id, user_id, role, created_at)
+			values ($1, $2, $3, $4, now())
+			on conflict (org_id, user_id) do nothing
+		`, generateID("mem"), orgID, tmID, t.role); tmErr != nil {
+			return tmErr
+		}
+	}
+
 	var projectCount int
 	if err := tx.QueryRow(ctx, `select count(*) from projects where org_id = $1 and deleted_at is null`, orgID).Scan(&projectCount); err != nil {
 		return err

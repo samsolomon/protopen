@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, User, Settings, LogOut, Terminal, Upload, FolderOpen } from 'lucide-react'
 
 type DashboardView = 'dashboard' | 'docs' | 'settings'
@@ -61,10 +62,12 @@ export function Dashboard({
   onSessionExpired,
 }: DashboardProps) {
   const [view, setView] = useState<DashboardView>('dashboard')
+  const [settingsTab, setSettingsTab] = useState('account')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
 
   const switchView = (next: DashboardView) => {
+    if (next === 'settings') setSettingsTab('account')
     setView(next)
     window.scrollTo(0, 0)
   }
@@ -122,7 +125,7 @@ export function Dashboard({
               {user.name}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => switchView('settings')}>
+              <DropdownMenuItem onClick={() => { setSettingsTab('account'); setView('settings') }}>
                 <User />
                 Profile
               </DropdownMenuItem>
@@ -172,27 +175,46 @@ export function Dashboard({
         {view === 'docs' ? (
           <CLIDocs />
         ) : view === 'settings' ? (
-          <div className="flex flex-col gap-8">
-            <ProfilePanel
-              user={user}
-              onUserUpdated={onUserUpdated}
-              onSessionExpired={onSessionExpired}
-            />
-            <PasswordPanel onSessionExpired={onSessionExpired} />
-            <AppearancePanel />
-            <OrgMembersPanel
-              user={user}
-              onSessionExpired={onSessionExpired}
-            />
-            <TokensPanel
-              onSessionExpired={onSessionExpired}
-              onViewDocs={() => switchView('docs')}
-            />
-            <DeleteAccountPanel
-              onAccountDeleted={onSignOut}
-              onSessionExpired={onSessionExpired}
-            />
-          </div>
+          <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="gap-8">
+            <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
+              <TabsTrigger value="account">Account</TabsTrigger>
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="team">Team</TabsTrigger>
+              <TabsTrigger value="tokens">API Tokens</TabsTrigger>
+              <TabsTrigger value="danger">Delete Account</TabsTrigger>
+            </TabsList>
+            <TabsContent value="account" className="max-w-2xl">
+              <div className="flex flex-col gap-8">
+                <ProfilePanel
+                  user={user}
+                  onUserUpdated={onUserUpdated}
+                  onSessionExpired={onSessionExpired}
+                />
+                <PasswordPanel onSessionExpired={onSessionExpired} />
+              </div>
+            </TabsContent>
+            <TabsContent value="appearance" className="max-w-2xl">
+              <AppearancePanel />
+            </TabsContent>
+            <TabsContent value="team" className="max-w-2xl">
+              <OrgMembersPanel
+                user={user}
+                onSessionExpired={onSessionExpired}
+              />
+            </TabsContent>
+            <TabsContent value="tokens" className="max-w-2xl">
+              <TokensPanel
+                onSessionExpired={onSessionExpired}
+                onViewDocs={() => switchView('docs')}
+              />
+            </TabsContent>
+            <TabsContent value="danger" className="max-w-2xl">
+              <DeleteAccountPanel
+                onAccountDeleted={onSignOut}
+                onSessionExpired={onSessionExpired}
+              />
+            </TabsContent>
+          </Tabs>
         ) : (
           <div className="flex flex-col gap-8">
             <section>

@@ -7,6 +7,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { FlaskConical } from 'lucide-react'
+
+const demoAccounts = [
+  { label: 'Sam', email: 'sam@velori.dev', role: 'Owner' },
+  { label: 'Jane', email: 'jane@velori.dev', role: 'Admin' },
+  { label: 'Alex', email: 'alex@velori.dev', role: 'Member' },
+]
 
 type AuthPageProps = {
   onLogin: (user: SessionUser) => void
@@ -17,6 +24,20 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const [authForm, setAuthForm] = useState<AuthFormState>({ name: '', email: demoEmail, password: demoPassword })
   const [authError, setAuthError] = useState<string | null>(null)
   const [authPending, setAuthPending] = useState(false)
+
+  const quickLogin = async (email: string) => {
+    setAuthMode('sign-in')
+    setAuthPending(true)
+    setAuthError(null)
+    try {
+      const user = await postAuth('sign-in', { name: '', email, password: demoPassword })
+      onLogin(user)
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Could not authenticate')
+    } finally {
+      setAuthPending(false)
+    }
+  }
 
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -53,6 +74,27 @@ export function AuthPage({ onLogin }: AuthPageProps) {
               <CardHeader>
                 <CardTitle>Sign in</CardTitle>
                 <CardDescription>Enter your credentials to access your projects.</CardDescription>
+                <div className="mt-2 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-500">
+                    <FlaskConical className="size-3.5" />
+                    Demo accounts
+                  </p>
+                  <div className="flex gap-2">
+                    {demoAccounts.map((account) => (
+                      <Button
+                        key={account.email}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                        disabled={authPending}
+                        onClick={() => void quickLogin(account.email)}
+                      >
+                        {account.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </CardHeader>
               <form onSubmit={(event) => void submitAuth(event)}>
                 <CardContent className="flex flex-col gap-4">
@@ -137,7 +179,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
         </Tabs>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Demo: <span className="font-medium text-foreground">{demoEmail}</span> / <span className="font-medium text-foreground">{demoPassword}</span>
+          Demo password: <span className="font-medium text-foreground">{demoPassword}</span>
         </p>
       </div>
     </div>
