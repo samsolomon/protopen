@@ -13,6 +13,24 @@ export type SessionUser = {
   email: string
   name: string
   username: string
+  orgs: OrgInfo[]
+}
+
+export type OrgInfo = {
+  id: string
+  slug: string
+  name: string
+  isPersonal: boolean
+  role: 'admin' | 'member'
+}
+
+export type OrgMember = {
+  id: string
+  userId: string
+  name: string
+  email: string
+  username: string
+  role: string
 }
 
 export type UploadMode = 'files' | 'zip'

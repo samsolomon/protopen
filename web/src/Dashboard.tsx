@@ -8,6 +8,7 @@ import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
+import { OrgMembersPanel } from './OrgMembersPanel'
 import { CLIDocs } from './CLIDocs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -179,6 +180,10 @@ export function Dashboard({
             />
             <PasswordPanel onSessionExpired={onSessionExpired} />
             <AppearancePanel />
+            <OrgMembersPanel
+              user={user}
+              onSessionExpired={onSessionExpired}
+            />
             <TokensPanel
               onSessionExpired={onSessionExpired}
               onViewDocs={() => switchView('docs')}

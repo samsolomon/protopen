@@ -89,6 +89,14 @@ func (app *application) updateProfileHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	orgs, err := loadUserOrgs(r.Context(), app.db, updated.ID)
+	if err != nil {
+		log.Printf("load orgs after profile update: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update profile"})
+		return
+	}
+	updated.Orgs = orgs
+
 	writeJSON(w, http.StatusOK, map[string]any{"user": updated})
 }
 
@@ -155,6 +163,37 @@ func (app *application) deleteAccountHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		log.Printf("delete account verify: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete account"})
+		return
+	}
+
+	// Check if sole admin of any non-personal org with other members
+	var blockedCount int
+	if err := app.db.QueryRow(r.Context(), `
+		select count(*) from organizations o
+		join org_members m on m.org_id = o.id
+		where m.user_id = $1 and m.role = $2 and o.is_personal = false
+		and (select count(*) from org_members where org_id = o.id and role = $2) = 1
+		and (select count(*) from org_members where org_id = o.id) > 1
+	`, user.ID, roleAdmin).Scan(&blockedCount); err != nil {
+		log.Printf("delete account org check: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete account"})
+		return
+	}
+	if blockedCount > 0 {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "you are the sole admin of an organization with other members — transfer ownership first"})
+		return
+	}
+
+	// Delete personal org first (cascades to projects), then delete user
+	if _, err := app.db.Exec(r.Context(), `
+		delete from organizations where id in (
+			select o.id from organizations o
+			join org_members m on m.org_id = o.id
+			where m.user_id = $1 and o.is_personal = true
+		)
+	`, user.ID); err != nil {
+		log.Printf("delete personal org: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete account"})
 		return
 	}

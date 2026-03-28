@@ -29,13 +29,19 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+
 	rows, err := app.db.Query(r.Context(), `
 		select d.id, d.status, d.label, d.size_bytes, d.file_count, d.created_at, (d.id = p.current_deploy_id) as is_current
 		from deploys d
 		join projects p on p.id = d.project_id
-		where d.project_id = $1 and p.user_id = $2 and p.deleted_at is null
+		where d.project_id = $1 and p.org_id = $2 and p.deleted_at is null
 		order by d.created_at desc
-	`, projectID, user.ID)
+	`, projectID, orgID)
 	if err != nil {
 		log.Printf("list deploys: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load deploys"})
@@ -71,6 +77,12 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+
 	var payload struct {
 		DeployID string `json:"deployId"`
 	}
@@ -84,9 +96,9 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		select exists(
 			select 1 from deploys d
 			join projects p on p.id = d.project_id
-			where p.id = $1 and p.user_id = $2 and d.id = $3 and p.deleted_at is null
+			where p.id = $1 and p.org_id = $2 and d.id = $3 and p.deleted_at is null
 		)
-	`, projectID, user.ID, payload.DeployID).Scan(&valid)
+	`, projectID, orgID, payload.DeployID).Scan(&valid)
 	if err != nil || !valid {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project or deploy not found"})
 		return

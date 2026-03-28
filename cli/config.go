@@ -12,6 +12,7 @@ var configHome string
 type config struct {
 	Token string `json:"token,omitempty"`
 	URL   string `json:"url,omitempty"`
+	Org   string `json:"org,omitempty"`
 }
 
 func configDir() string {

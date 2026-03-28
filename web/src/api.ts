@@ -1,4 +1,4 @@
-import type { AuthFormState, AuthMode, Deploy, Project, SessionUser, UploadFile, UploadSummary } from './types'
+import type { AuthFormState, AuthMode, Deploy, OrgInfo, OrgMember, Project, SessionUser, UploadFile, UploadSummary } from './types'
 import { API_BASE_URL } from './constants'
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -273,4 +273,77 @@ export async function deleteAccount(password: string): Promise<void> {
     const data = (await response.json()) as { error?: string }
     throw new Error(data.error ?? 'Could not delete account')
   }
+}
+
+export async function fetchOrgMembers(orgId: string): Promise<OrgMember[]> {
+  const response = await fetch(`${API_BASE_URL}/api/orgs/${orgId}/members`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    throw new Error('Could not load members')
+  }
+
+  const data = (await response.json()) as { members: OrgMember[] }
+  return data.members ?? []
+}
+
+export async function addOrgMember(orgId: string, email: string, role: string): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/orgs/${orgId}/members`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  const data = (await response.json()) as { error?: string; status?: string }
+  if (!response.ok) {
+    throw new Error(data.error ?? 'Could not add member')
+  }
+
+  return { status: data.status ?? 'added' }
+}
+
+export async function removeOrgMember(orgId: string, memberId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/orgs/${orgId}/members/${memberId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not remove member')
+  }
+}
+
+export async function createOrg(name: string, slug: string): Promise<OrgInfo> {
+  const response = await fetch(`${API_BASE_URL}/api/orgs`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, slug }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  const data = (await response.json()) as { error?: string; org?: OrgInfo }
+  if (!response.ok || !data.org) {
+    throw new Error(data.error ?? 'Could not create organization')
+  }
+
+  return data.org
 }

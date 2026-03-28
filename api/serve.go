@@ -29,13 +29,13 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	username, slug, assetPath, ok := parseProjectPath(r.URL.Path)
+	orgSlug, slug, assetPath, ok := parseProjectPath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
-	deployment, err := app.lookupLiveDeploy(r.Context(), username, slug)
+	deployment, err := app.lookupLiveDeploy(r.Context(), orgSlug, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.NotFound(w, r)
@@ -152,16 +152,16 @@ func (app *application) serveFromFilesystem(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func parseProjectPath(rawPath string) (username string, slug string, assetPath string, ok bool) {
+func parseProjectPath(rawPath string) (orgSlug string, slug string, assetPath string, ok bool) {
 	trimmed := strings.Trim(rawPath, "/")
 	parts := strings.Split(trimmed, "/")
 	if len(parts) < 2 || !strings.HasPrefix(parts[0], "~") {
 		return "", "", "", false
 	}
 
-	username = strings.TrimPrefix(parts[0], "~")
+	orgSlug = strings.TrimPrefix(parts[0], "~")
 	slug = parts[1]
-	if username == "" || slug == "" {
+	if orgSlug == "" || slug == "" {
 		return "", "", "", false
 	}
 
@@ -169,19 +169,19 @@ func parseProjectPath(rawPath string) (username string, slug string, assetPath s
 		assetPath = strings.Join(parts[2:], "/")
 	}
 
-	return username, slug, assetPath, true
+	return orgSlug, slug, assetPath, true
 }
 
-func (app *application) lookupLiveDeploy(ctx context.Context, username string, slug string) (liveDeploy, error) {
+func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, slug string) (liveDeploy, error) {
 	var siteRoot string
 	var isPublic bool
 	err := app.db.QueryRow(ctx, `
 		select d.storage_prefix, p.is_public
 		from projects p
-		join users u on u.id = p.user_id
+		join organizations o on o.id = p.org_id
 		join deploys d on d.id = p.current_deploy_id
-		where u.username = $1 and p.slug = $2 and p.deleted_at is null
-	`, username, slug).Scan(&siteRoot, &isPublic)
+		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
+	`, orgSlug, slug).Scan(&siteRoot, &isPublic)
 	if err != nil {
 		return liveDeploy{}, err
 	}

@@ -19,8 +19,9 @@ type client struct {
 }
 
 type deployResult struct {
-	liveURL string
-	raw     string
+	projectID string
+	liveURL   string
+	raw       string
 }
 
 type projectInfo struct {
@@ -29,6 +30,7 @@ type projectInfo struct {
 	Slug        string `json:"slug"`
 	DeployCount int    `json:"deployCount"`
 	LiveURL     string `json:"liveUrl"`
+	IsPublic    bool   `json:"isPublic"`
 }
 
 type deployInfo struct {
@@ -53,25 +55,25 @@ func newClient(token string, baseURL string) *client {
 	}
 }
 
-func (c *client) deployDirectory(dirPath string, name string, label string) (deployResult, error) {
+func (c *client) deployDirectory(dirPath string, name string, label string, org string) (deployResult, error) {
 	zipData, err := zipDirectory(dirPath)
 	if err != nil {
 		return deployResult{}, fmt.Errorf("create zip: %w", err)
 	}
 
-	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label)
+	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label, org)
 }
 
-func (c *client) deployZip(zipPath string, name string, label string) (deployResult, error) {
+func (c *client) deployZip(zipPath string, name string, label string, org string) (deployResult, error) {
 	data, err := os.ReadFile(zipPath)
 	if err != nil {
 		return deployResult{}, err
 	}
 
-	return c.upload(name, "zip", filepath.Base(zipPath), data, label)
+	return c.upload(name, "zip", filepath.Base(zipPath), data, label, org)
 }
 
-func (c *client) upload(name string, mode string, filename string, data []byte, label string) (deployResult, error) {
+func (c *client) upload(name string, mode string, filename string, data []byte, label string, org string) (deployResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -88,7 +90,11 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 	part.Write(data)
 	writer.Close()
 
-	req, err := http.NewRequest("POST", c.baseURL+"/api/uploads", body)
+	endpoint := c.baseURL + "/api/uploads"
+	if org != "" {
+		endpoint += "?org=" + org
+	}
+	req, err := http.NewRequest("POST", endpoint, body)
 	if err != nil {
 		return deployResult{}, err
 	}
@@ -114,19 +120,25 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 
 	var result struct {
 		Project struct {
+			ID      string `json:"id"`
 			LiveURL string `json:"liveUrl"`
 		} `json:"project"`
 	}
 	json.Unmarshal(respBody, &result)
 
 	return deployResult{
-		liveURL: result.Project.LiveURL,
-		raw:     string(respBody),
+		projectID: result.Project.ID,
+		liveURL:   result.Project.LiveURL,
+		raw:       string(respBody),
 	}, nil
 }
 
-func (c *client) listProjects() ([]projectInfo, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/api/projects", nil)
+func (c *client) listProjects(org string) ([]projectInfo, error) {
+	endpoint := c.baseURL + "/api/projects"
+	if org != "" {
+		endpoint += "?org=" + org
+	}
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +194,8 @@ func (c *client) getSession() (userInfo, error) {
 	return result.User, nil
 }
 
-func (c *client) findProject(nameOrSlug string) (projectInfo, error) {
-	projects, err := c.listProjects()
+func (c *client) findProject(nameOrSlug string, org string) (projectInfo, error) {
+	projects, err := c.listProjects(org)
 	if err != nil {
 		return projectInfo{}, err
 	}
@@ -253,6 +265,36 @@ func (c *client) rollback(projectID string, deployID string) error {
 			return fmt.Errorf("%s", errResp.Error)
 		}
 		return fmt.Errorf("rollback failed (HTTP %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (c *client) updateVisibility(projectID string, isPublic bool) error {
+	body, _ := json.Marshal(map[string]bool{"isPublic": isPublic})
+	req, err := http.NewRequest("PATCH", c.baseURL+"/api/projects/"+projectID, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+	}
+	if resp.StatusCode != http.StatusOK {
+		var errResp struct{ Error string `json:"error"` }
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		if errResp.Error != "" {
+			return fmt.Errorf("%s", errResp.Error)
+		}
+		return fmt.Errorf("update failed (HTTP %d)", resp.StatusCode)
 	}
 
 	return nil

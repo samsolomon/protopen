@@ -30,6 +30,8 @@ func main() {
 		cmdRollback(args)
 	case "token":
 		cmdToken(args)
+	case "visibility":
+		cmdVisibility(args)
 	case "login":
 		cmdLogin(args)
 	case "logout":
@@ -53,6 +55,7 @@ Commands:
   list                         List your projects
   deploys <name>               Show deploy history for a project
   rollback <name> <deploy-id>  Roll back to a previous deploy
+  visibility <name> <public|private>  Set project visibility
   token                        Show current token info
   login                        Authenticate and save your API token
   logout                       Remove saved token
@@ -67,13 +70,15 @@ func cmdDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	name := fs.String("name", "", "Project name (defaults to directory/zip name)")
 	label := fs.String("label", "", "Deploy label (e.g. 'v2 with new header')")
+	private := fs.Bool("private", false, "Make the project private after deploy")
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	jsonOutput := fs.Bool("json", false, "Output JSON response")
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: velori deploy <path> [--name NAME] [--token TOKEN] [--url URL] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: velori deploy <path> [--name NAME] [--private] [--token TOKEN] [--url URL] [--json]")
 		os.Exit(1)
 	}
 
@@ -94,15 +99,23 @@ func cmdDeploy(args []string) {
 		}
 	}
 
+	resolvedOrg := resolveOrg(*org)
+
 	var result deployResult
 	if info.IsDir() {
-		result, err = client.deployDirectory(path, projectName, *label)
+		result, err = client.deployDirectory(path, projectName, *label, resolvedOrg)
 	} else {
-		result, err = client.deployZip(path, projectName, *label)
+		result, err = client.deployZip(path, projectName, *label, resolvedOrg)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *private {
+		if err := client.updateVisibility(result.projectID, false); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: deployed but could not set private: %v\n", err)
+		}
 	}
 
 	if *jsonOutput {
@@ -114,12 +127,13 @@ func cmdDeploy(args []string) {
 
 func cmdList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	fs.Parse(args)
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	projects, err := client.listProjects()
+	projects, err := client.listProjects(resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -131,12 +145,17 @@ func cmdList(args []string) {
 	}
 
 	for _, p := range projects {
-		fmt.Printf("%-24s %3d deploys  %s\n", p.Name, p.DeployCount, p.LiveURL)
+		vis := "public"
+		if !p.IsPublic {
+			vis = "private"
+		}
+		fmt.Printf("%-24s %3d deploys  %-7s  %s\n", p.Name, p.DeployCount, vis, p.LiveURL)
 	}
 }
 
 func cmdDeploys(args []string) {
 	fs := flag.NewFlagSet("deploys", flag.ExitOnError)
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	fs.Parse(args)
@@ -147,7 +166,7 @@ func cmdDeploys(args []string) {
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findProject(fs.Arg(0))
+	proj, err := client.findProject(fs.Arg(0), resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -179,6 +198,7 @@ func cmdDeploys(args []string) {
 
 func cmdRollback(args []string) {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
 	fs.Parse(args)
@@ -189,7 +209,7 @@ func cmdRollback(args []string) {
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findProject(fs.Arg(0))
+	proj, err := client.findProject(fs.Arg(0), resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -247,6 +267,16 @@ func resolveURL(flag string) string {
 	return "http://localhost:8080"
 }
 
+func resolveOrg(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	if env := os.Getenv("VELORI_ORG"); env != "" {
+		return env
+	}
+	return loadConfig().Org
+}
+
 func maskToken(t string) string {
 	if len(t) <= 12 {
 		return t
@@ -269,6 +299,47 @@ Create tokens in the Velori dashboard under Settings > API Tokens.`)
 		os.Exit(1)
 	}
 	return t
+}
+
+func cmdVisibility(args []string) {
+	fs := flag.NewFlagSet("visibility", flag.ExitOnError)
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
+	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		fmt.Fprintln(os.Stderr, "usage: velori visibility <project-name> <public|private>")
+		os.Exit(1)
+	}
+
+	projectName := fs.Arg(0)
+	visibility := fs.Arg(1)
+
+	var isPublic bool
+	switch visibility {
+	case "public":
+		isPublic = true
+	case "private":
+		isPublic = false
+	default:
+		fmt.Fprintf(os.Stderr, "invalid visibility %q: must be \"public\" or \"private\"\n", visibility)
+		os.Exit(1)
+	}
+
+	client := newClient(requireToken(*token), resolveURL(*url))
+	proj, err := client.findProject(projectName, resolveOrg(*org))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := client.updateVisibility(proj.ID, isPublic); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%s is now %s\n", proj.Name, visibility)
 }
 
 func cmdLogin(args []string) {
@@ -369,8 +440,12 @@ Subcommands:
 	case "show":
 		cfg := loadConfig()
 		url := resolveURL("")
+		org := resolveOrg("")
 		fmt.Printf("Token:   %s\n", maskToken(cfg.Token))
 		fmt.Printf("URL:     %s\n", url)
+		if org != "" {
+			fmt.Printf("Org:     %s\n", org)
+		}
 		fmt.Printf("Config:  %s\n", configPath())
 
 	case "set":
@@ -384,6 +459,8 @@ Subcommands:
 			cfg.Token = args[2]
 		case "url":
 			cfg.URL = args[2]
+		case "org":
+			cfg.Org = args[2]
 		default:
 			fmt.Fprintf(os.Stderr, "unknown config key: %s\n", args[1])
 			os.Exit(1)

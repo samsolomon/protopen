@@ -35,10 +35,19 @@ type application struct {
 }
 
 type sessionUser struct {
-	ID       string `json:"id"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
+	ID       string    `json:"id"`
+	Email    string    `json:"email"`
+	Name     string    `json:"name"`
+	Username string    `json:"username"`
+	Orgs     []orgInfo `json:"orgs"`
+}
+
+type orgInfo struct {
+	ID         string `json:"id"`
+	Slug       string `json:"slug"`
+	Name       string `json:"name"`
+	IsPersonal bool   `json:"isPersonal"`
+	Role       string `json:"role"`
 }
 
 type authRequest struct {
@@ -77,12 +86,12 @@ type preparedUpload struct {
 }
 
 type projectRecord struct {
-	ID       string
-	UserID   string
-	Name     string
-	Slug     string
-	Username string
-	Deploys  int
+	ID      string
+	OrgID   string
+	Name    string
+	Slug    string
+	OrgSlug string
+	Deploys int
 }
 
 type liveDeploy struct {
@@ -157,6 +166,8 @@ func main() {
 	appMux.HandleFunc("/api/tokens", app.tokensHandler)
 	appMux.HandleFunc("/api/tokens/", app.tokenByIDHandler)
 	appMux.HandleFunc("/api/account/", app.accountHandler)
+	appMux.HandleFunc("/api/orgs", app.orgsHandler)
+	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
 	serveFrontend(appMux, frontendOrigin)
 
 	contentMux := http.NewServeMux()

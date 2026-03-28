@@ -19,7 +19,13 @@ func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	projects, err := app.listProjects(r.Context(), user.Email)
+	orgID, _, err := resolveOrgFromParam(user, r.URL.Query().Get("org"))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+
+	projects, err := app.listProjects(r.Context(), orgID)
 	if err != nil {
 		log.Printf("list projects: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load projects"})
@@ -60,7 +66,13 @@ func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		deleted, err := app.deleteProject(r.Context(), user.Email, projectID)
+		orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+		if err != nil {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+			return
+		}
+
+		deleted, err := app.deleteProject(r.Context(), orgID, projectID)
 		if err != nil {
 			log.Printf("delete project: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
@@ -88,6 +100,12 @@ func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+
 	var payload struct {
 		IsPublic *bool `json:"isPublic"`
 	}
@@ -103,9 +121,8 @@ func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Requ
 
 	commandTag, err := app.db.Exec(r.Context(), `
 		update projects set is_public = $1, updated_at = now()
-		where id = $2 and deleted_at is null
-		  and user_id = (select id from users where email = $3)
-	`, *payload.IsPublic, projectID, user.Email)
+		where id = $2 and deleted_at is null and org_id = $3
+	`, *payload.IsPublic, projectID, orgID)
 	if err != nil {
 		log.Printf("update project visibility: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update project"})

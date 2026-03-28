@@ -86,6 +86,7 @@ const commonFlags = [
 const deployFlags = [
   { flag: '--name', description: 'Project name (overrides directory/zip name)' },
   { flag: '--label', description: 'Deploy label (e.g. "v2 with new header")' },
+  { flag: '--private', description: 'Make the project private after deploy' },
   { flag: '--json', description: 'Output full JSON response instead of just the URL' },
   ...commonFlags,
 ]
@@ -141,6 +142,7 @@ export function CLIDocs() {
                 <TabsTrigger value="list">list</TabsTrigger>
                 <TabsTrigger value="deploys">deploys</TabsTrigger>
                 <TabsTrigger value="rollback">rollback</TabsTrigger>
+                <TabsTrigger value="visibility">visibility</TabsTrigger>
                 <TabsTrigger value="token">token</TabsTrigger>
                 <TabsTrigger value="login">login</TabsTrigger>
                 <TabsTrigger value="config">config</TabsTrigger>
@@ -159,9 +161,9 @@ export function CLIDocs() {
               <TabsContent value="list" className="pt-4">
                 <CommandTab
                   usage="velori list [flags]"
-                  description="List all projects with their deploy counts and live URLs."
+                  description="List all projects with their deploy counts, visibility, and live URLs."
                   flags={commonFlags}
-                  output={`my-site                    3 deploys  https://velori.dev/~sam/my-site\nlanding-page               1 deploys  https://velori.dev/~sam/landing-page`}
+                  output={`my-site                    3 deploys  public   https://velori.dev/~sam/my-site\nlanding-page               1 deploys  private  https://velori.dev/~sam/landing-page`}
                 />
               </TabsContent>
 
@@ -182,6 +184,16 @@ export function CLIDocs() {
                   flags={commonFlags}
                   example="velori rollback my-site a1b2c3d4e5f6"
                   output="Rolled back my-site to a1b2c3d4e5f6"
+                />
+              </TabsContent>
+
+              <TabsContent value="visibility" className="pt-4">
+                <CommandTab
+                  usage="velori visibility <project-name> <public|private> [flags]"
+                  description="Set a project's visibility. Public projects are accessible to anyone. Private projects require authentication."
+                  flags={commonFlags}
+                  example="velori visibility my-site private"
+                  output="my-site is now private"
                 />
               </TabsContent>
 

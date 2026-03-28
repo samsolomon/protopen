@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -125,6 +125,12 @@ func (app *application) requireSessionUser(r *http.Request) (sessionUser, error)
 		return sessionUser{}, err
 	}
 
+	orgs, err := loadUserOrgs(r.Context(), app.db, user.ID)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	user.Orgs = orgs
+
 	return user, nil
 }
 
@@ -147,6 +153,12 @@ func (app *application) authenticateBearer(r *http.Request) (sessionUser, error)
 		return sessionUser{}, err
 	}
 
+	orgs, err := loadUserOrgs(r.Context(), app.db, user.ID)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	user.Orgs = orgs
+
 	return user, nil
 }
 
@@ -166,6 +178,12 @@ func (app *application) authenticateUser(ctx context.Context, email string, pass
 		return sessionUser{}, fmt.Errorf("invalid credentials")
 	}
 
+	orgs, err := loadUserOrgs(ctx, app.db, user.ID)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	user.Orgs = orgs
+
 	return user, nil
 }
 
@@ -180,7 +198,13 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 		return sessionUser{}, fmt.Errorf("password must be at least 8 characters")
 	}
 
-	username, err := uniqueUsername(ctx, app.db, email)
+	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return sessionUser{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	username, err := uniqueUsername(ctx, tx, email)
 	if err != nil {
 		return sessionUser{}, err
 	}
@@ -190,17 +214,56 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 		return sessionUser{}, err
 	}
 
+	now := time.Now().UTC()
 	user := sessionUser{ID: generateID("usr"), Email: email, Name: name, Username: username}
-	_, err = app.db.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		insert into users (id, email, auth_ref, username, name, password_hash, created_at)
 		values ($1, $2, $3, $4, $5, $6, $7)
-	`, user.ID, user.Email, "local-password", user.Username, user.Name, string(passwordHash), time.Now().UTC())
+	`, user.ID, user.Email, "local-password", user.Username, user.Name, string(passwordHash), now)
 	if err != nil {
-		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "duplicate") {
+		if isDuplicateKeyError(err) {
 			return sessionUser{}, fmt.Errorf("an account with that email already exists")
 		}
 		return sessionUser{}, err
 	}
+
+	if _, err := ensurePersonalOrg(ctx, tx, user.ID, user.Username, user.Name); err != nil {
+		return sessionUser{}, err
+	}
+
+	// Auto-accept any pending org invites for this email
+	inviteRows, err := tx.Query(ctx, `
+		select org_id, role from org_invites where email = $1
+	`, user.Email)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	defer inviteRows.Close()
+	for inviteRows.Next() {
+		var invOrgID, invRole string
+		if err := inviteRows.Scan(&invOrgID, &invRole); err != nil {
+			return sessionUser{}, err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into org_members (id, org_id, user_id, role, created_at)
+			values ($1, $2, $3, $4, $5)
+		`, generateID("mem"), invOrgID, user.ID, invRole, now); err != nil {
+			return sessionUser{}, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `delete from org_invites where email = $1`, user.Email); err != nil {
+		return sessionUser{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return sessionUser{}, err
+	}
+
+	orgs, err := loadUserOrgs(ctx, app.db, user.ID)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	user.Orgs = orgs
 
 	return user, nil
 }
@@ -241,7 +304,7 @@ func (app *application) newSessionCookie(value string, maxAge int) *http.Cookie 
 	return cookie
 }
 
-func uniqueUsername(ctx context.Context, db *pgxpool.Pool, email string) (string, error) {
+func uniqueUsername(ctx context.Context, tx pgx.Tx, email string) (string, error) {
 	base := slugify(strings.Split(email, "@")[0])
 	if base == "" {
 		base = "user"
@@ -249,7 +312,13 @@ func uniqueUsername(ctx context.Context, db *pgxpool.Pool, email string) (string
 	username := base
 	for attempt := 2; ; attempt++ {
 		var exists bool
-		if err := db.QueryRow(ctx, `select exists(select 1 from users where username = $1)`, username).Scan(&exists); err != nil {
+		if err := tx.QueryRow(ctx, `
+			select exists(
+				select 1 from users where username = $1
+				union all
+				select 1 from organizations where slug = $1 and is_personal = false
+			)
+		`, username).Scan(&exists); err != nil {
 			return "", err
 		}
 		if !exists {

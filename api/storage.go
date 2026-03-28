@@ -10,7 +10,85 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (app *application) listProjects(ctx context.Context, email string) ([]project, error) {
+func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, string, ...any) (pgx.Rows, error) }, userID string) ([]orgInfo, error) {
+	rows, err := db.Query(ctx, `
+		select o.id, o.slug, o.name, o.is_personal, m.role
+		from org_members m
+		join organizations o on o.id = m.org_id
+		where m.user_id = $1
+		order by o.is_personal desc, o.name
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orgs []orgInfo
+	for rows.Next() {
+		var o orgInfo
+		if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.IsPersonal, &o.Role); err != nil {
+			return nil, err
+		}
+		orgs = append(orgs, o)
+	}
+	return orgs, rows.Err()
+}
+
+func (app *application) projectOrgID(ctx context.Context, projectID string) (string, error) {
+	var orgID string
+	err := app.db.QueryRow(ctx, `select org_id from projects where id = $1 and deleted_at is null`, projectID).Scan(&orgID)
+	return orgID, err
+}
+
+// requireProjectAccess looks up which org owns a project and verifies the user is a member.
+// Returns orgID and role, or an error distinguishing "not found" from "not a member".
+func (app *application) requireProjectAccess(ctx context.Context, user sessionUser, projectID string) (string, string, error) {
+	orgID, err := app.projectOrgID(ctx, projectID)
+	if err != nil {
+		return "", "", fmt.Errorf("project not found")
+	}
+	role, ok := orgRole(user, orgID)
+	if !ok {
+		return "", "", fmt.Errorf("not a member of this organization")
+	}
+	return orgID, role, nil
+}
+
+func orgRole(user sessionUser, orgID string) (string, bool) {
+	for _, o := range user.Orgs {
+		if o.ID == orgID {
+			return o.Role, true
+		}
+	}
+	return "", false
+}
+
+func personalOrg(user sessionUser) *orgInfo {
+	for i := range user.Orgs {
+		if user.Orgs[i].IsPersonal {
+			return &user.Orgs[i]
+		}
+	}
+	return nil
+}
+
+func resolveOrgFromParam(user sessionUser, orgParam string) (string, string, error) {
+	if orgParam == "" {
+		org := personalOrg(user)
+		if org == nil {
+			return "", "", fmt.Errorf("no personal organization")
+		}
+		return org.ID, org.Slug, nil
+	}
+	for _, o := range user.Orgs {
+		if o.Slug == orgParam {
+			return o.ID, o.Slug, nil
+		}
+	}
+	return "", "", fmt.Errorf("organization not found")
+}
+
+func (app *application) listProjects(ctx context.Context, orgID string) ([]project, error) {
 	rows, err := app.db.Query(ctx, `
 		select
 			p.id,
@@ -18,15 +96,15 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 			p.slug,
 			p.updated_at,
 			coalesce(count(d.id), 0) as deploy_count,
-			u.username,
+			o.slug,
 			p.is_public
 		from projects p
-		join users u on u.id = p.user_id
+		join organizations o on o.id = p.org_id
 		left join deploys d on d.project_id = p.id
-		where u.email = $1 and p.deleted_at is null
-		group by p.id, u.username
+		where p.org_id = $1 and p.deleted_at is null
+		group by p.id, o.slug
 		order by p.updated_at desc
-	`, email)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,31 +115,31 @@ func (app *application) listProjects(ctx context.Context, email string) ([]proje
 		var (
 			entry       project
 			updatedAt   time.Time
-			username    string
+			orgSlug     string
 			deployCount int64
 		)
 
-		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &username, &entry.IsPublic); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &orgSlug, &entry.IsPublic); err != nil {
 			return nil, err
 		}
 
 		entry.DeployCount = int(deployCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
-		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, username, entry.Slug)
+		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, entry.Slug)
 		projects = append(projects, entry)
 	}
 
 	return projects, rows.Err()
 }
 
-func (app *application) deleteProject(ctx context.Context, email string, projectID string) (bool, error) {
+func (app *application) deleteProject(ctx context.Context, orgID string, projectID string) (bool, error) {
 	commandTag, err := app.db.Exec(ctx, `
 		update projects
 		set deleted_at = now(), current_deploy_id = null, updated_at = now()
 		where id = $1
 		  and deleted_at is null
-		  and user_id = (select id from users where email = $2)
-	`, projectID, strings.ToLower(strings.TrimSpace(email)))
+		  and org_id = $2
+	`, projectID, orgID)
 	if err != nil {
 		return false, err
 	}
@@ -69,7 +147,7 @@ func (app *application) deleteProject(ctx context.Context, email string, project
 	return commandTag.RowsAffected() > 0, nil
 }
 
-func (app *application) upsertProjectFromUpload(ctx context.Context, email string, prepared preparedUpload) (project, error) {
+func (app *application) upsertProjectFromUpload(ctx context.Context, orgID string, orgSlug string, prepared preparedUpload) (project, error) {
 	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return project{}, err
@@ -78,12 +156,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 
 	payload := prepared.request
 
-	userID, username, err := lookupUserByEmail(ctx, tx, email)
-	if err != nil {
-		return project{}, err
-	}
-
-	matches, err := exactNameMatches(ctx, tx, userID, strings.TrimSpace(payload.Name))
+	matches, err := exactNameMatches(ctx, tx, orgID, strings.TrimSpace(payload.Name))
 	if err != nil {
 		return project{}, err
 	}
@@ -105,23 +178,23 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 			return project{}, err
 		}
 	} else {
-		slug, err := uniqueSlug(ctx, tx, userID, slugify(payload.Name))
+		slug, err := uniqueSlug(ctx, tx, orgID, slugify(payload.Name))
 		if err != nil {
 			return project{}, err
 		}
 
 		entry = projectRecord{
-			ID:       generateID("proj"),
-			UserID:   userID,
-			Name:     strings.TrimSpace(payload.Name),
-			Slug:     slug,
-			Username: username,
+			ID:      generateID("proj"),
+			OrgID:   orgID,
+			Name:    strings.TrimSpace(payload.Name),
+			Slug:    slug,
+			OrgSlug: orgSlug,
 		}
 
 		if _, err := tx.Exec(ctx, `
-			insert into projects (id, user_id, slug, name, created_at, updated_at)
+			insert into projects (id, org_id, slug, name, created_at, updated_at)
 			values ($1, $2, $3, $4, $5, $5)
-		`, entry.ID, entry.UserID, entry.Slug, entry.Name, now); err != nil {
+		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now); err != nil {
 			return project{}, err
 		}
 	}
@@ -154,27 +227,30 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, email strin
 		return project{}, err
 	}
 
+	var isPublic bool
+	app.db.QueryRow(ctx, `select is_public from projects where id = $1`, entry.ID).Scan(&isPublic)
+
 	return project{
 		ID:          entry.ID,
 		Name:        entry.Name,
 		Slug:        entry.Slug,
 		UpdatedAt:   relativeTime(now),
 		DeployCount: countForMatch(matches),
-		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, username, entry.Slug),
-		IsPublic:    true,
+		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, entry.Slug),
+		IsPublic:    isPublic,
 	}, nil
 }
 
-func exactNameMatches(ctx context.Context, tx pgx.Tx, userID string, name string) ([]projectRecord, error) {
+func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]projectRecord, error) {
 	rows, err := tx.Query(ctx, `
-		select p.id, p.user_id, p.name, p.slug, u.username, coalesce(count(d.id), 0) as deploy_count
+		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count
 		from projects p
-		join users u on u.id = p.user_id
+		join organizations o on o.id = p.org_id
 		left join deploys d on d.project_id = p.id
-		where p.user_id = $1 and p.name = $2 and p.deleted_at is null
-		group by p.id, u.username
+		where p.org_id = $1 and p.name = $2 and p.deleted_at is null
+		group by p.id, o.slug
 		order by p.updated_at desc
-	`, userID, name)
+	`, orgID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +260,7 @@ func exactNameMatches(ctx context.Context, tx pgx.Tx, userID string, name string
 	for rows.Next() {
 		var entry projectRecord
 		var deployCount int64
-		if err := rows.Scan(&entry.ID, &entry.UserID, &entry.Name, &entry.Slug, &entry.Username, &deployCount); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount); err != nil {
 			return nil, err
 		}
 		entry.Deploys = int(deployCount)
@@ -207,7 +283,7 @@ func lookupUserByEmail(ctx context.Context, tx pgx.Tx, email string) (string, st
 	return id, username, nil
 }
 
-func uniqueSlug(ctx context.Context, tx pgx.Tx, userID string, base string) (string, error) {
+func uniqueSlug(ctx context.Context, tx pgx.Tx, orgID string, base string) (string, error) {
 	if base == "" {
 		base = "prototype"
 	}
@@ -217,9 +293,9 @@ func uniqueSlug(ctx context.Context, tx pgx.Tx, userID string, base string) (str
 		var exists bool
 		if err := tx.QueryRow(ctx, `
 			select exists(
-				select 1 from projects where user_id = $1 and slug = $2 and deleted_at is null
+				select 1 from projects where org_id = $1 and slug = $2 and deleted_at is null
 			)
-		`, userID, slug).Scan(&exists); err != nil {
+		`, orgID, slug).Scan(&exists); err != nil {
 			return "", err
 		}
 

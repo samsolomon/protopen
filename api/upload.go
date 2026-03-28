@@ -53,7 +53,14 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		prepared.normalizedTo = r2Prefix
 	}
 
-	result, err := app.upsertProjectFromUpload(r.Context(), user.Email, prepared)
+	orgID, orgSlug, orgErr := resolveOrgFromParam(user, r.URL.Query().Get("org"))
+	if orgErr != nil {
+		cleanupPreparedUpload(prepared)
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": orgErr.Error()})
+		return
+	}
+
+	result, err := app.upsertProjectFromUpload(r.Context(), orgID, orgSlug, prepared)
 	if err != nil {
 		cleanupPreparedUpload(prepared)
 		status := http.StatusInternalServerError

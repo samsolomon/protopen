@@ -26,16 +26,21 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		return err
 	}
 
+	orgID, err := ensurePersonalOrg(ctx, tx, userID, username, demoUserName)
+	if err != nil {
+		return err
+	}
+
 	var projectCount int
-	if err := tx.QueryRow(ctx, `select count(*) from projects where user_id = $1 and deleted_at is null`, userID).Scan(&projectCount); err != nil {
+	if err := tx.QueryRow(ctx, `select count(*) from projects where org_id = $1 and deleted_at is null`, orgID).Scan(&projectCount); err != nil {
 		return err
 	}
 
 	if projectCount == 0 {
-		if err := insertSeedProject(ctx, tx, userID, username, app.contentBaseURL, "Product Teardown", "product-teardown", 4, app.ingestRoot); err != nil {
+		if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, "Product Teardown", "product-teardown", 4, app.ingestRoot); err != nil {
 			return err
 		}
-		if err := insertSeedProject(ctx, tx, userID, username, app.contentBaseURL, "AI Signup Flow", "ai-signup-flow", 2, app.ingestRoot); err != nil {
+		if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, "AI Signup Flow", "ai-signup-flow", 2, app.ingestRoot); err != nil {
 			return err
 		}
 	}
@@ -86,13 +91,44 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 	return id, username, nil
 }
 
-func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string) error {
+func ensurePersonalOrg(ctx context.Context, tx pgx.Tx, userID string, username string, name string) (string, error) {
+	var orgID string
+	err := tx.QueryRow(ctx, `
+		select o.id from organizations o
+		join org_members m on m.org_id = o.id
+		where m.user_id = $1 and o.is_personal = true
+	`, userID).Scan(&orgID)
+	if err == nil {
+		return orgID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+
+	orgID = generateID("org")
+	now := time.Now().UTC()
+	if _, err := tx.Exec(ctx, `
+		insert into organizations (id, slug, name, is_personal, created_at, updated_at)
+		values ($1, $2, $3, true, $4, $4)
+	`, orgID, username, name, now); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into org_members (id, org_id, user_id, role, created_at)
+		values ($1, $2, $3, 'admin', $4)
+	`, generateID("mem"), orgID, userID, now); err != nil {
+		return "", err
+	}
+	return orgID, nil
+}
+
+func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string) error {
 	projectID := generateID("proj")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
 	if _, err := tx.Exec(ctx, `
-		insert into projects (id, user_id, slug, name, created_at, updated_at)
+		insert into projects (id, org_id, slug, name, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $5)
-	`, projectID, userID, slug, name, now); err != nil {
+	`, projectID, orgID, slug, name, now); err != nil {
 		return err
 	}
 
@@ -100,7 +136,7 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, userID string, username s
 	for index := 0; index < deployCount; index++ {
 		deployID := generateID("dep")
 		deployTime := now.Add(time.Duration(index) * time.Hour)
-		seedRoot, err := createSeedDeployFiles(ingestRoot, username, slug, index)
+		seedRoot, err := createSeedDeployFiles(ingestRoot, orgSlug, slug, index)
 		if err != nil {
 			return err
 		}
