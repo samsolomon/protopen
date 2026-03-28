@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react'
 import type { SessionUser, OrgMember } from './types'
-import { fetchOrgMembers, addOrgMember, removeOrgMember, SessionExpiredError } from './api'
+import { fetchOrgMembers, addOrgMember, removeOrgMember, updateMemberRole, SessionExpiredError } from './api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { UserPlus, X } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu'
+import { UserPlus, X, ChevronDown } from 'lucide-react'
 
 type OrgMembersPanelProps = {
   user: SessionUser
@@ -23,6 +30,7 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
 
   const orgId = personalOrg?.id ?? ''
   const isAdmin = personalOrg?.role === 'admin'
+  const roleBadgeVariant = (role: string): 'default' | 'secondary' => (role === 'admin' ? 'default' : 'secondary')
 
   useEffect(() => {
     if (!orgId) return
@@ -56,6 +64,22 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
       toast.error(err instanceof Error ? err.message : 'Could not add member')
     } finally {
       setInviting(false)
+    }
+  }
+
+  const handleRoleChange = async (memberId: string, newRole: string) => {
+    if (!orgId) return
+    const target = members.find((m) => m.id === memberId)
+    if (!target || target.role === newRole) return
+    const prevRole = target.role
+    setMembers((cur) => cur.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)))
+    try {
+      await updateMemberRole(orgId, memberId, newRole)
+      toast.success(`Role updated to ${newRole}`)
+    } catch (err) {
+      setMembers((cur) => cur.map((m) => (m.id === memberId ? { ...m, role: prevRole } : m)))
+      if (err instanceof SessionExpiredError) return onSessionExpired()
+      toast.error(err instanceof Error ? err.message : 'Could not update role')
     }
   }
 
@@ -97,9 +121,31 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                    {member.role}
-                  </Badge>
+                  {isAdmin && member.userId !== user.id ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="cursor-pointer focus:outline-none"
+                      >
+                        <Badge variant={roleBadgeVariant(member.role)} render={<button />}>
+                          {member.role}
+                          <ChevronDown className="ml-1 h-3 w-3" />
+                        </Badge>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuRadioGroup
+                          value={member.role}
+                          onValueChange={(value) => handleRoleChange(member.id, value)}
+                        >
+                          <DropdownMenuRadioItem value="admin">Admin</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="member">Member</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <Badge variant={roleBadgeVariant(member.role)}>
+                      {member.role}
+                    </Badge>
+                  )}
                   {isAdmin && member.userId !== user.id && (
                     <Button
                       variant="ghost"

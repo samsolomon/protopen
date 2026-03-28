@@ -33,7 +33,14 @@ func (app *application) orgByIDHandler(w http.ResponseWriter, r *http.Request) {
 		case "members":
 			if len(parts) == 3 && parts[2] != "" {
 				memberID := strings.TrimRight(parts[2], "/")
-				app.removeOrgMemberHandler(w, r, orgID, memberID)
+				switch r.Method {
+				case http.MethodDelete:
+					app.removeOrgMemberHandler(w, r, orgID, memberID)
+				case http.MethodPatch:
+					app.updateOrgMemberHandler(w, r, orgID, memberID)
+				default:
+					w.WriteHeader(http.StatusMethodNotAllowed)
+				}
 			} else {
 				switch r.Method {
 				case http.MethodGet:
@@ -258,11 +265,6 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) removeOrgMemberHandler(w http.ResponseWriter, r *http.Request, orgID string, memberID string) {
-	if r.Method != http.MethodDelete {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -312,6 +314,80 @@ func (app *application) removeOrgMemberHandler(w http.ResponseWriter, r *http.Re
 	}
 	if commandTag.RowsAffected() == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "member not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (app *application) updateOrgMemberHandler(w http.ResponseWriter, r *http.Request, orgID string, memberID string) {
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	role, ok := orgRole(user, orgID)
+	if !ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
+		return
+	}
+	if role != roleAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only admins can change roles"})
+		return
+	}
+
+	var payload struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	if payload.Role != roleAdmin && payload.Role != roleMember {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be admin or member"})
+		return
+	}
+
+	var targetUserID string
+	var currentRole string
+	if err := app.db.QueryRow(r.Context(), `
+		select user_id, role from org_members where id = $1 and org_id = $2
+	`, memberID, orgID).Scan(&targetUserID, &currentRole); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "member not found"})
+		return
+	}
+
+	if targetUserID == user.ID {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot change your own role"})
+		return
+	}
+
+	if currentRole == payload.Role {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+
+	if currentRole == roleAdmin && payload.Role == roleMember {
+		var adminCount int
+		if err := app.db.QueryRow(r.Context(), `
+			select count(*) from org_members where org_id = $1 and role = $2
+		`, orgID, roleAdmin).Scan(&adminCount); err != nil {
+			log.Printf("count admins: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update role"})
+			return
+		}
+		if adminCount <= 1 {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "cannot demote the last admin"})
+			return
+		}
+	}
+
+	if _, err := app.db.Exec(r.Context(), `
+		update org_members set role = $1 where id = $2 and org_id = $3
+	`, payload.Role, memberID, orgID); err != nil {
+		log.Printf("update org member role: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update role"})
 		return
 	}
 

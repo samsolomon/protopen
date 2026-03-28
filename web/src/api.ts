@@ -312,6 +312,24 @@ export async function addOrgMember(orgId: string, email: string, role: string): 
   return { status: data.status ?? 'added' }
 }
 
+export async function updateMemberRole(orgId: string, memberId: string, role: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/orgs/${orgId}/members/${memberId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not update role')
+  }
+}
+
 export async function removeOrgMember(orgId: string, memberId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/orgs/${orgId}/members/${memberId}`, {
     method: 'DELETE',
