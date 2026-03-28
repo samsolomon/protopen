@@ -203,6 +203,10 @@ func main() {
 		return
 	}
 
+	// Local dev mode: serve content on app port so session cookie works for private projects
+	app.contentBaseURL = "http://localhost" + appListenAddr
+	appMux.Handle("/~", contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
+
 	// Local dev mode: two separate servers
 	appServer := &http.Server{
 		Addr:              appListenAddr,

@@ -54,7 +54,14 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if !deployment.isPublic {
-		if _, err := app.requireSessionUser(r); err != nil {
+		user, err := app.requireSessionUser(r)
+		if err != nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
+			return
+		}
+		if !userInOrg(user, orgSlug) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
@@ -165,6 +172,15 @@ func (app *application) serveFromFilesystem(w http.ResponseWriter, r *http.Reque
 		log.Printf("serve project file: %v", err)
 		http.Error(w, "could not serve file", http.StatusInternalServerError)
 	}
+}
+
+func userInOrg(user sessionUser, orgSlug string) bool {
+	for _, org := range user.Orgs {
+		if org.Slug == orgSlug {
+			return true
+		}
+	}
+	return false
 }
 
 func parseProjectPath(rawPath string) (orgSlug string, slug string, deployID string, assetPath string, ok bool) {
