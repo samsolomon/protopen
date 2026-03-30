@@ -299,6 +299,10 @@ func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if (payload.PinX != nil) != (payload.PinY != nil) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "both pinX and pinY are required to move a pin"})
+		return
+	}
 	if payload.PinX != nil && payload.PinY != nil {
 		if ownerID != user.ID {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the author can move a pin"})

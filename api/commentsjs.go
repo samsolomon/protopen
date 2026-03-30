@@ -10,12 +10,15 @@ var sr=host.__veloriSR;
 if(!ctx||!ctx.userId)return;
 
 var BAR_H=40;
+var BODY_MT=parseFloat(getComputedStyle(document.body).marginTop)||0;
+var SEND_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
 var commentMode=false;
 var overlay=null;
 var popover=null;
 var pins=[];
 var cachedComments=[];
 var currentPath=ctx.pagePath;
+var savedOverflow='';
 
 var styleEl=document.createElement('style');
 styleEl.textContent=` + "`" + `
@@ -41,8 +44,8 @@ styleEl.textContent=` + "`" + `
 .vlr-popover .vlr-toolbar{display:flex;align-items:center;gap:2px;position:relative}
 .vlr-popover .vlr-toolbar button{width:26px;height:26px;border-radius:50%;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#d4d4d8;transition:color .1s}
 .vlr-popover .vlr-toolbar button:hover{color:#71717a}
-.vlr-popover .vlr-toolbar button.vlr-resolve-active{color:#059669}
-.vlr-popover .vlr-toolbar button.vlr-resolve-active:hover{background:#ecfdf5}
+.vlr-popover .vlr-toolbar button.vlr-resolve-active{color:#18181b}
+.vlr-popover .vlr-toolbar button.vlr-resolve-active:hover{color:#71717a}
 .vlr-popover .vlr-menu{position:absolute;top:100%;right:0;margin-top:4px;background:#18181b;border-radius:8px;padding:4px 0;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:1}
 .vlr-popover .vlr-menu button{display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;color:#fff;font-size:12px;font-family:inherit;cursor:pointer;border-radius:0}
 .vlr-popover .vlr-menu button:hover{background:rgba(255,255,255,.1);color:#fff}
@@ -80,13 +83,25 @@ function relTime(iso){
 function initial(name){return (name||'?').charAt(0).toUpperCase()}
 function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
 
+function makeSendBtn(ta,maxH,onSend){
+  var btn=document.createElement('button');
+  btn.className='vlr-send';
+  btn.innerHTML=SEND_SVG;
+  btn.onclick=onSend;
+  ta.addEventListener('input',function(){
+    ta.style.height='auto';
+    ta.style.height=Math.min(ta.scrollHeight,maxH)+'px';
+    btn.classList.toggle('active',ta.value.trim().length>0);
+  });
+  return btn;
+}
+
 function clientToPin(clientX,clientY){
-  var mt=parseFloat(getComputedStyle(document.body).marginTop)||0;
   var docW=document.documentElement.scrollWidth;
   var docH=document.body.scrollHeight;
   return{
     x:(clientX+window.scrollX)/docW*100,
-    y:(clientY+window.scrollY-mt)/docH*100
+    y:(clientY+window.scrollY-BODY_MT)/docH*100
   };
 }
 
@@ -130,6 +145,7 @@ function initPinDrag(pin,c,isOwn){
     document.addEventListener('mouseup',onUp);
     document.addEventListener('touchmove',onMove,{passive:false});
     document.addEventListener('touchend',onUp);
+    document.addEventListener('touchcancel',onUp);
   }
   function onMove(e){
     var pt=e.touches?e.touches[0]:e;
@@ -164,6 +180,7 @@ function initPinDrag(pin,c,isOwn){
     document.removeEventListener('mouseup',onUp);
     document.removeEventListener('touchmove',onMove);
     document.removeEventListener('touchend',onUp);
+    document.removeEventListener('touchcancel',onUp);
   }
   pin.addEventListener('mousedown',onDown);
   pin.addEventListener('touchstart',onDown,{passive:false});
@@ -206,7 +223,7 @@ var tempPin=null;
 function removeNewPopover(){
   if(newPop){newPop.remove();newPop=null}
   if(tempPin){tempPin.remove();tempPin=null}
-  document.body.style.overflow='';
+  document.body.style.overflow=savedOverflow;
 }
 
 function showNewPopover(px,py,screenX,screenY){
@@ -228,15 +245,7 @@ function showNewPopover(px,py,screenX,screenY){
   var ta=document.createElement('textarea');
   ta.placeholder='Add a comment...';
   ta.rows=1;
-  var sendBtn=document.createElement('button');
-  sendBtn.className='vlr-send';
-  sendBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
-  sendBtn.onclick=function(){submitNew(px,py,ta.value)};
-  ta.addEventListener('input',function(){
-    ta.style.height='auto';
-    ta.style.height=Math.min(ta.scrollHeight,120)+'px';
-    sendBtn.classList.toggle('active',ta.value.trim().length>0);
-  });
+  var sendBtn=makeSendBtn(ta,120,function(){submitNew(px,py,ta.value)});
   ta.addEventListener('keydown',function(e){
     if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitNew(px,py,ta.value)}
     if(e.key==='Escape'){removeNewPopover()}
@@ -244,6 +253,7 @@ function showNewPopover(px,py,screenX,screenY){
   newPop.appendChild(ta);
   newPop.appendChild(sendBtn);
 
+  savedOverflow=document.body.style.overflow;
   document.body.style.overflow='hidden';
   document.body.appendChild(newPop);
   setTimeout(function(){ta.focus()},0);
@@ -296,7 +306,7 @@ function openThread(c,pinEl){
     copyLink.onclick=function(ev){
       ev.stopPropagation();
       var url=location.origin+location.pathname+'#vlr-comment='+c.id;
-      navigator.clipboard.writeText(url).then(function(){menu.remove();menu=null});
+      navigator.clipboard.writeText(url).then(function(){menu.remove();menu=null}).catch(function(){menu.remove();menu=null});
     };
     menu.appendChild(copyLink);
     if(c.userId===ctx.userId){
@@ -348,15 +358,7 @@ function openThread(c,pinEl){
   var ta=document.createElement('textarea');
   ta.placeholder='Reply...';
   ta.rows=1;
-  var sendBtn=document.createElement('button');
-  sendBtn.className='vlr-send';
-  sendBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
-  sendBtn.onclick=function(){submitReply(c,ta)};
-  ta.addEventListener('input',function(){
-    ta.style.height='auto';
-    ta.style.height=Math.min(ta.scrollHeight,80)+'px';
-    sendBtn.classList.toggle('active',ta.value.trim().length>0);
-  });
+  var sendBtn=makeSendBtn(ta,80,function(){submitReply(c,ta)});
   ta.addEventListener('keydown',function(e){
     if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitReply(c,ta)}
   });
@@ -467,7 +469,7 @@ setTimeout(function(){
         if(all[i].id===targetId){
           (function(comment,pinEl){
             if(pinEl)pinEl.scrollIntoView({behavior:'smooth',block:'center'});
-            setTimeout(function(){openThread(comment,pinEl)},400);
+            setTimeout(function(){openThread(comment,pinEl);loadComments()},400);
           })(all[i],pins[i]);
           return;
         }
