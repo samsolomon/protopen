@@ -13,7 +13,6 @@ var BAR_H=40;
 var BODY_MT=parseFloat(getComputedStyle(document.body).marginTop)||0;
 var SEND_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
 var commentMode=false;
-var overlay=null;
 var popover=null;
 var pins=[];
 var cachedComments=[];
@@ -26,8 +25,6 @@ styleEl.textContent=` + "`" + `
 [data-vlr-pin]:hover{transform:translate(-50%,-50%) scale(1.15);box-shadow:0 3px 12px rgba(0,0,0,.2)}
 [data-vlr-pin].vlr-own{cursor:grab}
 [data-vlr-pin].vlr-dragging{opacity:.75;transform:translate(-50%,-50%) scale(1.2);cursor:grabbing;transition:none;z-index:2147483646}
-#vlr-overlay{position:fixed;top:40px;left:0;right:0;bottom:0;z-index:2147483639;pointer-events:none}
-#vlr-overlay.placing{pointer-events:auto;cursor:crosshair}
 .vlr-popover{position:absolute;z-index:2147483645;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;color:#18181b;overflow:hidden}
 .vlr-popover .vlr-pop-body{padding:12px 14px;max-height:320px;overflow-y:auto}
 .vlr-popover .vlr-msg{margin-bottom:10px}
@@ -62,10 +59,6 @@ document.head.appendChild(styleEl);
 // Ensure body is positioned so absolute pins work
 if(getComputedStyle(document.body).position==='static')document.body.style.position='relative';
 
-// Fixed overlay for click capture in placing mode only
-overlay=document.createElement('div');
-overlay.id='vlr-overlay';
-document.body.appendChild(overlay);
 
 // ---- API helpers ----
 function api(method,path,body){
@@ -200,7 +193,6 @@ function loadComments(cb){
 var commentBtn=sr.getElementById('velori-comment-btn');
 function setCommentMode(on){
   commentMode=on;
-  if(commentBtn)commentBtn.style.opacity='';
   document.body.style.cursor=on?'crosshair':'';
   if(!commentMode){
     clearPins();
