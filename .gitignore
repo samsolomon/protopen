@@ -8,3 +8,6 @@ api/api
 api/.data/
 cli/cli
 cli/velori
+.env
+.env.local
+.env.*.local
