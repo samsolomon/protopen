@@ -44,19 +44,13 @@ styleEl.textContent=` + "`" + `
 .vlr-popover .vlr-btn.unresolve{color:#d97706}
 .vlr-popover .vlr-btn.delete{color:#dc2626}
 .vlr-popover .vlr-btn.delete:hover{background:#fef2f2}
-.vlr-popover .vlr-compose{border-top:1px solid #e4e4e7;padding:10px 14px;display:flex;gap:6px}
-.vlr-popover .vlr-compose textarea{flex:1;border:1px solid #e4e4e7;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:12px;resize:none;outline:none;min-height:32px;max-height:80px}
-.vlr-popover .vlr-compose textarea:focus{border-color:#18181b}
-.vlr-popover .vlr-compose button{background:#18181b;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
-.vlr-popover .vlr-compose button:hover{background:#27272a}
-.vlr-new-popover{position:fixed;z-index:2147483646;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:12px;width:280px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px}
-.vlr-new-popover textarea{width:100%;border:1px solid #e4e4e7;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;resize:none;outline:none;min-height:60px;box-sizing:border-box}
-.vlr-new-popover textarea:focus{border-color:#18181b}
-.vlr-new-popover .vlr-pop-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.vlr-new-popover button{border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
-.vlr-new-popover .vlr-cancel{background:#f4f4f5;color:#71717a}
-.vlr-new-popover .vlr-submit{background:#18181b;color:#fff}
-.vlr-new-popover .vlr-submit:hover{background:#27272a}
+.vlr-popover .vlr-compose{border-top:1px solid #e4e4e7;padding:8px 10px;display:flex;align-items:flex-end;gap:6px}
+.vlr-popover .vlr-compose textarea{flex:1;border:none;background:transparent;padding:6px 0;font-family:inherit;font-size:12px;resize:none;outline:none;min-height:18px;max-height:80px;overflow-y:auto;line-height:1.4}
+.vlr-send{width:28px;height:28px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;background:#d4d4d8;color:#fff;transition:background .15s;padding:0}
+.vlr-send.active{background:#18181b}
+.vlr-send:hover.active{background:#27272a}
+.vlr-new-popover{position:fixed;z-index:2147483646;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:6px 6px 6px 4px;min-width:220px;max-width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;display:flex;align-items:flex-end;gap:4px}
+.vlr-new-popover textarea{flex:1;border:none;background:transparent;padding:7px 10px;font-family:inherit;font-size:13px;resize:none;outline:none;min-height:18px;max-height:120px;overflow-y:auto;line-height:1.4}
 ` + "`" + `;
 document.head.appendChild(styleEl);
 
@@ -224,19 +218,29 @@ function showNewPopover(px,py,screenX,screenY){
 
   newPop=document.createElement('div');
   newPop.className='vlr-new-popover';
-  var left=Math.min(screenX+12,window.innerWidth-300);
-  var top=Math.min(screenY+12,window.innerHeight-140);
+  var left=Math.min(screenX+12,window.innerWidth-340);
+  var top=Math.min(screenY+12,window.innerHeight-60);
   newPop.style.left=left+'px';
   newPop.style.top=top+'px';
-  newPop.innerHTML='<textarea placeholder="Add a comment..." autofocus></textarea><div class="vlr-pop-actions"><button class="vlr-cancel">Cancel</button><button class="vlr-submit">Post</button></div>';
 
-  var ta=newPop.querySelector('textarea');
-  newPop.querySelector('.vlr-cancel').onclick=function(){removeNewPopover()};
-  newPop.querySelector('.vlr-submit').onclick=function(){submitNew(px,py,ta.value)};
+  var ta=document.createElement('textarea');
+  ta.placeholder='Add a comment...';
+  ta.rows=1;
+  var sendBtn=document.createElement('button');
+  sendBtn.className='vlr-send';
+  sendBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
+  sendBtn.onclick=function(){submitNew(px,py,ta.value)};
+  ta.addEventListener('input',function(){
+    ta.style.height='auto';
+    ta.style.height=Math.min(ta.scrollHeight,120)+'px';
+    sendBtn.classList.toggle('active',ta.value.trim().length>0);
+  });
   ta.addEventListener('keydown',function(e){
     if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitNew(px,py,ta.value)}
     if(e.key==='Escape'){removeNewPopover()}
   });
+  newPop.appendChild(ta);
+  newPop.appendChild(sendBtn);
 
   document.body.style.overflow='hidden';
   document.body.appendChild(newPop);
@@ -311,8 +315,14 @@ function openThread(c,pinEl){
   ta.placeholder='Reply...';
   ta.rows=1;
   var sendBtn=document.createElement('button');
-  sendBtn.textContent='Reply';
+  sendBtn.className='vlr-send';
+  sendBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   sendBtn.onclick=function(){submitReply(c,ta)};
+  ta.addEventListener('input',function(){
+    ta.style.height='auto';
+    ta.style.height=Math.min(ta.scrollHeight,80)+'px';
+    sendBtn.classList.toggle('active',ta.value.trim().length>0);
+  });
   ta.addEventListener('keydown',function(e){
     if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitReply(c,ta)}
   });
