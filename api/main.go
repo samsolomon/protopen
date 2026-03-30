@@ -95,6 +95,8 @@ type projectRecord struct {
 }
 
 type liveDeploy struct {
+	projectID   string
+	deployID    string
 	siteRoot    string
 	isPublic    bool
 	projectName string
@@ -169,9 +171,15 @@ func main() {
 	appMux.HandleFunc("/api/account/", app.accountHandler)
 	appMux.HandleFunc("/api/orgs", app.orgsHandler)
 	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
+	appMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
+	appMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
+	appMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
 	serveFrontend(appMux, frontendOrigin)
 
 	contentMux := http.NewServeMux()
+	contentMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
+	contentMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
+	contentMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
 	contentMux.HandleFunc("/", app.serveProjectHandler)
 
 	if listenAddr != "" {

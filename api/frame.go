@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func frameSnippet(projectName string, appOrigin string, deploys []toolbarDeploy, activeDeployID string, baseURL string) string {
+func frameSnippet(projectName string, appOrigin string, deploys []toolbarDeploy, activeDeployID string, baseURL string, projectID string, pagePath string, userID string, userName string) string {
 	name := html.EscapeString(projectName)
 	origin := html.EscapeString(appOrigin)
 
@@ -20,6 +20,8 @@ var D=/*DEPLOYS*/[];var A='/*ACTIVE*/';var B='/*BASE*/';
 var h=document.createElement('div');
 h.id='velori-frame';
 var s=h.attachShadow({mode:'closed'});
+h.__veloriSR=s;
+h.__veloriCtx=/*CTX*/{};
 s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:40px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:40px;background:oklch(0.9753 0.0039 107.3/70%%);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);color:#18181b;padding:0 12px;font-size:13px;border-bottom:1px solid #e4e4e7}.logo{color:#18181b;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.02em;margin-right:10px}.logo:hover{opacity:.7}.name{flex:1;text-align:center;color:#71717a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vn{margin-left:auto;display:flex;align-items:center;gap:6px}.vn select,.vn button{-webkit-appearance:none;appearance:none;background:transparent;border:none;color:#18181b;font-family:inherit;font-size:12px;cursor:pointer;outline:none}.vn select{padding:1px 16px 1px 4px;height:20px;background-image:url("data:image/svg+xml,%%3Csvg xmlns=%%27http://www.w3.org/2000/svg%%27 width=%%278%%27 height=%%278%%27%%3E%%3Cpath d=%%27M2 3l2 2 2-2%%27 stroke=%%27%%2318181b%%27 stroke-width=%%271%%27 fill=%%27none%%27/%%3E%%3C/svg%%3E");background-repeat:no-repeat;background-position:right 2px center}.vn select:hover,.vn button:hover{opacity:.6}</style><div class="bar"><a class="logo" href="%s">Velori</a><span class="name">%s</span><div class="vn" id="vn"></div></div>';
 var vn=s.getElementById("vn");
 function mksel(parent,selected){
@@ -65,6 +67,11 @@ document.body.appendChild(splitEl);
 window.addEventListener("message",function(e){if(e.data==="velori-exit-split")exitSplit()});
 }
 }
+if(h.__veloriCtx.userId){
+var cb=document.createElement("button");cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';cb.title="Comments";cb.id="velori-comment-btn";cb.style.cssText="display:inline-flex;align-items:center;padding:2px";
+vn.insertBefore(cb,vn.firstChild);
+var cs=document.createElement("script");cs.src="/__velori/comments.js";document.head.appendChild(cs);
+}
 document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+40+'px';
 document.body.appendChild(h);
 })();</script>`, origin, name)
@@ -74,6 +81,16 @@ document.body.appendChild(h);
 	tpl = strings.Replace(tpl, "/*DEPLOYS*/[]", string(deploysJSON), 1)
 	tpl = strings.Replace(tpl, "/*ACTIVE*/", html.EscapeString(activeDeployID), 1)
 	tpl = strings.Replace(tpl, "/*BASE*/", html.EscapeString(baseURL), 1)
+
+	ctxJSON, _ := json.Marshal(map[string]string{
+		"projectId": projectID,
+		"deployId":  activeDeployID,
+		"pagePath":  pagePath,
+		"userId":    userID,
+		"userName":  userName,
+	})
+	tpl = strings.Replace(tpl, "/*CTX*/{}", string(ctxJSON), 1)
+
 	return tpl
 }
 

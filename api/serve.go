@@ -53,9 +53,11 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Always attempt auth so comment widget knows who the user is.
+	// For private projects, deny access if not authenticated or not in org.
+	user, _ := app.requireSessionUser(r)
 	if !deployment.isPublic {
-		user, err := app.requireSessionUser(r)
-		if err != nil || !userInOrg(user, orgSlug) {
+		if user.ID == "" || !userInOrg(user, orgSlug) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)
@@ -65,7 +67,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 
 	deploys := app.listToolbarDeploys(r.Context(), orgSlug, slug)
 	baseURL := fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, slug)
-	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployID, baseURL)
+	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL, deployment.projectID, assetPath, user.ID, user.Name)
 	fw := newFrameWriter(w, snippet)
 	defer fw.Close()
 
@@ -206,21 +208,18 @@ func parseProjectPath(rawPath string) (orgSlug string, slug string, deployID str
 }
 
 func (app *application) lookupDeployByID(ctx context.Context, orgSlug string, slug string, deployID string) (liveDeploy, error) {
-	var siteRoot string
-	var isPublic bool
-	var projectName string
+	var d liveDeploy
 	err := app.db.QueryRow(ctx, `
-		select d.storage_prefix, p.is_public, p.name
+		select p.id, d.id, d.storage_prefix, p.is_public, p.name
 		from projects p
 		join organizations o on o.id = p.org_id
 		join deploys d on d.id = $3 and d.project_id = p.id
 		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-	`, orgSlug, slug, deployID).Scan(&siteRoot, &isPublic, &projectName)
+	`, orgSlug, slug, deployID).Scan(&d.projectID, &d.deployID, &d.siteRoot, &d.isPublic, &d.projectName)
 	if err != nil {
 		return liveDeploy{}, err
 	}
-
-	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic, projectName: projectName}, nil
+	return d, nil
 }
 
 type toolbarDeploy struct {
@@ -263,21 +262,18 @@ func (app *application) listToolbarDeploys(ctx context.Context, orgSlug string, 
 }
 
 func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, slug string) (liveDeploy, error) {
-	var siteRoot string
-	var isPublic bool
-	var projectName string
+	var d liveDeploy
 	err := app.db.QueryRow(ctx, `
-		select d.storage_prefix, p.is_public, p.name
+		select p.id, d.id, d.storage_prefix, p.is_public, p.name
 		from projects p
 		join organizations o on o.id = p.org_id
 		join deploys d on d.id = p.current_deploy_id
 		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-	`, orgSlug, slug).Scan(&siteRoot, &isPublic, &projectName)
+	`, orgSlug, slug).Scan(&d.projectID, &d.deployID, &d.siteRoot, &d.isPublic, &d.projectName)
 	if err != nil {
 		return liveDeploy{}, err
 	}
-
-	return liveDeploy{siteRoot: siteRoot, isPublic: isPublic, projectName: projectName}, nil
+	return d, nil
 }
 
 func resolveAssetPath(siteRoot string, requested string) (string, bool, error) {
