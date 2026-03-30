@@ -282,16 +282,24 @@ function openThread(c,pinEl){
   actions.className='vlr-toolbar';
   actions.style.position='relative';
 
-  if(c.userId===ctx.userId){
-    var moreBtn=document.createElement('button');
-    moreBtn.title='More';
-    moreBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
-    var menu=null;
-    moreBtn.onclick=function(e){
-      e.stopPropagation();
-      if(menu){menu.remove();menu=null;return}
-      menu=document.createElement('div');
-      menu.className='vlr-menu';
+  var moreBtn=document.createElement('button');
+  moreBtn.title='More';
+  moreBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+  var menu=null;
+  moreBtn.onclick=function(e){
+    e.stopPropagation();
+    if(menu){menu.remove();menu=null;return}
+    menu=document.createElement('div');
+    menu.className='vlr-menu';
+    var copyLink=document.createElement('button');
+    copyLink.textContent='Copy link';
+    copyLink.onclick=function(ev){
+      ev.stopPropagation();
+      var url=location.origin+location.pathname+'#vlr-comment='+c.id;
+      navigator.clipboard.writeText(url).then(function(){menu.remove();menu=null});
+    };
+    menu.appendChild(copyLink);
+    if(c.userId===ctx.userId){
       var del=document.createElement('button');
       del.textContent='Delete thread\u2026';
       del.onclick=function(ev){
@@ -300,10 +308,10 @@ function openThread(c,pinEl){
         api('DELETE','/comments/'+c.id).then(function(){closePopover();loadComments()});
       };
       menu.appendChild(del);
-      actions.appendChild(menu);
-    };
-    actions.appendChild(moreBtn);
-  }
+    }
+    actions.appendChild(menu);
+  };
+  actions.appendChild(moreBtn);
 
   var resolveBtn=document.createElement('button');
   resolveBtn.title=resolved?'Unresolve':'Resolve';
@@ -445,7 +453,30 @@ document.addEventListener('keydown',function(e){
 });
 
 // ---- Init ----
-loadComments();
+setTimeout(function(){
+  var hashMatch=location.hash.match(/^#vlr-comment=(.+)/);
+  if(hashMatch){
+    var targetId=hashMatch[1];
+    history.replaceState(null,'',location.pathname+location.search);
+    setCommentMode(true);
+    var qs='?project_id='+encodeURIComponent(ctx.projectId)+'&deploy_id='+encodeURIComponent(ctx.deployId)+'&page_path='+encodeURIComponent(currentPath)+'&include_resolved=true';
+    api('GET','/comments'+qs).then(function(data){
+      var all=data.comments||[];
+      renderPins(all);
+      for(var i=0;i<all.length;i++){
+        if(all[i].id===targetId){
+          (function(comment,pinEl){
+            if(pinEl)pinEl.scrollIntoView({behavior:'smooth',block:'center'});
+            setTimeout(function(){openThread(comment,pinEl)},400);
+          })(all[i],pins[i]);
+          return;
+        }
+      }
+    });
+  }else{
+    loadComments();
+  }
+},0);
 })();`
 
 var commentsJSBytes = []byte(commentsJS)
