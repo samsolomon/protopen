@@ -18,6 +18,9 @@ var pins=[];
 var cachedComments=[];
 var currentPath=ctx.pagePath;
 var savedOverflow='';
+var orgMembers=null;
+var acEl=null;
+var acIdx=0;
 
 var styleEl=document.createElement('style');
 styleEl.textContent=` + "`" + `
@@ -53,6 +56,12 @@ styleEl.textContent=` + "`" + `
 .vlr-send:hover.active{background:#27272a}
 .vlr-new-popover{position:fixed;z-index:2147483646;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:6px 6px 6px 4px;min-width:220px;max-width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;display:flex;align-items:flex-end;gap:4px}
 .vlr-new-popover textarea{flex:1;border:none;background:transparent;padding:7px 10px;font-family:inherit;font-size:13px;resize:none;outline:none;min-height:18px;max-height:120px;overflow-y:auto;line-height:1.4}
+.vlr-mention{color:#18181b;font-weight:600;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:4px;font-size:inherit}
+.vlr-autocomplete{position:fixed;z-index:2147483647;background:#fff;border:1px solid #e4e4e7;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:180px;max-height:160px;overflow-y:auto;font-family:Geist,Inter,system-ui,sans-serif;font-size:13px}
+.vlr-autocomplete button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:none;background:none;cursor:pointer;color:#18181b;font-family:inherit;font-size:13px;text-align:left}
+.vlr-autocomplete button:hover,.vlr-autocomplete button.vlr-ac-active{background:#f4f4f5}
+.vlr-autocomplete .vlr-ac-name{font-weight:500}
+.vlr-autocomplete .vlr-ac-user{color:#a1a1aa;font-size:11px}
 ` + "`" + `;
 document.head.appendChild(styleEl);
 
@@ -87,6 +96,92 @@ function makeSendBtn(ta,maxH,onSend){
     btn.classList.toggle('active',ta.value.trim().length>0);
   });
   return btn;
+}
+
+// ---- @mention autocomplete ----
+function loadMembers(cb){
+  if(orgMembers){cb(orgMembers);return}
+  api('GET','/members?project_id='+encodeURIComponent(ctx.projectId)).then(function(data){
+    orgMembers=data.members||[];
+    cb(orgMembers);
+  });
+}
+
+function closeAutocomplete(){
+  if(acEl){acEl.remove();acEl=null}
+}
+
+function initMentionAutocomplete(ta,onSubmit,onEscape){
+  ta.addEventListener('input',function(){
+    var pos=ta.selectionStart;
+    var text=ta.value.substring(0,pos);
+    var match=text.match(/(^|\s)@([a-zA-Z0-9_-]*)$/);
+    if(!match){closeAutocomplete();return}
+    var query=match[2].toLowerCase();
+    loadMembers(function(members){
+      var filtered=members.filter(function(m){
+        return m.id!==ctx.userId&&(m.name.toLowerCase().indexOf(query)>=0||m.username.toLowerCase().indexOf(query)>=0);
+      }).slice(0,5);
+      if(!filtered.length){closeAutocomplete();return}
+      showAutocomplete(ta,pos-query.length-1,query.length+1,filtered);
+    });
+  });
+  ta.addEventListener('keydown',function(e){
+    if(acEl){
+      var items=acEl.querySelectorAll('button');
+      if(e.key==='ArrowDown'){e.preventDefault();acIdx=Math.min(acIdx+1,items.length-1);updateActive(items);return}
+      if(e.key==='ArrowUp'){e.preventDefault();acIdx=Math.max(acIdx-1,0);updateActive(items);return}
+      if(e.key==='Enter'||e.key==='Tab'){
+        if(items[acIdx]){e.preventDefault();items[acIdx].click()}
+        return;
+      }
+      if(e.key==='Escape'){e.preventDefault();closeAutocomplete();return}
+    }
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(onSubmit)onSubmit()}
+    if(e.key==='Escape'&&onEscape)onEscape();
+  });
+  ta.addEventListener('blur',function(){setTimeout(closeAutocomplete,150)});
+}
+
+function updateActive(items){
+  for(var i=0;i<items.length;i++){items[i].classList.toggle('vlr-ac-active',i===acIdx)}
+}
+
+function showAutocomplete(ta,replaceStart,replaceLen,members){
+  closeAutocomplete();
+  acIdx=0;
+  acEl=document.createElement('div');
+  acEl.className='vlr-autocomplete';
+
+  // Position near cursor in textarea
+  var taRect=ta.getBoundingClientRect();
+  acEl.style.left=taRect.left+'px';
+  acEl.style.bottom=(window.innerHeight-taRect.top+4)+'px';
+
+  members.forEach(function(m,i){
+    var btn=document.createElement('button');
+    btn.innerHTML='<span class="vlr-ac-name">'+esc(m.name)+'</span><span class="vlr-ac-user">@'+esc(m.username)+'</span>';
+    if(i===0)btn.classList.add('vlr-ac-active');
+    btn.onmousedown=function(e){e.preventDefault()};
+    btn.onclick=function(e){
+      e.stopPropagation();
+      var cursorPos=ta.selectionStart;
+      var beforeAt=ta.value.substring(0,replaceStart);
+      var afterCursor=ta.value.substring(cursorPos);
+      ta.value=beforeAt+'@'+m.username+' '+afterCursor;
+      var newPos=beforeAt.length+m.username.length+2;
+      ta.selectionStart=ta.selectionEnd=newPos;
+      ta.dispatchEvent(new Event('input',{bubbles:true}));
+      closeAutocomplete();
+      ta.focus();
+    };
+    acEl.appendChild(btn);
+  });
+  document.body.appendChild(acEl);
+}
+
+function renderMentions(text){
+  return esc(text).replace(/(^|\s)@([a-zA-Z0-9_-]+)/g,'$1<span class="vlr-mention">@$2</span>');
 }
 
 function clientToPin(clientX,clientY){
@@ -236,11 +331,8 @@ function showNewPopover(px,py,screenX,screenY){
   var ta=document.createElement('textarea');
   ta.placeholder='Add a comment...';
   ta.rows=1;
+  initMentionAutocomplete(ta,function(){submitNew(px,py,ta.value)},function(){removeNewPopover()});
   var sendBtn=makeSendBtn(ta,120,function(){submitNew(px,py,ta.value)});
-  ta.addEventListener('keydown',function(e){
-    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitNew(px,py,ta.value)}
-    if(e.key==='Escape'){removeNewPopover()}
-  });
   newPop.appendChild(ta);
   newPop.appendChild(sendBtn);
 
@@ -331,7 +423,7 @@ function openThread(c,pinEl){
   body.className='vlr-pop-body';
   var bodyText=document.createElement('div');
   bodyText.className='vlr-body';
-  bodyText.textContent=c.body;
+  bodyText.innerHTML=renderMentions(c.body);
   body.appendChild(bodyText);
 
   // Replies
@@ -349,10 +441,8 @@ function openThread(c,pinEl){
   var ta=document.createElement('textarea');
   ta.placeholder='Reply...';
   ta.rows=1;
+  initMentionAutocomplete(ta,function(){submitReply(c,ta)});
   var sendBtn=makeSendBtn(ta,80,function(){submitReply(c,ta)});
-  ta.addEventListener('keydown',function(e){
-    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitReply(c,ta)}
-  });
   compose.appendChild(ta);
   compose.appendChild(sendBtn);
   popover.appendChild(compose);
@@ -386,7 +476,7 @@ function renderMsg(c,isReply){
   msg.appendChild(head);
   var bd=document.createElement('div');
   bd.className='vlr-body';
-  bd.textContent=c.body;
+  bd.innerHTML=renderMentions(c.body);
   msg.appendChild(bd);
   return msg;
 }
