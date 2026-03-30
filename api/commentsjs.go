@@ -200,7 +200,7 @@ function loadComments(cb){
 var commentBtn=sr.getElementById('velori-comment-btn');
 function setCommentMode(on){
   commentMode=on;
-  if(commentBtn)commentBtn.style.opacity=commentMode?'1':'.5';
+  if(commentBtn)commentBtn.style.opacity='';
   document.body.style.cursor=on?'crosshair':'';
   if(!commentMode){
     clearPins();
@@ -212,7 +212,6 @@ function setCommentMode(on){
 }
 if(commentBtn){
   commentBtn.addEventListener('click',function(){setCommentMode(!commentMode)});
-  commentBtn.style.opacity='.5';
 }
 
 
