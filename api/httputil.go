@@ -155,6 +155,13 @@ func contentSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 func getenv(key string, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {

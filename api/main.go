@@ -57,20 +57,29 @@ type authRequest struct {
 }
 
 type project struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	UpdatedAt   string `json:"updatedAt"`
-	DeployCount int    `json:"deployCount"`
-	LiveURL     string `json:"liveUrl"`
-	IsPublic    bool   `json:"isPublic"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Slug          string  `json:"slug"`
+	UpdatedAt     string  `json:"updatedAt"`
+	DeployCount   int     `json:"deployCount"`
+	LiveURL       string  `json:"liveUrl"`
+	IsPublic      bool    `json:"isPublic"`
+	GitBranch     *string `json:"gitBranch,omitempty"`
+	GitCommitHash *string `json:"gitCommitHash,omitempty"`
+	GitRemoteURL  *string `json:"gitRemoteURL,omitempty"`
 }
 
 type uploadRequest struct {
-	Name  string     `json:"name"`
-	Mode  string     `json:"mode"`
-	Label string     `json:"label,omitempty"`
-	Files []fileMeta `json:"files"`
+	Name             string     `json:"name"`
+	Mode             string     `json:"mode"`
+	Label            string     `json:"label,omitempty"`
+	Files            []fileMeta `json:"files"`
+	GitCommitHash    string     `json:"gitCommitHash,omitempty"`
+	GitBranch        string     `json:"gitBranch,omitempty"`
+	GitCommitMessage string     `json:"gitCommitMessage,omitempty"`
+	GitDirty         *bool      `json:"gitDirty,omitempty"`
+	GitAuthor        string     `json:"gitAuthor,omitempty"`
+	GitRemoteURL     string     `json:"gitRemoteURL,omitempty"`
 }
 
 type fileMeta struct {

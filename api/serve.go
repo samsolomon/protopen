@@ -223,15 +223,18 @@ func (app *application) lookupDeployByID(ctx context.Context, orgSlug string, sl
 }
 
 type toolbarDeploy struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	Time      string `json:"time"`
-	IsCurrent bool   `json:"isCurrent"`
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	Time          string  `json:"time"`
+	IsCurrent     bool    `json:"isCurrent"`
+	GitCommitHash *string `json:"gitCommitHash,omitempty"`
+	GitBranch     *string `json:"gitBranch,omitempty"`
 }
 
 func (app *application) listToolbarDeploys(ctx context.Context, orgSlug string, slug string) []toolbarDeploy {
 	rows, err := app.db.Query(ctx, `
-		select d.id, d.label, d.created_at, (d.id = p.current_deploy_id) as is_current
+		select d.id, d.label, d.created_at, (d.id = p.current_deploy_id) as is_current,
+			d.git_commit_hash, d.git_branch
 		from deploys d
 		join projects p on p.id = d.project_id
 		join organizations o on o.id = p.org_id
@@ -249,7 +252,7 @@ func (app *application) listToolbarDeploys(ctx context.Context, orgSlug string, 
 		var d toolbarDeploy
 		var label *string
 		var createdAt time.Time
-		if err := rows.Scan(&d.ID, &label, &createdAt, &d.IsCurrent); err != nil {
+		if err := rows.Scan(&d.ID, &label, &createdAt, &d.IsCurrent, &d.GitCommitHash, &d.GitBranch); err != nil {
 			return nil
 		}
 		if label != nil {

@@ -95,14 +95,16 @@ func (app *application) listProjects(ctx context.Context, orgID string) ([]proje
 			p.name,
 			p.slug,
 			p.updated_at,
-			coalesce(count(d.id), 0) as deploy_count,
+			(select count(*) from deploys where project_id = p.id) as deploy_count,
 			o.slug,
-			p.is_public
+			p.is_public,
+			cd.git_branch,
+			cd.git_commit_hash,
+			cd.git_remote_url
 		from projects p
 		join organizations o on o.id = p.org_id
-		left join deploys d on d.project_id = p.id
+		left join deploys cd on cd.id = p.current_deploy_id
 		where p.org_id = $1 and p.deleted_at is null
-		group by p.id, o.slug
 		order by p.updated_at desc
 	`, orgID)
 	if err != nil {
@@ -119,7 +121,8 @@ func (app *application) listProjects(ctx context.Context, orgID string) ([]proje
 			deployCount int64
 		)
 
-		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &orgSlug, &entry.IsPublic); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &orgSlug, &entry.IsPublic,
+			&entry.GitBranch, &entry.GitCommitHash, &entry.GitRemoteURL); err != nil {
 			return nil, err
 		}
 
@@ -208,10 +211,17 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	if payload.Label != "" {
 		label = &payload.Label
 	}
+	gitCommitHash := stringPtr(payload.GitCommitHash)
+	gitBranch := stringPtr(payload.GitBranch)
+	gitCommitMessage := stringPtr(payload.GitCommitMessage)
+	gitAuthor := stringPtr(payload.GitAuthor)
+	gitRemoteURL := stringPtr(payload.GitRemoteURL)
 	if _, err := tx.Exec(ctx, `
-		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at, label)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, deployID, entry.ID, "validated", totalSize, len(payload.Files), storagePrefix, now, label); err != nil {
+		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at, label,
+			git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`, deployID, entry.ID, "validated", totalSize, len(payload.Files), storagePrefix, now, label,
+		gitCommitHash, gitBranch, gitCommitMessage, payload.GitDirty, gitAuthor, gitRemoteURL); err != nil {
 		return project{}, err
 	}
 

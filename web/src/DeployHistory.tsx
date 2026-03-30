@@ -3,7 +3,9 @@ import type { Deploy } from './types'
 import { fetchDeploys, rollbackDeploy, SessionExpiredError } from './api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
+import { commitURL } from '@/lib/utils'
 
 type DeployHistoryProps = {
   projectId: string
@@ -73,7 +75,31 @@ export function DeployHistory({ projectId, onRollback, onSessionExpired }: Deplo
             {deploy.isCurrent ? <Badge variant="default">live</Badge> : null}
             <span className="text-muted-foreground">{deploy.createdAt}</span>
             {deploy.label ? <span className="font-medium">{deploy.label}</span> : null}
-            <span className="text-muted-foreground">{deploy.fileCount} files</span>
+            {deploy.gitCommitHash ? (
+              deploy.gitRemoteURL ? (
+                <a
+                  href={commitURL(deploy.gitRemoteURL, deploy.gitCommitHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 font-mono text-muted-foreground hover:underline"
+                  title={deploy.gitCommitHash}
+                >
+                  {deploy.gitCommitHash.slice(0, 8)}{deploy.gitDirty ? '*' : ''}
+                  <ExternalLink className="size-2.5" />
+                </a>
+              ) : (
+                <span className="font-mono text-muted-foreground" title={deploy.gitCommitHash}>
+                  {deploy.gitCommitHash.slice(0, 8)}{deploy.gitDirty ? '*' : ''}
+                </span>
+              )
+            ) : null}
+            {deploy.gitBranch ? <Badge variant="outline">{deploy.gitBranch}</Badge> : null}
+            {deploy.gitCommitMessage ? (
+              <span className="max-w-[200px] truncate text-muted-foreground" title={deploy.gitCommitMessage}>
+                {deploy.gitCommitMessage}
+              </span>
+            ) : null}
+            {!deploy.gitCommitHash ? <span className="text-muted-foreground">{deploy.fileCount} files</span> : null}
           </div>
           {!deploy.isCurrent ? (
             <Button

@@ -20,7 +20,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Globe, Lock, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
+import { commitURL } from '@/lib/utils'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -88,6 +89,7 @@ export function ProjectsTable({
             <TableHead>Name</TableHead>
             <TableHead>URL</TableHead>
             <TableHead className="text-center">Deploys</TableHead>
+            <TableHead>Latest</TableHead>
             <TableHead>Updated</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -130,6 +132,33 @@ export function ProjectsTable({
                   <TableCell className="text-center">
                     <Badge variant="secondary">{project.deployCount}</Badge>
                   </TableCell>
+                  <TableCell>
+                    {project.gitBranch ? (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <GitBranch className="size-3 shrink-0" />
+                        <span className="truncate max-w-[120px]">{project.gitBranch}</span>
+                        {project.gitCommitHash ? (
+                          project.gitRemoteURL ? (
+                            <a
+                              href={commitURL(project.gitRemoteURL, project.gitCommitHash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-xs hover:underline"
+                              title={project.gitCommitHash}
+                            >
+                              {project.gitCommitHash.slice(0, 8)}
+                            </a>
+                          ) : (
+                            <span className="font-mono text-xs" title={project.gitCommitHash}>
+                              {project.gitCommitHash.slice(0, 8)}
+                            </span>
+                          )
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {project.updatedAt}
                   </TableCell>
@@ -168,7 +197,7 @@ export function ProjectsTable({
                 </TableRow>
                 {isExpanded && (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="bg-muted/30 px-4 py-3">
+                    <TableCell colSpan={6} className="bg-muted/30 px-4 py-3">
                       <DeployHistory
                         projectId={project.id}
                         onRollback={onProjectsChanged}

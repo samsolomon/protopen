@@ -100,12 +100,13 @@ func cmdDeploy(args []string) {
 	}
 
 	resolvedOrg := resolveOrg(*org)
+	git := detectGitMeta(path)
 
 	var result deployResult
 	if info.IsDir() {
-		result, err = client.deployDirectory(path, projectName, *label, resolvedOrg)
+		result, err = client.deployDirectory(path, projectName, *label, resolvedOrg, git)
 	} else {
-		result, err = client.deployZip(path, projectName, *label, resolvedOrg)
+		result, err = client.deployZip(path, projectName, *label, resolvedOrg, git)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -122,6 +123,17 @@ func cmdDeploy(args []string) {
 		fmt.Println(result.raw)
 	} else {
 		fmt.Println(result.liveURL)
+		if git != nil {
+			dirty := ""
+			if git.Dirty {
+				dirty = " (dirty)"
+			}
+			branch := git.Branch
+			if branch == "" {
+				branch = "detached"
+			}
+			fmt.Fprintf(os.Stderr, "  git: %s %s%s\n", branch, git.CommitHash[:8], dirty)
+		}
 	}
 }
 
@@ -192,7 +204,21 @@ func cmdDeploys(args []string) {
 		if d.Label != nil && *d.Label != "" {
 			label = "  " + *d.Label
 		}
-		fmt.Printf("%s%-20s %4d files  %s%s\n", current, d.ID, d.FileCount, d.CreatedAt, label)
+		gitInfo := ""
+		if d.GitCommitHash != nil && *d.GitCommitHash != "" {
+			short := *d.GitCommitHash
+			if len(short) > 8 {
+				short = short[:8]
+			}
+			gitInfo = "  " + short
+			if d.GitBranch != nil && *d.GitBranch != "" {
+				gitInfo += " (" + *d.GitBranch + ")"
+			}
+			if d.GitDirty != nil && *d.GitDirty {
+				gitInfo += "*"
+			}
+		}
+		fmt.Printf("%s%-20s %4d files  %s%s%s\n", current, d.ID, d.FileCount, d.CreatedAt, label, gitInfo)
 	}
 }
 

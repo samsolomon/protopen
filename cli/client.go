@@ -34,12 +34,18 @@ type projectInfo struct {
 }
 
 type deployInfo struct {
-	ID        string  `json:"id"`
-	Status    string  `json:"status"`
-	Label     *string `json:"label"`
-	FileCount int     `json:"fileCount"`
-	CreatedAt string  `json:"createdAt"`
-	IsCurrent bool    `json:"isCurrent"`
+	ID               string  `json:"id"`
+	Status           string  `json:"status"`
+	Label            *string `json:"label"`
+	FileCount        int     `json:"fileCount"`
+	CreatedAt        string  `json:"createdAt"`
+	IsCurrent        bool    `json:"isCurrent"`
+	GitCommitHash    *string `json:"gitCommitHash"`
+	GitBranch        *string `json:"gitBranch"`
+	GitCommitMessage *string `json:"gitCommitMessage"`
+	GitDirty         *bool   `json:"gitDirty"`
+	GitAuthor        *string `json:"gitAuthor"`
+	GitRemoteURL     *string `json:"gitRemoteURL"`
 }
 
 type userInfo struct {
@@ -55,25 +61,25 @@ func newClient(token string, baseURL string) *client {
 	}
 }
 
-func (c *client) deployDirectory(dirPath string, name string, label string, org string) (deployResult, error) {
+func (c *client) deployDirectory(dirPath string, name string, label string, org string, git *gitMeta) (deployResult, error) {
 	zipData, err := zipDirectory(dirPath)
 	if err != nil {
 		return deployResult{}, fmt.Errorf("create zip: %w", err)
 	}
 
-	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label, org)
+	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label, org, git)
 }
 
-func (c *client) deployZip(zipPath string, name string, label string, org string) (deployResult, error) {
+func (c *client) deployZip(zipPath string, name string, label string, org string, git *gitMeta) (deployResult, error) {
 	data, err := os.ReadFile(zipPath)
 	if err != nil {
 		return deployResult{}, err
 	}
 
-	return c.upload(name, "zip", filepath.Base(zipPath), data, label, org)
+	return c.upload(name, "zip", filepath.Base(zipPath), data, label, org, git)
 }
 
-func (c *client) upload(name string, mode string, filename string, data []byte, label string, org string) (deployResult, error) {
+func (c *client) upload(name string, mode string, filename string, data []byte, label string, org string, git *gitMeta) (deployResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -81,6 +87,18 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 	writer.WriteField("mode", mode)
 	if label != "" {
 		writer.WriteField("label", label)
+	}
+	if git != nil {
+		writer.WriteField("git_commit_hash", git.CommitHash)
+		writer.WriteField("git_branch", git.Branch)
+		writer.WriteField("git_commit_message", git.CommitMessage)
+		if git.Dirty {
+			writer.WriteField("git_dirty", "true")
+		} else {
+			writer.WriteField("git_dirty", "false")
+		}
+		writer.WriteField("git_author", git.Author)
+		writer.WriteField("git_remote_url", git.RemoteURL)
 	}
 
 	part, err := writer.CreateFormFile("files", filename)

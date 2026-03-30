@@ -61,11 +61,44 @@ func (app *application) seedDemoData(ctx context.Context) error {
 	}
 
 	if projectCount == 0 {
-		if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, "Product Teardown", "product-teardown", 4, app.ingestRoot); err != nil {
-			return err
+		seedProjects := []struct {
+			name, slug string
+			deploys    int
+			commits    []seedCommit
+		}{
+			{"Product Teardown", "product-teardown", 4, []seedCommit{
+				{"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "main", "Initial prototype layout", "Jane Chen", false},
+				{"b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1", "main", "Add feature cards and hero section", "Alex Rivera", false},
+				{"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "feature/docs", "Add docs page", "Jane Chen", false},
+				{"d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "main", "Polish colors and typography", "Morgan Lee", true},
+			}},
+			{"AI Signup Flow", "ai-signup-flow", 3, []seedCommit{
+				{"e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4", "main", "Scaffold signup form", "Alex Rivera", false},
+				{"f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5", "feature/validation", "Add email validation and error states", "Jane Chen", false},
+				{"a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "main", "Merge validation, add success screen", "Alex Rivera", false},
+			}},
+			{"Pricing Page", "pricing-page", 5, []seedCommit{
+				{"1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", "main", "Initial pricing grid layout", "Morgan Lee", false},
+				{"2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c", "feature/toggle", "Add monthly/annual toggle", "Jane Chen", false},
+				{"3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d", "feature/toggle", "Animate toggle transition", "Jane Chen", true},
+				{"4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e", "main", "Add enterprise tier and CTA", "Alex Rivera", false},
+				{"5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f", "main", "Final copy pass", "Morgan Lee", false},
+			}},
+			{"Mobile Nav", "mobile-nav", 2, []seedCommit{
+				{"6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a", "feature/hamburger", "Add hamburger menu prototype", "Alex Rivera", false},
+				{"7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b", "feature/hamburger", "Slide-in animation and backdrop", "Alex Rivera", true},
+			}},
+			{"Dashboard Widgets", "dashboard-widgets", 3, []seedCommit{
+				{"8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c", "main", "Chart widget with sample data", "Morgan Lee", false},
+				{"9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d", "feature/stats", "Add stat cards and KPI row", "Jane Chen", false},
+				{"0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e", "main", "Responsive grid and dark mode tokens", "Morgan Lee", false},
+			}},
 		}
-		if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, "AI Signup Flow", "ai-signup-flow", 2, app.ingestRoot); err != nil {
-			return err
+
+		for _, sp := range seedProjects {
+			if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, sp.name, sp.slug, sp.deploys, app.ingestRoot, sp.commits); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -146,7 +179,12 @@ func ensurePersonalOrg(ctx context.Context, tx pgx.Tx, userID string, username s
 	return orgID, nil
 }
 
-func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string) error {
+type seedCommit struct {
+	hash, branch, message, author string
+	dirty                         bool
+}
+
+func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string, commits []seedCommit) error {
 	projectID := generateID("proj")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
 	if _, err := tx.Exec(ctx, `
@@ -156,6 +194,8 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug str
 		return err
 	}
 
+	seedRemoteURL := "https://github.com/velori-team/" + slug
+
 	var latestDeployID string
 	for index := 0; index < deployCount; index++ {
 		deployID := generateID("dep")
@@ -164,10 +204,13 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug str
 		if err != nil {
 			return err
 		}
+		commit := commits[index%len(commits)]
 		if _, err := tx.Exec(ctx, `
-			insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at)
-			values ($1, $2, $3, $4, $5, $6, $7)
-		`, deployID, projectID, "seeded", int64(250000+index*12000), 5+index, seedRoot, deployTime); err != nil {
+			insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at,
+				git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url)
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		`, deployID, projectID, "seeded", int64(250000+index*12000), 5+index, seedRoot, deployTime,
+			commit.hash, commit.branch, commit.message, commit.dirty, commit.author, seedRemoteURL); err != nil {
 			return err
 		}
 		latestDeployID = deployID

@@ -6,6 +6,9 @@ export type Project = {
   deployCount: number
   liveUrl: string
   isPublic: boolean
+  gitBranch?: string | null
+  gitCommitHash?: string | null
+  gitRemoteURL?: string | null
 }
 
 export type SessionUser = {
@@ -68,4 +71,10 @@ export type Deploy = {
   fileCount: number
   createdAt: string
   isCurrent: boolean
+  gitCommitHash?: string | null
+  gitBranch?: string | null
+  gitCommitMessage?: string | null
+  gitDirty?: boolean | null
+  gitAuthor?: string | null
+  gitRemoteURL?: string | null
 }

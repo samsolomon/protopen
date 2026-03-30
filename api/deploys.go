@@ -8,13 +8,19 @@ import (
 )
 
 type deployRecord struct {
-	ID        string  `json:"id"`
-	Status    string  `json:"status"`
-	Label     *string `json:"label"`
-	SizeBytes int64   `json:"sizeBytes"`
-	FileCount int     `json:"fileCount"`
-	CreatedAt string  `json:"createdAt"`
-	IsCurrent bool    `json:"isCurrent"`
+	ID               string  `json:"id"`
+	Status           string  `json:"status"`
+	Label            *string `json:"label"`
+	SizeBytes        int64   `json:"sizeBytes"`
+	FileCount        int     `json:"fileCount"`
+	CreatedAt        string  `json:"createdAt"`
+	IsCurrent        bool    `json:"isCurrent"`
+	GitCommitHash    *string `json:"gitCommitHash,omitempty"`
+	GitBranch        *string `json:"gitBranch,omitempty"`
+	GitCommitMessage *string `json:"gitCommitMessage,omitempty"`
+	GitDirty         *bool   `json:"gitDirty,omitempty"`
+	GitAuthor        *string `json:"gitAuthor,omitempty"`
+	GitRemoteURL     *string `json:"gitRemoteURL,omitempty"`
 }
 
 func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Request, projectID string) {
@@ -36,7 +42,8 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	rows, err := app.db.Query(r.Context(), `
-		select d.id, d.status, d.label, d.size_bytes, d.file_count, d.created_at, (d.id = p.current_deploy_id) as is_current
+		select d.id, d.status, d.label, d.size_bytes, d.file_count, d.created_at, (d.id = p.current_deploy_id) as is_current,
+			d.git_commit_hash, d.git_branch, d.git_commit_message, d.git_dirty, d.git_author, d.git_remote_url
 		from deploys d
 		join projects p on p.id = d.project_id
 		where d.project_id = $1 and p.org_id = $2 and p.deleted_at is null
@@ -53,7 +60,8 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var entry deployRecord
 		var createdAt time.Time
-		if err := rows.Scan(&entry.ID, &entry.Status, &entry.Label, &entry.SizeBytes, &entry.FileCount, &createdAt, &entry.IsCurrent); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.Status, &entry.Label, &entry.SizeBytes, &entry.FileCount, &createdAt, &entry.IsCurrent,
+			&entry.GitCommitHash, &entry.GitBranch, &entry.GitCommitMessage, &entry.GitDirty, &entry.GitAuthor, &entry.GitRemoteURL); err != nil {
 			log.Printf("scan deploy: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load deploys"})
 			return

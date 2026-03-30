@@ -105,9 +105,18 @@ func (app *application) prepareMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	payload := uploadRequest{
-		Name:  strings.TrimSpace(r.FormValue("name")),
-		Mode:  strings.TrimSpace(r.FormValue("mode")),
-		Label: strings.TrimSpace(r.FormValue("label")),
+		Name:             strings.TrimSpace(r.FormValue("name")),
+		Mode:             strings.TrimSpace(r.FormValue("mode")),
+		Label:            strings.TrimSpace(r.FormValue("label")),
+		GitCommitHash:    strings.TrimSpace(r.FormValue("git_commit_hash")),
+		GitBranch:        strings.TrimSpace(r.FormValue("git_branch")),
+		GitCommitMessage: strings.TrimSpace(r.FormValue("git_commit_message")),
+		GitAuthor:        strings.TrimSpace(r.FormValue("git_author")),
+		GitRemoteURL:     strings.TrimSpace(r.FormValue("git_remote_url")),
+	}
+	if dirtyStr := strings.TrimSpace(r.FormValue("git_dirty")); dirtyStr != "" {
+		dirty := dirtyStr == "true"
+		payload.GitDirty = &dirty
 	}
 
 	paths := []string{}
