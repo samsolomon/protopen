@@ -22,8 +22,10 @@ h.id='velori-frame';
 var s=h.attachShadow({mode:'closed'});
 h.__veloriSR=s;
 h.__veloriCtx=/*CTX*/{};
-s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:40px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:40px;background:oklch(0.9753 0.0039 107.3/70%%);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);color:#18181b;padding:0 12px;font-size:13px;border-bottom:1px solid #e4e4e7}.logo{color:#18181b;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.02em;margin-right:10px}.logo:hover{opacity:.7}.name{flex:1;text-align:center;color:#71717a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vn{margin-left:auto;display:flex;align-items:center;gap:6px}.vn select,.vn button{-webkit-appearance:none;appearance:none;background:transparent;border:none;color:#18181b;font-family:inherit;font-size:12px;cursor:pointer;outline:none}.vn select{padding:1px 16px 1px 4px;height:20px;background-image:url("data:image/svg+xml,%%3Csvg xmlns=%%27http://www.w3.org/2000/svg%%27 width=%%278%%27 height=%%278%%27%%3E%%3Cpath d=%%27M2 3l2 2 2-2%%27 stroke=%%27%%2318181b%%27 stroke-width=%%271%%27 fill=%%27none%%27/%%3E%%3C/svg%%3E");background-repeat:no-repeat;background-position:right 2px center}.vn select:hover,.vn button:hover{opacity:.6}</style><div class="bar"><a class="logo" href="%s">Velori</a><span class="name">%s</span><div class="vn" id="vn"></div></div>';
+s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:40px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:40px;background:oklch(0.9753 0.0039 107.3/70%%);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);color:#18181b;padding:0 12px;font-size:13px;border-bottom:1px solid #e4e4e7}.logo{color:#18181b;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.02em;flex-shrink:0}.logo:hover{opacity:.7}.center{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}.center-inner{display:flex;flex-direction:column;align-items:center;position:relative;cursor:pointer;padding:2px 8px;border-radius:6px;transition:background .1s}.center-inner:hover{background:rgba(0,0,0,.04)}.center .name{font-weight:500;font-size:13px;color:#18181b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}.center .ver{color:#71717a;font-size:11px;line-height:1.2;display:flex;align-items:center;gap:3px}.center .chevron{color:#a1a1aa}.center select{position:absolute;top:0;left:0;width:100%%;height:100%%;opacity:0;cursor:pointer;-webkit-appearance:none;appearance:none}.actions{display:flex;align-items:center;gap:4px;flex-shrink:0}.actions button{-webkit-appearance:none;appearance:none;background:transparent;border:none;color:#71717a;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;outline:none;padding:4px 10px;border-radius:6px;transition:background .1s,color .1s}.actions button:hover{background:rgba(0,0,0,.06);color:#18181b}</style><div class="bar"><a class="logo" href="%s">Velori</a><div class="center"><div class="center-inner" id="center"><span class="name">%s</span><span class="ver" id="ver"></span></div></div><div class="actions" id="vn"></div></div>';
 var vn=s.getElementById("vn");
+var verEl=s.getElementById("ver");
+var centerEl=s.getElementById("center");
 function mksel(parent,selected){
 var sel=document.createElement("select");
 D.forEach(function(d,i){var o=document.createElement("option");o.value=d.isCurrent?"":d.id;var t="v"+(i+1);if(d.isCurrent)t+=" (Latest)";if(d.label)t+=" — "+d.label;if(d.time)t+=" — "+d.time;o.textContent=t;if(i===selected)o.selected=true;sel.appendChild(o)});
@@ -33,8 +35,10 @@ function deployUrl(v){return v?B+"/_v/"+v+"/":B+"/"}
 if(D.length>1){
 var activeIdx=A?D.findIndex(function(d){return d.id===A}):D.findIndex(function(d){return d.isCurrent});
 if(activeIdx<0)activeIdx=D.length-1;
-var sel=mksel(vn,activeIdx);
+var sel=mksel(centerEl,activeIdx);
 sel.onchange=function(){window.location.href=deployUrl(sel.value)};
+function updateVerLabel(){var d=D[sel.selectedIndex];var t="v"+(sel.selectedIndex+1);if(d&&d.isCurrent)t+=" (Latest)";if(d&&d.time)t+=" \u00b7 "+d.time;verEl.innerHTML=t+'<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'}
+updateVerLabel();sel.onchange=function(){updateVerLabel();window.location.href=deployUrl(sel.value)};
 if(inFrame){
 var exitBtn=document.createElement("button");
 exitBtn.textContent="Exit";
@@ -68,7 +72,7 @@ window.addEventListener("message",function(e){if(e.data==="velori-exit-split")ex
 }
 }
 if(h.__veloriCtx.userId){
-var cb=document.createElement("button");cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';cb.title="Comments";cb.id="velori-comment-btn";cb.style.cssText="display:inline-flex;align-items:center;padding:2px";
+var cb=document.createElement("button");cb.textContent="Comment";cb.id="velori-comment-btn";
 vn.insertBefore(cb,vn.firstChild);
 var cs=document.createElement("script");cs.src="/__velori/comments.js";document.head.appendChild(cs);
 }
