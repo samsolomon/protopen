@@ -36,14 +36,16 @@ styleEl.textContent=` + "`" + `
 .vlr-popover .vlr-body{line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .vlr-popover .vlr-replies{border-top:1px solid #f4f4f5;margin-top:8px;padding-top:8px}
 .vlr-popover .vlr-reply-msg{margin-bottom:8px;padding-left:10px;border-left:2px solid #e4e4e7}
-.vlr-popover .vlr-actions{display:flex;gap:6px;margin-top:6px}
-.vlr-popover .vlr-btn{background:#f4f4f5;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;color:#71717a;font-family:inherit}
-.vlr-popover .vlr-btn:hover{background:#e4e4e7;color:#18181b}
-.vlr-popover .vlr-btn.resolve{color:#059669}
-.vlr-popover .vlr-btn.resolve:hover{background:#ecfdf5}
-.vlr-popover .vlr-btn.unresolve{color:#d97706}
-.vlr-popover .vlr-btn.delete{color:#dc2626}
-.vlr-popover .vlr-btn.delete:hover{background:#fef2f2}
+.vlr-popover .vlr-pop-header{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 0 14px}
+.vlr-popover .vlr-pop-header-left{display:flex;align-items:center;gap:6px}
+.vlr-popover .vlr-toolbar{display:flex;align-items:center;gap:2px;position:relative}
+.vlr-popover .vlr-toolbar button{width:26px;height:26px;border-radius:50%;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#d4d4d8;transition:color .1s}
+.vlr-popover .vlr-toolbar button:hover{color:#71717a}
+.vlr-popover .vlr-toolbar button.vlr-resolve-active{color:#059669}
+.vlr-popover .vlr-toolbar button.vlr-resolve-active:hover{background:#ecfdf5}
+.vlr-popover .vlr-menu{position:absolute;top:100%;right:0;margin-top:4px;background:#18181b;border-radius:8px;padding:4px 0;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:1}
+.vlr-popover .vlr-menu button{display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;color:#fff;font-size:12px;font-family:inherit;cursor:pointer;border-radius:0}
+.vlr-popover .vlr-menu button:hover{background:rgba(255,255,255,.1);color:#fff}
 .vlr-popover .vlr-compose{border-top:1px solid #e4e4e7;padding:8px 10px;display:flex;align-items:flex-end;gap:6px}
 .vlr-popover .vlr-compose textarea{flex:1;border:none;background:transparent;padding:6px 0;font-family:inherit;font-size:12px;resize:none;outline:none;min-height:18px;max-height:80px;overflow-y:auto;line-height:1.4}
 .vlr-send{width:28px;height:28px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;background:#d4d4d8;color:#fff;transition:background .15s;padding:0}
@@ -272,32 +274,56 @@ function openThread(c,pinEl){
 
   var resolved=!!c.resolvedAt;
 
-  // Body content
-  var body=document.createElement('div');
-  body.className='vlr-pop-body';
-  body.appendChild(renderMsg(c,false));
-
-  // Actions
+  // Header row: author info left, action icons right
+  var header=document.createElement('div');
+  header.className='vlr-pop-header';
+  header.innerHTML='<div class="vlr-pop-header-left"><span class="vlr-avatar">'+initial(c.userName)+'</span><span class="vlr-author">'+esc(c.userName)+'</span><span class="vlr-time">'+relTime(c.createdAt)+'</span></div>';
   var actions=document.createElement('div');
-  actions.className='vlr-actions';
+  actions.className='vlr-toolbar';
+  actions.style.position='relative';
+
+  if(c.userId===ctx.userId){
+    var moreBtn=document.createElement('button');
+    moreBtn.title='More';
+    moreBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+    var menu=null;
+    moreBtn.onclick=function(e){
+      e.stopPropagation();
+      if(menu){menu.remove();menu=null;return}
+      menu=document.createElement('div');
+      menu.className='vlr-menu';
+      var del=document.createElement('button');
+      del.textContent='Delete thread\u2026';
+      del.onclick=function(ev){
+        ev.stopPropagation();
+        if(!confirm('Delete this comment and all replies?'))return;
+        api('DELETE','/comments/'+c.id).then(function(){closePopover();loadComments()});
+      };
+      menu.appendChild(del);
+      actions.appendChild(menu);
+    };
+    actions.appendChild(moreBtn);
+  }
+
   var resolveBtn=document.createElement('button');
-  resolveBtn.className='vlr-btn '+(resolved?'unresolve':'resolve');
-  resolveBtn.textContent=resolved?'Unresolve':'Resolve';
+  resolveBtn.title=resolved?'Unresolve':'Resolve';
+  if(resolved)resolveBtn.classList.add('vlr-resolve-active');
+  resolveBtn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
   resolveBtn.onclick=function(){
     api('PATCH','/comments/'+c.id,{resolved:!resolved}).then(function(){closePopover();loadComments()});
   };
   actions.appendChild(resolveBtn);
-  if(c.userId===ctx.userId){
-    var delBtn=document.createElement('button');
-    delBtn.className='vlr-btn delete';
-    delBtn.textContent='Delete';
-    delBtn.onclick=function(){
-      if(!confirm('Delete this comment and all replies?'))return;
-      api('DELETE','/comments/'+c.id).then(function(){closePopover();loadComments()});
-    };
-    actions.appendChild(delBtn);
-  }
-  body.appendChild(actions);
+
+  header.appendChild(actions);
+  popover.appendChild(header);
+
+  // Body content
+  var body=document.createElement('div');
+  body.className='vlr-pop-body';
+  var bodyText=document.createElement('div');
+  bodyText.className='vlr-body';
+  bodyText.textContent=c.body;
+  body.appendChild(bodyText);
 
   // Replies
   if(c.replies&&c.replies.length){
