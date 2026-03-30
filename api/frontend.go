@@ -10,10 +10,23 @@ import (
 //go:embed all:dist
 var frontendFS embed.FS
 
-func serveFrontend(mux *http.ServeMux, frontendOrigin string) {
+func serveFrontend(mux *http.ServeMux, frontendOrigin string, contentHandler ...http.Handler) {
 	distFS, err := fs.Sub(frontendFS, "dist")
 	if err != nil {
 		return
+	}
+
+	var content http.Handler
+	if len(contentHandler) > 0 {
+		content = contentHandler[0]
+	}
+
+	serveContent := func(w http.ResponseWriter, r *http.Request) {
+		if content != nil {
+			content.ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 	}
 
 	// Check for a built frontend
@@ -21,8 +34,12 @@ func serveFrontend(mux *http.ServeMux, frontendOrigin string) {
 		// No built frontend — redirect to the frontend dev server
 		if frontendOrigin != "" {
 			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-				if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/~") {
+				if strings.HasPrefix(r.URL.Path, "/api/") {
 					http.NotFound(w, r)
+					return
+				}
+				if strings.HasPrefix(r.URL.Path, "/~") {
+					serveContent(w, r)
 					return
 				}
 				target := frontendOrigin + r.URL.RequestURI()
@@ -35,9 +52,12 @@ func serveFrontend(mux *http.ServeMux, frontendOrigin string) {
 	fileServer := http.FileServer(http.FS(distFS))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Don't serve frontend for API or content routes
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/~") {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/~") {
+			serveContent(w, r)
 			return
 		}
 

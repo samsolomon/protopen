@@ -174,7 +174,7 @@ func main() {
 	appMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
 	appMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
 	appMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
-	serveFrontend(appMux, frontendOrigin)
+	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	contentMux := http.NewServeMux()
 	contentMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
@@ -215,7 +215,6 @@ func main() {
 	if os.Getenv("PUBLIC_CONTENT_URL") == "" {
 		app.contentBaseURL = "http://localhost" + appListenAddr
 	}
-	appMux.Handle("/~", contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	// Local dev mode: two separate servers
 	appServer := &http.Server{

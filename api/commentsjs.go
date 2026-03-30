@@ -19,16 +19,16 @@ var currentPath=ctx.pagePath;
 
 var styleEl=document.createElement('style');
 styleEl.textContent=` + "`" + `
-[data-vlr-pin]{position:absolute;width:28px;height:28px;border-radius:50%;background:#6d28d9;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483640;box-shadow:0 2px 8px rgba(0,0,0,.18);border:2px solid #fff;transform:translate(-50%,-50%);transition:opacity .15s,transform .15s;pointer-events:auto;font-family:system-ui,sans-serif}
-[data-vlr-pin]:hover{transform:translate(-50%,-50%) scale(1.15)}
+[data-vlr-pin]{position:absolute;width:28px;height:28px;border-radius:50%;background:oklch(0.6276 0.1586 43.6/85%);-webkit-backdrop-filter:blur(12px) saturate(1.5);backdrop-filter:blur(12px) saturate(1.5);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483640;box-shadow:0 2px 8px rgba(0,0,0,.15);border:2px solid rgba(255,255,255,.6);transform:translate(-50%,-50%);transition:opacity .15s,transform .15s;pointer-events:auto;font-family:system-ui,sans-serif}
+[data-vlr-pin]:hover{transform:translate(-50%,-50%) scale(1.15);box-shadow:0 3px 12px rgba(0,0,0,.2)}
 #vlr-overlay{position:fixed;top:40px;left:0;right:0;bottom:0;z-index:2147483639;pointer-events:none}
 #vlr-overlay.placing{pointer-events:auto;cursor:crosshair}
-.vlr-popover{position:absolute;z-index:2147483645;background:#fff;border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.12);width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;color:#18181b;overflow:hidden}
+.vlr-popover{position:absolute;z-index:2147483645;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;color:#18181b;overflow:hidden}
 .vlr-popover .vlr-pop-body{padding:12px 14px;max-height:320px;overflow-y:auto}
 .vlr-popover .vlr-msg{margin-bottom:10px}
 .vlr-popover .vlr-msg:last-child{margin-bottom:0}
 .vlr-popover .vlr-msg-head{display:flex;align-items:center;gap:6px;margin-bottom:3px}
-.vlr-popover .vlr-avatar{width:22px;height:22px;border-radius:50%;background:#6d28d9;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.vlr-popover .vlr-avatar{width:22px;height:22px;border-radius:50%;background:#18181b;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .vlr-popover .vlr-author{font-weight:600;font-size:12px}
 .vlr-popover .vlr-time{color:#a1a1aa;font-size:11px}
 .vlr-popover .vlr-body{line-height:1.5;white-space:pre-wrap;word-break:break-word}
@@ -44,17 +44,17 @@ styleEl.textContent=` + "`" + `
 .vlr-popover .vlr-btn.delete:hover{background:#fef2f2}
 .vlr-popover .vlr-compose{border-top:1px solid #e4e4e7;padding:10px 14px;display:flex;gap:6px}
 .vlr-popover .vlr-compose textarea{flex:1;border:1px solid #e4e4e7;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:12px;resize:none;outline:none;min-height:32px;max-height:80px}
-.vlr-popover .vlr-compose textarea:focus{border-color:#6d28d9}
-.vlr-popover .vlr-compose button{background:#6d28d9;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
-.vlr-popover .vlr-compose button:hover{background:#5b21b6}
-.vlr-new-popover{position:fixed;z-index:2147483646;background:#fff;border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:12px;width:280px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px}
+.vlr-popover .vlr-compose textarea:focus{border-color:#18181b}
+.vlr-popover .vlr-compose button{background:#18181b;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.vlr-popover .vlr-compose button:hover{background:#27272a}
+.vlr-new-popover{position:fixed;z-index:2147483646;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:12px;width:280px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px}
 .vlr-new-popover textarea{width:100%;border:1px solid #e4e4e7;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;resize:none;outline:none;min-height:60px;box-sizing:border-box}
-.vlr-new-popover textarea:focus{border-color:#6d28d9}
+.vlr-new-popover textarea:focus{border-color:#18181b}
 .vlr-new-popover .vlr-pop-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
 .vlr-new-popover button{border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
 .vlr-new-popover .vlr-cancel{background:#f4f4f5;color:#71717a}
-.vlr-new-popover .vlr-submit{background:#6d28d9;color:#fff}
-.vlr-new-popover .vlr-submit:hover{background:#5b21b6}
+.vlr-new-popover .vlr-submit{background:#18181b;color:#fff}
+.vlr-new-popover .vlr-submit:hover{background:#27272a}
 ` + "`" + `;
 document.head.appendChild(styleEl);
 
@@ -121,6 +121,7 @@ var commentBtn=sr.getElementById('velori-comment-btn');
 function setCommentMode(on){
   commentMode=on;
   if(commentBtn)commentBtn.style.opacity=commentMode?'1':'.5';
+  document.body.style.cursor=on?'crosshair':'';
   if(!commentMode){
     clearPins();
     closePopover();
@@ -142,6 +143,7 @@ var tempPin=null;
 function removeNewPopover(){
   if(newPop){newPop.remove();newPop=null}
   if(tempPin){tempPin.remove();tempPin=null}
+  document.body.style.overflow='';
 }
 
 function showNewPopover(px,py,screenX,screenY){
@@ -171,6 +173,7 @@ function showNewPopover(px,py,screenX,screenY){
     if(e.key==='Escape'){removeNewPopover()}
   });
 
+  document.body.style.overflow='hidden';
   document.body.appendChild(newPop);
   setTimeout(function(){ta.focus()},0);
 }
@@ -308,6 +311,7 @@ document.addEventListener('click',function(e){
   // Place new comment in comment mode
   if(!commentMode||popover||newPop||isPin)return;
   if(e.clientY<BAR_H)return;
+  e.preventDefault();
   var docW=document.documentElement.scrollWidth;
   var docH=Math.max(document.body.scrollHeight,document.body.offsetHeight);
   var px=(e.clientX+window.scrollX)/docW*100;
