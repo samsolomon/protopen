@@ -123,7 +123,7 @@ function initMentionAutocomplete(ta,onSubmit,onEscape){
         return m.id!==ctx.userId&&(m.name.toLowerCase().indexOf(query)>=0||m.username.toLowerCase().indexOf(query)>=0);
       }).slice(0,5);
       if(!filtered.length){closeAutocomplete();return}
-      showAutocomplete(ta,pos-query.length-1,query.length+1,filtered);
+      showAutocomplete(ta,pos-query.length-1,filtered);
     });
   });
   ta.addEventListener('keydown',function(e){
@@ -147,7 +147,7 @@ function updateActive(items){
   for(var i=0;i<items.length;i++){items[i].classList.toggle('vlr-ac-active',i===acIdx)}
 }
 
-function showAutocomplete(ta,replaceStart,replaceLen,members){
+function showAutocomplete(ta,replaceStart,members){
   closeAutocomplete();
   acIdx=0;
   acEl=document.createElement('div');
