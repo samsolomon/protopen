@@ -289,12 +289,32 @@ func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	var payload struct {
-		Body     *string `json:"body"`
-		Resolved *bool   `json:"resolved"`
+		Body     *string  `json:"body"`
+		Resolved *bool    `json:"resolved"`
+		PinX     *float64 `json:"pinX"`
+		PinY     *float64 `json:"pinY"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
+	}
+
+	if payload.PinX != nil && payload.PinY != nil {
+		if ownerID != user.ID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the author can move a pin"})
+			return
+		}
+		if *payload.PinX < 0 || *payload.PinX > 100 || *payload.PinY < 0 || *payload.PinY > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pin coordinates must be between 0 and 100"})
+			return
+		}
+		if _, err := app.db.Exec(r.Context(), `
+			update comments set pin_x = $1, pin_y = $2, updated_at = now() where id = $3
+		`, *payload.PinX, *payload.PinY, commentID); err != nil {
+			log.Printf("move comment pin: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not move pin"})
+			return
+		}
 	}
 
 	if payload.Body != nil {

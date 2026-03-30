@@ -21,6 +21,8 @@ var styleEl=document.createElement('style');
 styleEl.textContent=` + "`" + `
 [data-vlr-pin]{position:absolute;width:28px;height:28px;border-radius:50%;background:oklch(0.6276 0.2 43.6/90%);-webkit-backdrop-filter:blur(12px) saturate(1.5);backdrop-filter:blur(12px) saturate(1.5);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483640;box-shadow:0 2px 8px rgba(0,0,0,.15);border:2px solid rgba(255,255,255,.6);transform:translate(-50%,-50%);transition:opacity .15s,transform .15s;pointer-events:auto;font-family:system-ui,sans-serif}
 [data-vlr-pin]:hover{transform:translate(-50%,-50%) scale(1.15);box-shadow:0 3px 12px rgba(0,0,0,.2)}
+[data-vlr-pin].vlr-own{cursor:grab}
+[data-vlr-pin].vlr-dragging{opacity:.75;transform:translate(-50%,-50%) scale(1.2);cursor:grabbing;transition:none;z-index:2147483646}
 #vlr-overlay{position:fixed;top:40px;left:0;right:0;bottom:0;z-index:2147483639;pointer-events:none}
 #vlr-overlay.placing{pointer-events:auto;cursor:crosshair}
 .vlr-popover{position:absolute;z-index:2147483645;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:320px;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;font-size:13px;color:#18181b;overflow:hidden}
@@ -82,6 +84,16 @@ function relTime(iso){
 function initial(name){return (name||'?').charAt(0).toUpperCase()}
 function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
 
+function clientToPin(clientX,clientY){
+  var mt=parseFloat(getComputedStyle(document.body).marginTop)||0;
+  var docW=document.documentElement.scrollWidth;
+  var docH=document.body.scrollHeight;
+  return{
+    x:(clientX+window.scrollX)/docW*100,
+    y:(clientY+window.scrollY-mt)/docH*100
+  };
+}
+
 // ---- Pin rendering ----
 // Pins are position:absolute in document.body, using percentage coordinates
 // relative to the full document dimensions so they scroll with content.
@@ -100,10 +112,65 @@ function renderPins(comments){
     pin.textContent=String(i+1);
     pin.style.left=c.pinX+'%';
     pin.style.top=c.pinY+'%';
-    pin.addEventListener('click',function(e){e.stopPropagation();openThread(c,pin)});
+    var isOwn=c.userId===ctx.userId;
+    if(isOwn)pin.classList.add('vlr-own');
+    initPinDrag(pin,c,isOwn);
     document.body.appendChild(pin);
     pins.push(pin);
   });
+}
+
+// ---- Pin drag ----
+var DRAG_THRESHOLD=4;
+function initPinDrag(pin,c,isOwn){
+  var startX,startY,dragging;
+  function onDown(e){
+    if(!commentMode)return;
+    e.preventDefault();
+    e.stopPropagation();
+    var pt=e.touches?e.touches[0]:e;
+    startX=pt.clientX;startY=pt.clientY;dragging=false;
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+    document.addEventListener('touchmove',onMove,{passive:false});
+    document.addEventListener('touchend',onUp);
+  }
+  function onMove(e){
+    var pt=e.touches?e.touches[0]:e;
+    var dx=pt.clientX-startX,dy=pt.clientY-startY;
+    if(!dragging&&Math.sqrt(dx*dx+dy*dy)<DRAG_THRESHOLD)return;
+    if(!dragging){
+      if(!isOwn){cleanup();return}
+      dragging=true;
+      closePopover();
+      pin.classList.add('vlr-dragging');
+    }
+    e.preventDefault();
+    var mc=clientToPin(pt.clientX,pt.clientY);
+    pin.style.left=mc.x+'%';
+    pin.style.top=mc.y+'%';
+  }
+  function onUp(e){
+    cleanup();
+    if(dragging){
+      pin.classList.remove('vlr-dragging');
+      var pt=e.changedTouches?e.changedTouches[0]:e;
+      var fc=clientToPin(pt.clientX,pt.clientY);
+      var px=Math.round(fc.x*10000)/10000;
+      var py=Math.round(fc.y*10000)/10000;
+      api('PATCH','/comments/'+c.id,{pinX:px,pinY:py}).then(function(){loadComments()});
+    }else{
+      openThread(c,pin);
+    }
+  }
+  function cleanup(){
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+    document.removeEventListener('touchmove',onMove);
+    document.removeEventListener('touchend',onUp);
+  }
+  pin.addEventListener('mousedown',onDown);
+  pin.addEventListener('touchstart',onDown,{passive:false});
 }
 
 // ---- Load comments ----
@@ -148,8 +215,6 @@ function removeNewPopover(){
 
 function showNewPopover(px,py,screenX,screenY){
   removeNewPopover();
-  var docW=document.documentElement.scrollWidth;
-  var docH=Math.max(document.body.scrollHeight,document.body.offsetHeight);
   tempPin=document.createElement('div');
   tempPin.setAttribute('data-vlr-pin','');
   tempPin.textContent='+';
@@ -312,10 +377,9 @@ document.addEventListener('click',function(e){
   if(!commentMode||popover||newPop||isPin)return;
   if(e.clientY<BAR_H)return;
   e.preventDefault();
-  var docW=document.documentElement.scrollWidth;
-  var docH=Math.max(document.body.scrollHeight,document.body.offsetHeight);
-  var px=(e.clientX+window.scrollX)/docW*100;
-  var py=(e.clientY+window.scrollY)/docH*100;
+  var coords=clientToPin(e.clientX,e.clientY);
+  var px=coords.x;
+  var py=coords.y;
   showNewPopover(px,py,e.clientX,e.clientY);
 });
 
