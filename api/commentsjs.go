@@ -247,7 +247,7 @@ function showNewPopover(px,py,screenX,screenY){
   ta.rows=1;
   var sendBtn=makeSendBtn(ta,120,function(){submitNew(px,py,ta.value)});
   ta.addEventListener('keydown',function(e){
-    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitNew(px,py,ta.value)}
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitNew(px,py,ta.value)}
     if(e.key==='Escape'){removeNewPopover()}
   });
   newPop.appendChild(ta);
@@ -360,7 +360,7 @@ function openThread(c,pinEl){
   ta.rows=1;
   var sendBtn=makeSendBtn(ta,80,function(){submitReply(c,ta)});
   ta.addEventListener('keydown',function(e){
-    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){submitReply(c,ta)}
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitReply(c,ta)}
   });
   compose.appendChild(ta);
   compose.appendChild(sendBtn);
