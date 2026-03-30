@@ -63,6 +63,18 @@ export type AuthFormState = {
 
 export type UploadState = 'idle' | 'dragging' | 'uploading' | 'success'
 
+export type Notification = {
+  id: string
+  type: 'mention' | 'reply' | 'resolve' | 'new_comment'
+  actorName: string
+  projectName: string
+  commentId: string
+  bodyPreview: string
+  linkUrl: string
+  readAt: string | null
+  createdAt: string
+}
+
 export type Deploy = {
   id: string
   status: string
