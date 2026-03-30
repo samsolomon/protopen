@@ -180,14 +180,18 @@ func main() {
 	appMux.HandleFunc("/api/account/", app.accountHandler)
 	appMux.HandleFunc("/api/orgs", app.orgsHandler)
 	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
+	appMux.HandleFunc("/api/notifications", app.notificationsHandler)
+	appMux.HandleFunc("/api/notifications/count", app.notificationsCountHandler)
 	appMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
 	appMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
+	appMux.HandleFunc("/__velori/api/members", app.commentMembersHandler)
 	appMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	contentMux := http.NewServeMux()
 	contentMux.HandleFunc("/__velori/api/comments", app.commentsHandler)
 	contentMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
+	contentMux.HandleFunc("/__velori/api/members", app.commentMembersHandler)
 	contentMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
 	contentMux.HandleFunc("/", app.serveProjectHandler)
 

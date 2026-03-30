@@ -67,7 +67,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 
 	deploys := app.listToolbarDeploys(r.Context(), orgSlug, slug)
 	baseURL := fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, slug)
-	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL, deployment.projectID, assetPath, user.ID, user.Name)
+	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL, deployment.projectID, assetPath, user.ID, user.Name, orgSlug)
 	fw := newFrameWriter(w, snippet)
 	defer fw.Close()
 

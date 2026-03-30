@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func frameSnippet(projectName string, appOrigin string, deploys []toolbarDeploy, activeDeployID string, baseURL string, projectID string, pagePath string, userID string, userName string) string {
+func frameSnippet(projectName string, appOrigin string, deploys []toolbarDeploy, activeDeployID string, baseURL string, projectID string, pagePath string, userID string, userName string, orgSlug string) string {
 	name := html.EscapeString(projectName)
 	origin := html.EscapeString(appOrigin)
 
@@ -92,6 +92,7 @@ document.body.appendChild(h);
 		"pagePath":  pagePath,
 		"userId":    userID,
 		"userName":  userName,
+		"orgSlug":   orgSlug,
 	})
 	tpl = strings.Replace(tpl, "/*CTX*/{}", string(ctxJSON), 1)
 
