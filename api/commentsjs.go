@@ -401,6 +401,11 @@ document.addEventListener('keydown',function(e){
     else if(popover)closePopover();
     else if(commentMode)setCommentMode(false);
   }
+  var tag=e.target&&e.target.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.target.isContentEditable)return;
+  if(e.key==='c'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+    setCommentMode(!commentMode);
+  }
 });
 
 // ---- Init ----
