@@ -1,24 +1,31 @@
 # Velori
 
-Velori is a hosted static prototype platform for non-engineers.
+Velori is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI, and anonymous publishes can be claimed into a permanent account later.
 
-This repo starts with three apps:
+This repo has three main apps:
 
-- `web/` - React dashboard for uploads and project management
-- `api/` - Go API for health checks, projects, and mock uploads
+- `web/` - React dashboard for auth, uploads, projects, notifications, settings, and CLI docs
+- `api/` - Go API for auth, uploads, anonymous publish/claim, comments, notifications, and content serving
 - `cli/` - Command-line tool for deploying from the terminal
 
-## Build plan
+## Docs
 
-Implementation milestones and checklists live in `BUILD_PLAN.md`.
+- Implementation milestones and checklists live in `BUILD_PLAN.md`.
+- Anonymous publish and claim examples live in `SKILL.md`.
+
+## Current capabilities
+
+- upload a folder or zip from the dashboard
+- redeploy the same project name and keep a stable live URL
+- deploy from the CLI with saved config or environment variables
+- publish a temporary anonymous site, then claim it into an account
+- add comments with `@mentions` and receive notifications in the dashboard
 
 ## MCP
 
-This project includes a root `.mcp.json` with the `shadcn` MCP server configured.
+This repo includes a root `.mcp.json` with the `shadcn` MCP server configured.
 
-After restarting your MCP client, you should be able to browse and install shadcn registry items.
-
-Note: the current frontend is not fully set up for shadcn component installs yet because Tailwind and `components.json` are not configured.
+The web app is already configured for shadcn and Tailwind via `web/components.json` and `web/src/index.css`, so registry installs should work after restarting your MCP client.
 
 ## Quick start
 
@@ -28,17 +35,18 @@ Note: the current frontend is not fully set up for shadcn component installs yet
 docker compose up -d postgres
 ```
 
-The API defaults to `postgres://velori:velori@localhost:5432/velori?sslmode=disable`.
-
-Make sure Docker Desktop or another Docker daemon is running first.
+The default local database URL is `postgres://velori:velori@localhost:5432/velori?sslmode=disable`.
 
 ### Web
 
+Install dependencies from the repo root, then start the Vite app:
+
 ```bash
-cd web
 npm install
-npm run dev
+npm run dev:web
 ```
+
+The dashboard runs at `http://localhost:5173` and expects the API at `http://localhost:8080`.
 
 ### API
 
@@ -47,59 +55,110 @@ cd api
 go run .
 ```
 
-### CLI
+Local defaults:
+
+- app/API server: `http://localhost:8080`
+- content server: `http://127.0.0.1:8081`
+- storage: local filesystem under `.data/ingest`
+
+The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
+
+Use the seeded demo account:
+
+- `sam@velori.dev`
+- `velori-demo`
+
+### Environment
+
+Overrides are documented in `.env.example`.
+
+- Leave `PORT` empty for local split mode (`:8080` app/API and `:8081` content).
+- Set `PORT` for single-server production mode.
+- Leave `R2_*` empty to use local filesystem storage.
+- Set `R2_*` and `R2_BUCKET_NAME` to use Cloudflare R2 object storage.
+
+## CLI
+
+Build the CLI:
 
 ```bash
 cd cli
 make build
 ```
 
-Authenticate with an API token (create one in the dashboard under Settings > API Tokens):
+Authenticate with an API token from the dashboard under Settings > API Tokens:
 
 ```bash
 ./velori login
 ```
 
-Deploy a static site:
+Deploy a folder or zip:
 
 ```bash
 ./velori deploy ./my-site
+./velori deploy ./dist --name "My Prototype" --label "v2"
+./velori deploy ./site.zip
 ```
 
-Run `./velori help` for all commands.
+Config is stored at `~/.velori/config.json`.
 
-### Tests
+Resolution order is:
+
+- flags
+- environment variables: `VELORI_TOKEN`, `VELORI_URL`, `VELORI_ORG`
+- config file
+- defaults
+
+Useful commands:
+
+- `./velori list`
+- `./velori deploys <project-name>`
+- `./velori rollback <project-name> <deploy-id>`
+- `./velori visibility <project-name> <public|private>`
+- `./velori token`
+- `./velori logout`
+- `./velori config show`
+
+Run `./velori help` for the full command list.
+
+## Anonymous publish API
+
+Publish a folder without creating an account first:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/publish \
+  -F "name=my-prototype" \
+  -F "files=@index.html"
+```
+
+The response includes a live `siteUrl`, a `claimToken`, and a `claimUrl`.
+
+- anonymous sites expire after 24 hours unless claimed
+- anonymous publish is rate limited to 5 requests per hour per IP
+
+See `SKILL.md` for full examples, including zip upload and claim requests.
+
+## Tests
+
+Run API tests:
 
 ```bash
 cd api
 go test ./...
 ```
 
-### Smoke test
+## Smoke tests
 
-With Postgres, the API, and the web app running locally:
+With Postgres and the API running locally:
 
 ```bash
 ./scripts/local-smoke-test.sh
+./scripts/zip-smoke-test.sh
+./scripts/anon-smoke-test.sh
 ```
 
-This signs in with the seeded demo account, uploads a small static prototype, then redeploys the same project name and verifies that the stable live URL serves the updated HTML.
+These cover:
 
-The web app expects the API at `http://localhost:8080`.
-
-Local hosted prototype content is served separately at `http://127.0.0.1:8081`.
-
-The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
-
-Local auth now uses email/password plus an HTTP-only session cookie on the app origin. Use the seeded demo account:
-
-- `sam@velori.dev`
-- `velori-demo`
-
-The dashboard now supports deleting your own projects, which helps keep local testing clean while iterating on upload and redeploy behavior.
-
-The current upload flow now sends real multipart file uploads to the API for both folder and zip selections. Folder uploads are normalized into a temporary ingest directory, and zip uploads are extracted server-side into that same staging area before validation.
-
-Use `INGEST_ROOT` to override the local staging directory. By default it uses `api/.data/ingest` when the API is started from `api/`.
-
-Successful staged deploys are now served from the content origin at URLs like `http://127.0.0.1:8081/~sam/product-teardown`.
+- signed-in upload and stable URL redeploy
+- zip upload serving
+- anonymous publish, claim, badge injection, and publish rate limiting
