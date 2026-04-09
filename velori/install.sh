@@ -3,7 +3,7 @@ set -euo pipefail
 
 SKILL_DIR="${HOME}/.claude/skills/velori"
 SCRIPTS_DIR="${SKILL_DIR}/scripts"
-REPO_BASE="https://raw.githubusercontent.com/samsolomon/velori/main/skill"
+REPO_BASE="https://raw.githubusercontent.com/samsolomon/velori/main/velori"
 
 die() {
   echo "error: $1" >&2
