@@ -2,6 +2,12 @@
 
 Deploy static sites and prototypes to a live URL instantly.
 
+## Setup
+
+Install as a skill if you have npm: `npx skills add samsolomon/velori --skill velori -g`
+
+If not, do this instead: `curl -fsSL https://app.velori.dev/install.sh | bash`
+
 ## Quick deploy (no account needed)
 
 Publish any folder with an `index.html` to get a live URL. No sign-up required — sites expire after 24 hours unless claimed.

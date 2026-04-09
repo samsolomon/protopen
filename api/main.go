@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -195,6 +197,7 @@ func main() {
 	appMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimitPublish(app.publishHandler))
 	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
+	appMux.HandleFunc("/install.sh", serveInstallScript)
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	contentMux := http.NewServeMux()
@@ -273,4 +276,12 @@ func main() {
 
 func (app *application) healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+//go:embed install.sh
+var installScript string
+
+func serveInstallScript(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprint(w, installScript)
 }

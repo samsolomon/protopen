@@ -11,3 +11,4 @@ cli/velori
 .env
 .env.local
 .env.*.local
+api/.velori/
