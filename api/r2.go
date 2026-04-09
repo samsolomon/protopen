@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 type objectStore struct {
@@ -53,6 +54,63 @@ func (s *objectStore) download(ctx context.Context, key string) (io.ReadCloser, 
 	}
 
 	return output.Body, contentType, nil
+}
+
+func (s *objectStore) listObjects(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+	var continuationToken *string
+
+	for {
+		output, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket:            aws.String(s.bucket),
+			Prefix:            aws.String(prefix),
+			ContinuationToken: continuationToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, obj := range output.Contents {
+			if obj.Key != nil {
+				keys = append(keys, *obj.Key)
+			}
+		}
+
+		if output.IsTruncated == nil || !*output.IsTruncated {
+			break
+		}
+		continuationToken = output.NextContinuationToken
+	}
+
+	return keys, nil
+}
+
+func (s *objectStore) deleteObjects(ctx context.Context, keys []string) error {
+	const maxBatch = 1000
+
+	for i := 0; i < len(keys); i += maxBatch {
+		end := i + maxBatch
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		objects := make([]types.ObjectIdentifier, end-i)
+		for j, key := range keys[i:end] {
+			objects[j] = types.ObjectIdentifier{Key: aws.String(key)}
+		}
+
+		_, err := s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(s.bucket),
+			Delete: &types.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func isNotFound(err error) bool {

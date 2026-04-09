@@ -494,9 +494,16 @@ func validateUpload(payload uploadRequest) error {
 
 func (app *application) uploadToR2(ctx context.Context, prepared preparedUpload) (string, error) {
 	prefix := generateID("deploy")
+	if err := app.uploadToR2WithPrefix(ctx, prepared, prefix); err != nil {
+		return "", err
+	}
+	return prefix, nil
+}
+
+func (app *application) uploadToR2WithPrefix(ctx context.Context, prepared preparedUpload, prefix string) error {
 	siteRoot := prepared.normalizedTo
 
-	err := filepath.WalkDir(siteRoot, func(pathname string, entry os.DirEntry, walkErr error) error {
+	return filepath.WalkDir(siteRoot, func(pathname string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -524,9 +531,4 @@ func (app *application) uploadToR2(ctx context.Context, prepared preparedUpload)
 
 		return app.store.upload(ctx, key, file, contentType)
 	})
-	if err != nil {
-		return "", err
-	}
-
-	return prefix, nil
 }

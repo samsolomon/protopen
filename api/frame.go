@@ -99,6 +99,18 @@ document.body.appendChild(h);
 	return tpl
 }
 
+func anonFrameSnippet(appOrigin string, claimURL string) string {
+	origin := html.EscapeString(appOrigin)
+	claim := html.EscapeString(claimURL)
+
+	return fmt.Sprintf(`<script data-velori-badge>(function(){
+var h=document.createElement('div');
+var s=h.attachShadow({mode:'closed'});
+s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;bottom:12px;right:12px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.badge{display:flex;align-items:center;gap:6px;padding:6px 12px;background:oklch(0.9753 0.0039 107.3/85%%%%);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:8px;font-size:12px;color:#3f3f46;box-shadow:0 1px 3px rgba(0,0,0,.08)}.badge a{color:#18181b;text-decoration:none;font-weight:500}.badge a:hover{text-decoration:underline}.badge .sep{color:#d4d4d8}</style><div class="badge"><a href="%s">Velori</a><span class="sep">&middot;</span><a href="%s">Claim this site</a></div>';
+document.body.appendChild(h);
+})();</script>`, origin, claim)
+}
+
 type frameWriter struct {
 	http.ResponseWriter
 	snippet     string

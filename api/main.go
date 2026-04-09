@@ -32,6 +32,8 @@ type application struct {
 	appOrigin      string
 	contentOrigin  string
 	cookieDomain   string
+
+	publishLimiter *rateLimiter
 }
 
 type sessionUser struct {
@@ -162,9 +164,14 @@ func main() {
 		contentOrigin:  contentOrigin,
 		cookieDomain:   cookieDomain,
 	}
+	app.publishLimiter = newRateLimiter(5, 1*time.Hour)
+
 	if err := app.seedDemoData(ctx); err != nil {
 		log.Fatalf("seed demo data: %v", err)
 	}
+
+	app.publishLimiter.startCleanup(ctx)
+	app.startCleanupLoop(ctx)
 
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/healthz", app.healthzHandler)
@@ -186,6 +193,8 @@ func main() {
 	appMux.HandleFunc("/__velori/api/comments/", app.commentByIDHandler)
 	appMux.HandleFunc("/__velori/api/members", app.commentMembersHandler)
 	appMux.HandleFunc("/__velori/comments.js", app.commentsJSHandler)
+	appMux.HandleFunc("/api/v1/publish", app.rateLimitPublish(app.publishHandler))
+	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	contentMux := http.NewServeMux()
