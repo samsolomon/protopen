@@ -3,7 +3,6 @@ set -euo pipefail
 
 BASE_URL="https://app.velori.dev"
 API_KEY="${VELORI_TOKEN:-}"
-SLUG=""
 NAME=""
 TARGET=""
 
@@ -48,8 +47,9 @@ fi
 # Build the upload
 if [[ -d "$TARGET" ]]; then
   # Directory: zip it
-  tmp_zip="$(mktemp /tmp/velori-publish-XXXXXX).zip"
-  trap 'rm -f "$tmp_zip"' EXIT
+  tmp_dir="$(mktemp -d /tmp/velori-publish-XXXXXX)"
+  tmp_zip="${tmp_dir}/site.zip"
+  trap 'rm -rf "$tmp_dir"' EXIT
   (cd "$TARGET" && zip -qr "$tmp_zip" .)
   UPLOAD_FILE="$tmp_zip"
   MODE="zip"

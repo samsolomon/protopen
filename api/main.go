@@ -283,5 +283,6 @@ var installScript string
 
 func serveInstallScript(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	fmt.Fprint(w, installScript)
 }

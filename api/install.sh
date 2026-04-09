@@ -1,3 +1,4 @@
+# KEEP IN SYNC with skill/install.sh (go:embed cannot follow symlinks)
 #!/usr/bin/env bash
 set -euo pipefail
 
