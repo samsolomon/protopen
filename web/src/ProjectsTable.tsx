@@ -25,7 +25,7 @@ import { commitURL } from '@/lib/utils'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
   return (
     <Tooltip>
