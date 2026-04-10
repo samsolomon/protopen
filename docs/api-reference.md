@@ -640,4 +640,4 @@ No auth. Returns `{"status": "ok"}`.
 
 ### `GET /install.sh`
 
-No auth. Returns the Velori skill install script (plain text).
+No auth. Returns the Velori install script (plain text). Installs the CLI binary and agent skill.
