@@ -12,3 +12,4 @@ cli/velori
 .env.local
 .env.*.local
 api/.velori/
+dist/

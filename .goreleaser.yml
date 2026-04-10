@@ -1,0 +1,33 @@
+version: 2
+
+project_name: velori
+
+gomod:
+  dir: ./cli
+
+builds:
+  - dir: ./cli
+    binary: velori
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "velori_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+release:
+  github:
+    owner: samsolomon
+    name: velori-cli

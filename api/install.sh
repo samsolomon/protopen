@@ -1,10 +1,12 @@
-# KEEP IN SYNC with velori/install.sh (go:embed cannot follow symlinks)
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO="samsolomon/velori-cli"
+SKILL_REPO="samsolomon/velori"
+INSTALL_DIR="${HOME}/.velori/bin"
 SKILL_DIR="${HOME}/.claude/skills/velori"
 SCRIPTS_DIR="${SKILL_DIR}/scripts"
-REPO_BASE="https://raw.githubusercontent.com/samsolomon/velori/main/velori"
+SKILL_BASE="https://raw.githubusercontent.com/${SKILL_REPO}/main/velori"
 
 die() {
   echo "error: $1" >&2
@@ -13,6 +15,27 @@ die() {
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "requires $1"
+}
+
+detect_platform() {
+  local os arch
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+
+  case "$os" in
+    darwin) ;;
+    linux) ;;
+    *) die "unsupported OS: ${os}" ;;
+  esac
+
+  case "$arch" in
+    x86_64)  arch="amd64" ;;
+    aarch64) arch="arm64" ;;
+    arm64)   arch="arm64" ;;
+    *)       die "unsupported architecture: ${arch}" ;;
+  esac
+
+  echo "${os}_${arch}"
 }
 
 atomic_download() {
@@ -28,18 +51,51 @@ atomic_download() {
   mv "$tmp" "$destination"
 }
 
-echo "Installing velori skill..."
+echo "Installing velori..."
 
 need_cmd curl
-need_cmd zip
+need_cmd tar
 
+# --- Install CLI binary ---
+platform="$(detect_platform)"
+archive="velori_${platform}.tar.gz"
+url="https://github.com/${REPO}/releases/latest/download/${archive}"
+
+mkdir -p "$INSTALL_DIR"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+echo "Downloading velori CLI (${platform})..."
+curl -fsSL "$url" -o "${tmp_dir}/${archive}"
+tar -xzf "${tmp_dir}/${archive}" -C "$tmp_dir"
+mv "${tmp_dir}/velori" "${INSTALL_DIR}/velori"
+chmod +x "${INSTALL_DIR}/velori"
+
+# --- Install skill files ---
+echo "Installing agent skill..."
 mkdir -p "$SCRIPTS_DIR"
-
-atomic_download "${REPO_BASE}/SKILL.md" "$SKILL_DIR/SKILL.md"
-atomic_download "${REPO_BASE}/scripts/publish.sh" "$SCRIPTS_DIR/publish.sh"
-
+atomic_download "${SKILL_BASE}/SKILL.md" "$SKILL_DIR/SKILL.md"
+atomic_download "${SKILL_BASE}/scripts/publish.sh" "$SCRIPTS_DIR/publish.sh"
 chmod +x "$SCRIPTS_DIR/publish.sh"
 
+# --- PATH setup ---
+version="$("${INSTALL_DIR}/velori" version 2>/dev/null || echo "installed")"
+
 echo ""
-echo "done - velori skill installed to ${SKILL_DIR}"
-echo "restart Claude Code to start using it"
+echo "done — velori ${version}"
+echo ""
+echo "  Binary:  ${INSTALL_DIR}/velori"
+echo "  Skill:   ${SKILL_DIR}"
+
+# Check if already on PATH
+if command -v velori >/dev/null 2>&1; then
+  echo ""
+  echo "velori is on your PATH. You're ready to go."
+else
+  echo ""
+  echo "Add velori to your PATH:"
+  echo ""
+  echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+  echo ""
+  echo "Add that line to your ~/.zshrc or ~/.bashrc to make it permanent."
+fi

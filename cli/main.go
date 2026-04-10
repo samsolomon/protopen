@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+var version = "dev"
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -38,6 +40,8 @@ func main() {
 		cmdLogout(args)
 	case "config":
 		cmdConfig(args)
+	case "version", "--version", "-v":
+		fmt.Println("velori " + version)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
