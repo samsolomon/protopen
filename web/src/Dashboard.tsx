@@ -9,7 +9,6 @@ import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
-import { CLIDocs } from './CLIDocs'
 import { NotificationsPanel } from './NotificationsPanel'
 import { fetchUnreadCount } from './api'
 import { Button } from '@/components/ui/button'
@@ -32,7 +31,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, Terminal, Upload, FolderOpen, Bell } from 'lucide-react'
 
-type DashboardView = 'dashboard' | 'docs' | 'settings' | 'notifications'
+type DashboardView = 'dashboard' | 'settings' | 'notifications'
 
 type DashboardProps = {
   user: SessionUser
@@ -108,14 +107,6 @@ export function Dashboard({
             <Button
               variant="ghost"
               size="default"
-              className={view === 'docs' ? 'bg-muted' : ''}
-              onClick={() => switchView('docs')}
-            >
-              CLI
-            </Button>
-            <Button
-              variant="ghost"
-              size="default"
               className={view === 'settings' ? 'bg-muted' : ''}
               onClick={() => switchView('settings')}
             >
@@ -185,8 +176,6 @@ export function Dashboard({
       >
         {view === 'notifications' ? (
           <NotificationsPanel onSessionExpired={onSessionExpired} onCountChange={setUnreadCount} />
-        ) : view === 'docs' ? (
-          <CLIDocs />
         ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
@@ -218,7 +207,6 @@ export function Dashboard({
             <TabsContent value="tokens" className="max-w-2xl">
               <TokensPanel
                 onSessionExpired={onSessionExpired}
-                onViewDocs={() => switchView('docs')}
               />
             </TabsContent>
             <TabsContent value="danger" className="max-w-2xl">
