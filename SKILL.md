@@ -64,7 +64,7 @@ velori deploy ./dist --name "My Prototype" --label "v2 with dark mode"
 velori deploy site.zip
 ```
 
-Flags: `--name`, `--label`, `--private`, `--org`, `--json`.
+Flags: `--name`, `--label`, `--private`, `--org`, `--token`, `--url`, `--json`.
 
 Authenticate with `velori login` or set `VELORI_TOKEN`.
 
