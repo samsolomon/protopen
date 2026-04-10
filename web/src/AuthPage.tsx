@@ -7,7 +7,38 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FlaskConical } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical } from 'lucide-react'
+
+function PasswordInput({ id, value, onChange, showPassword, onToggle }: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  showPassword: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={showPassword ? 'text' : 'password'}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="At least 8 characters"
+        className="pr-9"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute right-0 top-0 h-full px-2.5 text-muted-foreground hover:text-foreground"
+        onClick={onToggle}
+        tabIndex={-1}
+      >
+        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </Button>
+    </div>
+  )
+}
 
 const demoAccounts = [
   { label: 'Sam', email: 'sam@velori.dev', role: 'Owner' },
@@ -24,6 +55,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const [authForm, setAuthForm] = useState<AuthFormState>({ name: '', email: demoEmail, password: demoPassword })
   const [authError, setAuthError] = useState<string | null>(null)
   const [authPending, setAuthPending] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const quickLogin = async (email: string) => {
     setAuthMode('sign-in')
@@ -97,7 +129,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 </div>
               </CardHeader>
               <form onSubmit={(event) => void submitAuth(event)}>
-                <CardContent className="flex flex-col gap-4">
+                <CardContent className="flex flex-col gap-4 pb-4">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signin-email">Email</Label>
                     <Input
@@ -110,12 +142,12 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signin-password">Password</Label>
-                    <Input
+                    <PasswordInput
                       id="signin-password"
-                      type="password"
                       value={authForm.password}
-                      onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))}
-                      placeholder="At least 8 characters"
+                      onChange={(value) => setAuthForm((current) => ({ ...current, password: value }))}
+                      showPassword={showPassword}
+                      onToggle={() => setShowPassword((s) => !s)}
                     />
                   </div>
                   {authError ? <p className="text-sm text-destructive">{authError}</p> : null}
@@ -136,7 +168,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 <CardDescription>Get started with your first prototype.</CardDescription>
               </CardHeader>
               <form onSubmit={(event) => void submitAuth(event)}>
-                <CardContent className="flex flex-col gap-4">
+                <CardContent className="flex flex-col gap-4 pb-4">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signup-name">Name</Label>
                     <Input
@@ -158,12 +190,12 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input
+                    <PasswordInput
                       id="signup-password"
-                      type="password"
                       value={authForm.password}
-                      onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))}
-                      placeholder="At least 8 characters"
+                      onChange={(value) => setAuthForm((current) => ({ ...current, password: value }))}
+                      showPassword={showPassword}
+                      onToggle={() => setShowPassword((s) => !s)}
                     />
                   </div>
                   {authError ? <p className="text-sm text-destructive">{authError}</p> : null}
