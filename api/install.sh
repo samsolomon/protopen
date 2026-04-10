@@ -79,10 +79,10 @@ atomic_download "${SKILL_BASE}/scripts/publish.sh" "$SCRIPTS_DIR/publish.sh"
 chmod +x "$SCRIPTS_DIR/publish.sh"
 
 # --- PATH setup ---
-version="$("${INSTALL_DIR}/velori" version 2>/dev/null || echo "installed")"
+version="$("${INSTALL_DIR}/velori" version 2>/dev/null || echo "")"
 
 echo ""
-echo "done — velori ${version}"
+echo "done — velori${version:+ ${version}}"
 echo ""
 echo "  Binary:  ${INSTALL_DIR}/velori"
 echo "  Skill:   ${SKILL_DIR}"

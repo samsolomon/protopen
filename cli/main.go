@@ -41,7 +41,7 @@ func main() {
 	case "config":
 		cmdConfig(args)
 	case "version", "--version", "-v":
-		fmt.Println("velori " + version)
+		fmt.Println(version)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
