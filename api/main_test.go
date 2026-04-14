@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateUploadAcceptsExtractedZipContents(t *testing.T) {
@@ -516,5 +517,224 @@ func TestCreateSeedDeployFilesUsesProjectRelativeLinks(t *testing.T) {
 	}
 	if !strings.Contains(markup, "href=\"docs\"") {
 		t.Fatal("expected seeded page to include project-relative docs link")
+	}
+}
+
+func TestParseAnonymousPath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input     string
+		slug      string
+		assetPath string
+		ok        bool
+	}{
+		{"/bright-apex-abc1/index.html", "bright-apex-abc1", "index.html", true},
+		{"/bright-apex-abc1/", "bright-apex-abc1", "", true},
+		{"/bright-apex-abc1", "bright-apex-abc1", "", true},
+		{"/cool-demo-xy9z/assets/style.css", "cool-demo-xy9z", "assets/style.css", true},
+		{"/singleword/", "", "", false},
+		{"/~sam/project", "", "", false},
+		{"/_internal/foo", "", "", false},
+		{"/api/projects", "", "", false},
+		{"/healthz", "", "", false},
+		{"/", "", "", false},
+		{"", "", "", false},
+	}
+	for _, tc := range cases {
+		slug, assetPath, ok := parseAnonymousPath(tc.input)
+		if ok != tc.ok || slug != tc.slug || assetPath != tc.assetPath {
+			t.Errorf("parseAnonymousPath(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				tc.input, slug, assetPath, ok, tc.slug, tc.assetPath, tc.ok)
+		}
+	}
+}
+
+func TestValidateAnonFileTypes(t *testing.T) {
+	t.Parallel()
+
+	allowed := []fileMeta{
+		{Name: "index.html", Path: "index.html"},
+		{Name: "style.css", Path: "style.css"},
+		{Name: "app.js", Path: "app.js"},
+		{Name: "logo.png", Path: "logo.png"},
+		{Name: "module.wasm", Path: "module.wasm"},
+	}
+	if err := validateAnonFileTypes(allowed); err != nil {
+		t.Fatalf("expected allowed types to pass, got %v", err)
+	}
+
+	// Extensionless files are allowed
+	if err := validateAnonFileTypes([]fileMeta{{Name: "LICENSE", Path: "LICENSE"}}); err != nil {
+		t.Fatalf("expected extensionless file to pass, got %v", err)
+	}
+
+	// Blocked extensions
+	for _, ext := range []string{".exe", ".php", ".sh", ".py", ".rb"} {
+		err := validateAnonFileTypes([]fileMeta{{Name: "bad" + ext, Path: "bad" + ext}})
+		if err == nil {
+			t.Errorf("expected %s to be blocked", ext)
+		} else if !strings.Contains(err.Error(), ext) {
+			t.Errorf("expected error to mention %s, got: %v", ext, err)
+		}
+	}
+
+	// Extension resolved from Path when Name has none
+	err := validateAnonFileTypes([]fileMeta{{Name: "script", Path: "dir/script.sh"}})
+	if err == nil {
+		t.Fatal("expected blocked extension from Path to be rejected")
+	}
+}
+
+func TestRelativeTime(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{0, "Just now"},
+		{30 * time.Second, "Just now"},
+		{59 * time.Second, "Just now"},
+		{1 * time.Minute, "1 minute ago"},
+		{5 * time.Minute, "5 minutes ago"},
+		{59 * time.Minute, "59 minutes ago"},
+		{1 * time.Hour, "1 hour ago"},
+		{3 * time.Hour, "3 hours ago"},
+		{23 * time.Hour, "23 hours ago"},
+		{25 * time.Hour, "Yesterday"},
+		{47 * time.Hour, "Yesterday"},
+		{49 * time.Hour, "2 days ago"},
+		{10 * 24 * time.Hour, "10 days ago"},
+	}
+	for _, tc := range cases {
+		got := relativeTime(time.Now().Add(-tc.ago))
+		if got != tc.want {
+			t.Errorf("relativeTime(-%v) = %q, want %q", tc.ago, got, tc.want)
+		}
+	}
+}
+
+func TestOrgRole(t *testing.T) {
+	t.Parallel()
+
+	user := sessionUser{
+		Orgs: []orgInfo{
+			{ID: "org_1", Slug: "team-a", Role: "admin"},
+			{ID: "org_2", Slug: "team-b", Role: "member"},
+		},
+	}
+
+	role, ok := orgRole(user, "org_1")
+	if !ok || role != "admin" {
+		t.Fatalf("expected admin role for org_1, got %q %v", role, ok)
+	}
+
+	role, ok = orgRole(user, "org_99")
+	if ok {
+		t.Fatalf("expected not found for org_99, got %q", role)
+	}
+}
+
+func TestPersonalOrg(t *testing.T) {
+	t.Parallel()
+
+	user := sessionUser{
+		Orgs: []orgInfo{
+			{ID: "org_1", Slug: "sam", IsPersonal: true, Role: "admin"},
+			{ID: "org_2", Slug: "team", IsPersonal: false, Role: "member"},
+		},
+	}
+
+	org := personalOrg(user)
+	if org == nil || org.ID != "org_1" {
+		t.Fatal("expected personal org to be returned")
+	}
+
+	noPersonal := sessionUser{
+		Orgs: []orgInfo{{ID: "org_2", Slug: "team", IsPersonal: false}},
+	}
+	if personalOrg(noPersonal) != nil {
+		t.Fatal("expected nil when no personal org exists")
+	}
+}
+
+func TestResolveOrgFromParam(t *testing.T) {
+	t.Parallel()
+
+	user := sessionUser{
+		Orgs: []orgInfo{
+			{ID: "org_1", Slug: "sam", IsPersonal: true, Role: "admin"},
+			{ID: "org_2", Slug: "my-team", IsPersonal: false, Role: "member"},
+		},
+	}
+
+	// Empty param returns personal org
+	id, slug, err := resolveOrgFromParam(user, "")
+	if err != nil || id != "org_1" || slug != "sam" {
+		t.Fatalf("expected personal org, got (%q, %q, %v)", id, slug, err)
+	}
+
+	// Matching slug
+	id, slug, err = resolveOrgFromParam(user, "my-team")
+	if err != nil || id != "org_2" || slug != "my-team" {
+		t.Fatalf("expected team org, got (%q, %q, %v)", id, slug, err)
+	}
+
+	// Non-matching slug
+	_, _, err = resolveOrgFromParam(user, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for non-matching slug")
+	}
+
+	// Empty param with no personal org
+	noPersonal := sessionUser{Orgs: []orgInfo{{ID: "org_2", Slug: "team", IsPersonal: false}}}
+	_, _, err = resolveOrgFromParam(noPersonal, "")
+	if err == nil {
+		t.Fatal("expected error when no personal org exists")
+	}
+}
+
+func TestUserInOrg(t *testing.T) {
+	t.Parallel()
+
+	user := sessionUser{
+		Orgs: []orgInfo{
+			{ID: "org_1", Slug: "sam"},
+			{ID: "org_2", Slug: "team"},
+		},
+	}
+
+	if !userInOrg(user, "sam") {
+		t.Fatal("expected user to be in org 'sam'")
+	}
+	if userInOrg(user, "other") {
+		t.Fatal("expected user to not be in org 'other'")
+	}
+}
+
+func TestGenerateAnonSlug(t *testing.T) {
+	t.Parallel()
+
+	seen := make(map[string]bool)
+	for i := 0; i < 100; i++ {
+		slug := generateAnonSlug()
+
+		if !strings.Contains(slug, "-") {
+			t.Fatalf("slug %q missing required hyphen", slug)
+		}
+
+		parts := strings.Split(slug, "-")
+		if len(parts) != 3 {
+			t.Fatalf("expected 3 parts (adj-noun-suffix), got %d in %q", len(parts), slug)
+		}
+		if len(parts[2]) != 4 {
+			t.Fatalf("expected 4-char suffix, got %q in %q", parts[2], slug)
+		}
+
+		if seen[slug] {
+			t.Fatalf("duplicate slug generated: %q", slug)
+		}
+		seen[slug] = true
 	}
 }
