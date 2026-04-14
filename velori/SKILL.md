@@ -55,3 +55,26 @@ Or pass inline: `./scripts/publish.sh {dir} --api-key vtk_...`
 - 5 anonymous publishes per hour per IP
 - Anonymous sites expire in 24 hours unless claimed
 - Allowed file types: HTML, CSS, JS/TS, JSON, images, fonts, PDF, video, audio, WASM, text, source maps, 3D models
+
+## Building for Velori
+
+Velori is **static-only** — no server-side code runs. Everything must work in the browser.
+
+- **Simple data**: hardcode it in JS arrays or objects. Most prototypes don't need a database.
+- **Queryable data**: use [sql.js](https://github.com/nicolewindows/sql.js/) (SQLite compiled to WASM). Load from CDN and seed data in JS — do not bundle `.db` files.
+- **SPA routing**: Velori falls back to `index.html` for unmatched paths, so client-side routers work.
+
+### sql.js quick start
+
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
+<script>
+initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${f}` }).then(SQL => {
+  const db = new SQL.Database();
+  db.run("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, price REAL)");
+  db.run("INSERT INTO items VALUES (1,'Widget',9.99), (2,'Gadget',24.99)");
+  const results = db.exec("SELECT * FROM items");
+  console.log(results);
+});
+</script>
+```
