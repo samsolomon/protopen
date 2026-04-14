@@ -40,11 +40,12 @@ type application struct {
 }
 
 type sessionUser struct {
-	ID       string    `json:"id"`
-	Email    string    `json:"email"`
-	Name     string    `json:"name"`
-	Username string    `json:"username"`
-	Orgs     []orgInfo `json:"orgs"`
+	ID            string    `json:"id"`
+	Email         string    `json:"email"`
+	Name          string    `json:"name"`
+	Username      string    `json:"username"`
+	Orgs          []orgInfo `json:"orgs"`
+	isBearerToken bool
 }
 
 type orgInfo struct {

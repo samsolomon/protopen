@@ -164,6 +164,14 @@ func contentSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+func requireSession(user sessionUser, w http.ResponseWriter) bool {
+	if user.isBearerToken {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "this action requires signing in"})
+		return false
+	}
+	return true
+}
+
 func stringPtr(s string) *string {
 	if s == "" {
 		return nil

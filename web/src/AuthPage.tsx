@@ -1,13 +1,12 @@
 import { type FormEvent, useState } from 'react'
 import type { AuthFormState, AuthMode, SessionUser } from './types'
-import { demoEmail, demoPassword } from './constants'
 import { postAuth } from './api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Eye, EyeOff, FlaskConical } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 
 function PasswordInput({ id, value, onChange, showPassword, onToggle }: {
   id: string
@@ -40,36 +39,16 @@ function PasswordInput({ id, value, onChange, showPassword, onToggle }: {
   )
 }
 
-const demoAccounts = [
-  { label: 'Sam', email: 'sam@velori.dev', role: 'Owner' },
-  { label: 'Jane', email: 'jane@velori.dev', role: 'Admin' },
-  { label: 'Alex', email: 'alex@velori.dev', role: 'Member' },
-]
-
 type AuthPageProps = {
   onLogin: (user: SessionUser) => void
 }
 
 export function AuthPage({ onLogin }: AuthPageProps) {
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in')
-  const [authForm, setAuthForm] = useState<AuthFormState>({ name: '', email: demoEmail, password: demoPassword })
+  const [authForm, setAuthForm] = useState<AuthFormState>({ name: '', email: '', password: '' })
   const [authError, setAuthError] = useState<string | null>(null)
   const [authPending, setAuthPending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-
-  const quickLogin = async (email: string) => {
-    setAuthMode('sign-in')
-    setAuthPending(true)
-    setAuthError(null)
-    try {
-      const user = await postAuth('sign-in', { name: '', email, password: demoPassword })
-      onLogin(user)
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Could not authenticate')
-    } finally {
-      setAuthPending(false)
-    }
-  }
 
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -106,27 +85,6 @@ export function AuthPage({ onLogin }: AuthPageProps) {
               <CardHeader>
                 <CardTitle>Sign in</CardTitle>
                 <CardDescription>Enter your credentials to access your projects.</CardDescription>
-                <div className="mt-2 rounded-lg border border-dashed border-brand/40 bg-brand/5 p-3">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-brand">
-                    <FlaskConical className="size-3.5" />
-                    Demo accounts
-                  </p>
-                  <div className="flex gap-2">
-                    {demoAccounts.map((account) => (
-                      <Button
-                        key={account.email}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-brand/30 text-brand hover:bg-brand/10 hover:text-brand/80"
-                        disabled={authPending}
-                        onClick={() => void quickLogin(account.email)}
-                      >
-                        {account.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
               </CardHeader>
               <form onSubmit={(event) => void submitAuth(event)}>
                 <CardContent className="flex flex-col gap-4 pb-4">
@@ -137,7 +95,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       type="email"
                       value={authForm.email}
                       onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))}
-                      placeholder="sam@velori.dev"
+                      placeholder="you@example.com"
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -175,7 +133,6 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       id="signup-name"
                       value={authForm.name}
                       onChange={(event) => setAuthForm((current) => ({ ...current, name: event.target.value }))}
-                      placeholder="Taylor Prototype"
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -185,7 +142,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       type="email"
                       value={authForm.email}
                       onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))}
-                      placeholder="sam@velori.dev"
+                      placeholder="you@example.com"
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -209,10 +166,6 @@ export function AuthPage({ onLogin }: AuthPageProps) {
             </Card>
           </TabsContent>
         </Tabs>
-
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Demo password: <span className="font-medium text-foreground">{demoPassword}</span>
-        </p>
       </div>
     </div>
   )

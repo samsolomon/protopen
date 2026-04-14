@@ -59,6 +59,9 @@ func (app *application) updateProfileHandler(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	var payload updateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -104,6 +107,9 @@ func (app *application) changePasswordHandler(w http.ResponseWriter, r *http.Req
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if !requireSession(user, w) {
 		return
 	}
 
@@ -154,6 +160,9 @@ func (app *application) deleteAccountHandler(w http.ResponseWriter, r *http.Requ
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if !requireSession(user, w) {
 		return
 	}
 

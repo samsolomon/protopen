@@ -76,6 +76,9 @@ func (app *application) createOrgHandler(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	var payload struct {
 		Name string `json:"name"`
@@ -190,6 +193,9 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	role, ok := orgRole(user, orgID)
 	if !ok {
@@ -270,6 +276,9 @@ func (app *application) removeOrgMemberHandler(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	role, ok := orgRole(user, orgID)
 	if !ok {
@@ -324,6 +333,9 @@ func (app *application) updateOrgMemberHandler(w http.ResponseWriter, r *http.Re
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if !requireSession(user, w) {
 		return
 	}
 

@@ -65,6 +65,9 @@ func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Reques
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
+		if !requireSession(user, w) {
+			return
+		}
 
 		orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
 		if err != nil {
@@ -97,6 +100,9 @@ func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Requ
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if !requireSession(user, w) {
 		return
 	}
 

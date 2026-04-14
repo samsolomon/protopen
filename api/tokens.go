@@ -40,6 +40,9 @@ func (app *application) tokenByIDHandler(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	tokenID := strings.TrimPrefix(r.URL.Path, "/api/tokens/")
 	tokenID = strings.TrimSpace(tokenID)
@@ -105,6 +108,9 @@ func (app *application) createTokenHandler(w http.ResponseWriter, r *http.Reques
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if !requireSession(user, w) {
 		return
 	}
 

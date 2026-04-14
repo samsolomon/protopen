@@ -84,6 +84,9 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	if !requireSession(user, w) {
+		return
+	}
 
 	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
 	if err != nil {

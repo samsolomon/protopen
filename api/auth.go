@@ -158,6 +158,7 @@ func (app *application) authenticateBearer(r *http.Request) (sessionUser, error)
 		return sessionUser{}, err
 	}
 	user.Orgs = orgs
+	user.isBearerToken = true
 
 	return user, nil
 }
