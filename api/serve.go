@@ -59,10 +59,9 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Always attempt auth so comment widget knows who the user is.
 	// For private projects, deny access if not authenticated or not in org.
-	user, _ := app.requireSessionUser(r)
 	if !deployment.isPublic {
+		user, _ := app.requireSessionUser(r)
 		if user.ID == "" || !userInOrg(user, orgSlug) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -73,7 +72,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 
 	deploys := app.listToolbarDeploys(r.Context(), orgSlug, slug)
 	baseURL := fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, slug)
-	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL, deployment.projectID, assetPath, user.ID, user.Name, orgSlug)
+	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL)
 	fw := newFrameWriter(w, snippet)
 	defer fw.Close()
 

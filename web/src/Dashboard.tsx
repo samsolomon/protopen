@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Project, SessionUser } from './types'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
@@ -9,8 +9,6 @@ import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
-import { NotificationsPanel } from './NotificationsPanel'
-import { fetchUnreadCount } from './api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -29,9 +27,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Terminal, Upload, FolderOpen, Bell } from 'lucide-react'
+import { Plus, Terminal, Upload, FolderOpen } from 'lucide-react'
 
-type DashboardView = 'dashboard' | 'settings' | 'notifications'
+type DashboardView = 'dashboard' | 'settings'
 
 type DashboardProps = {
   user: SessionUser
@@ -66,16 +64,6 @@ export function Dashboard({
   const [settingsTab, setSettingsTab] = useState('account')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  useEffect(() => {
-    const poll = () => {
-      void fetchUnreadCount().then((c) => setUnreadCount((prev) => prev === c ? prev : c))
-    }
-    poll()
-    const interval = setInterval(poll, 30000)
-    return () => clearInterval(interval)
-  }, [])
 
   const switchView = (next: DashboardView) => {
     if (next === 'settings') setSettingsTab('account')
@@ -114,17 +102,6 @@ export function Dashboard({
             </Button>
           </nav>
           <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => switchView('notifications')}
-            className="relative p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <Bell size={16} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-medium flex items-center justify-center">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">{user.name}</Button>
@@ -174,9 +151,7 @@ export function Dashboard({
           }
         }}
       >
-        {view === 'notifications' ? (
-          <NotificationsPanel onSessionExpired={onSessionExpired} onCountChange={setUnreadCount} />
-        ) : view === 'settings' ? (
+        {view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>

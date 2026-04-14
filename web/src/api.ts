@@ -1,4 +1,4 @@
-import type { AuthFormState, AuthMode, Deploy, Notification, OrgInfo, OrgMember, Project, SessionUser, UploadFile, UploadSummary } from './types'
+import type { AuthFormState, AuthMode, Deploy, OrgInfo, OrgMember, Project, SessionUser, UploadFile, UploadSummary } from './types'
 import { API_BASE_URL } from './constants'
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -366,36 +366,3 @@ export async function createOrg(name: string, slug: string): Promise<OrgInfo> {
   return data.org
 }
 
-// ---- Notifications ----
-
-export async function fetchNotifications(): Promise<Notification[]> {
-  const response = await fetch(`${API_BASE_URL}/api/notifications`, {
-    credentials: 'include',
-  })
-
-  if (response.status === 401) {
-    throw new SessionExpiredError()
-  }
-
-  const data = (await response.json()) as { notifications?: Notification[] }
-  return data.notifications ?? []
-}
-
-export async function fetchUnreadCount(): Promise<number> {
-  const response = await fetch(`${API_BASE_URL}/api/notifications/count`, {
-    credentials: 'include',
-  })
-
-  if (!response.ok) return 0
-  const data = (await response.json()) as { count: number }
-  return data.count
-}
-
-export async function markNotificationsRead(ids?: string[]): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/notifications`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(ids ? { ids } : { all: true }),
-  })
-}
