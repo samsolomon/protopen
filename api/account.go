@@ -141,6 +141,12 @@ func (app *application) changePasswordHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Invalidate all other sessions so a compromised session can't survive a password change
+	if cookie, err := r.Cookie(sessionCookie); err == nil {
+		currentHash := hashToken(cookie.Value)
+		app.db.Exec(r.Context(), `DELETE FROM sessions WHERE user_id = $1 AND token_hash != $2`, user.ID, currentHash)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

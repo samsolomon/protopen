@@ -36,6 +36,7 @@ type application struct {
 	cookieDomain   string
 
 	publishLimiter *rateLimiter
+	authLimiter    *rateLimiter
 }
 
 type sessionUser struct {
@@ -167,19 +168,23 @@ func main() {
 		cookieDomain:   cookieDomain,
 	}
 	app.publishLimiter = newRateLimiter(5, 1*time.Hour)
+	app.authLimiter = newRateLimiter(10, 15*time.Minute)
 
-	if err := app.seedDemoData(ctx); err != nil {
-		log.Fatalf("seed demo data: %v", err)
+	if getenv("SEED_DEMO", "") != "" {
+		if err := app.seedDemoData(ctx); err != nil {
+			log.Fatalf("seed demo data: %v", err)
+		}
 	}
 
 	app.publishLimiter.startCleanup(ctx)
+	app.authLimiter.startCleanup(ctx)
 	app.startCleanupLoop(ctx)
 
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/healthz", app.healthzHandler)
 	appMux.HandleFunc("/api/session", app.sessionHandler)
-	appMux.HandleFunc("/api/sign-in", app.signInHandler)
-	appMux.HandleFunc("/api/sign-up", app.signUpHandler)
+	appMux.HandleFunc("/api/sign-in", app.rateLimit(app.authLimiter, app.signInHandler))
+	appMux.HandleFunc("/api/sign-up", app.rateLimit(app.authLimiter, app.signUpHandler))
 	appMux.HandleFunc("/api/sign-out", app.signOutHandler)
 	appMux.HandleFunc("/api/projects", app.projectsHandler)
 	appMux.HandleFunc("/api/projects/", app.projectByIDHandler)
@@ -189,7 +194,7 @@ func main() {
 	appMux.HandleFunc("/api/account/", app.accountHandler)
 	appMux.HandleFunc("/api/orgs", app.orgsHandler)
 	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
-	appMux.HandleFunc("/api/v1/publish", app.rateLimitPublish(app.publishHandler))
+	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))
 	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
 	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))
 	appMux.HandleFunc("/skill/SKILL.md", serveSkillFile(skillMD, "text/markdown; charset=utf-8"))
@@ -203,7 +208,7 @@ func main() {
 		addr := ":" + listenAddr
 		contentHost := strings.TrimPrefix(contentOrigin, "https://")
 		contentHost = strings.TrimPrefix(contentHost, "http://")
-		appHandler := withCORS(frontendOrigin, appMux)
+		appHandler := appSecurityHeaders(withCORS(frontendOrigin, appMux))
 		contentHandler := contentSecurityHeaders(contentMux)
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +241,7 @@ func main() {
 	// Local dev mode: two separate servers
 	appServer := &http.Server{
 		Addr:              appListenAddr,
-		Handler:           withCORS(frontendOrigin, appMux),
+		Handler:           appSecurityHeaders(withCORS(frontendOrigin, appMux)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

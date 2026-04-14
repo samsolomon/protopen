@@ -233,7 +233,7 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 
 	// Auto-accept any pending org invites for this email
 	inviteRows, err := tx.Query(ctx, `
-		select org_id, role from org_invites where email = $1
+		select org_id, role from org_invites where email = $1 and expires_at > now()
 	`, user.Email)
 	if err != nil {
 		return sessionUser{}, err

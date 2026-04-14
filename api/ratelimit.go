@@ -84,7 +84,7 @@ func (rl *rateLimiter) startCleanup(ctx context.Context) {
 	}()
 }
 
-func (app *application) rateLimitPublish(next http.HandlerFunc) http.HandlerFunc {
+func (app *application) rateLimit(rl *rateLimiter, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 		if idx := strings.LastIndex(ip, ":"); idx != -1 {
@@ -94,7 +94,7 @@ func (app *application) rateLimitPublish(next http.HandlerFunc) http.HandlerFunc
 			ip = strings.TrimSpace(strings.Split(forwarded, ",")[0])
 		}
 
-		allowed, retryAfter := app.publishLimiter.allow(ip)
+		allowed, retryAfter := rl.allow(ip)
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{

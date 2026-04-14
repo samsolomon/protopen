@@ -299,11 +299,6 @@ func extractZipToDir(zipPath string, destinationRoot string) error {
 			return fmt.Errorf("zip upload contains too many files")
 		}
 
-		totalBytes += int64(file.UncompressedSize64)
-		if totalBytes > maxArchiveBytes {
-			return fmt.Errorf("zip upload exceeds the 100MB extracted size limit")
-		}
-
 		destinationPath := filepath.Join(destinationRoot, filepath.FromSlash(normalizedPath))
 		if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 			return err
@@ -320,7 +315,14 @@ func extractZipToDir(zipPath string, destinationRoot string) error {
 			return err
 		}
 
-		_, copyErr := io.Copy(output, input)
+		remaining := maxArchiveBytes - totalBytes + 1
+		written, copyErr := io.Copy(output, io.LimitReader(input, remaining))
+		totalBytes += written
+		if totalBytes > maxArchiveBytes {
+			output.Close()
+			input.Close()
+			return fmt.Errorf("zip upload exceeds the 100MB extracted size limit")
+		}
 		closeErr := output.Close()
 		inputErr := input.Close()
 		if copyErr != nil {

@@ -19,6 +19,8 @@ RUN CGO_ENABLED=0 go build -o /velori .
 # Stage 3: Runtime
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
+RUN adduser -D velori
 COPY --from=backend /velori /velori
+USER velori
 EXPOSE 8080
 CMD ["/velori"]
