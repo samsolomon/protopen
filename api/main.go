@@ -191,7 +191,9 @@ func main() {
 	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimitPublish(app.publishHandler))
 	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
-	appMux.HandleFunc("/install.sh", serveInstallScript)
+	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))
+	appMux.HandleFunc("/skill/SKILL.md", serveSkillFile(skillMD, "text/markdown; charset=utf-8"))
+	appMux.HandleFunc("/skill/scripts/publish.sh", serveSkillFile(publishScript, "text/plain; charset=utf-8"))
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
 
 	contentMux := http.NewServeMux()
@@ -271,8 +273,16 @@ func (app *application) healthzHandler(w http.ResponseWriter, _ *http.Request) {
 //go:embed install.sh
 var installScript string
 
-func serveInstallScript(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	fmt.Fprint(w, installScript)
+//go:embed skill/SKILL.md
+var skillMD string
+
+//go:embed skill/scripts/publish.sh
+var publishScript string
+
+func serveSkillFile(content string, contentType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Cache-Control", "no-cache")
+		fmt.Fprint(w, content)
+	}
 }

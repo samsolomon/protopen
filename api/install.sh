@@ -2,11 +2,10 @@
 set -euo pipefail
 
 REPO="samsolomon/velori-cli"
-SKILL_REPO="samsolomon/velori"
 INSTALL_DIR="${HOME}/.velori/bin"
 SKILL_DIR="${HOME}/.claude/skills/velori"
 SCRIPTS_DIR="${SKILL_DIR}/scripts"
-SKILL_BASE="https://raw.githubusercontent.com/${SKILL_REPO}/main/velori"
+SKILL_BASE="https://app.velori.dev/skill"
 
 die() {
   echo "error: $1" >&2
