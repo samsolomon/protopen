@@ -79,8 +79,8 @@ func (app *application) updateProfileHandler(w http.ResponseWriter, r *http.Requ
 	var updated sessionUser
 	err = app.db.QueryRow(r.Context(), `
 		update users set name = $1, email = $2 where id = $3
-		returning id, email, name, username
-	`, name, email, user.ID).Scan(&updated.ID, &updated.Email, &updated.Name, &updated.Username)
+		returning id, email, name, username, email_verified_at
+	`, name, email, user.ID).Scan(&updated.ID, &updated.Email, &updated.Name, &updated.Username, &updated.EmailVerifiedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

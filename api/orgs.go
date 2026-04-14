@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -266,6 +267,18 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create invite"})
 		return
 	}
+
+	orgName := "your team"
+	for _, org := range user.Orgs {
+		if org.ID == orgID {
+			orgName = org.Name
+			break
+		}
+	}
+	signupURL := app.appOrigin + "/sign-up?email=" + url.QueryEscape(email)
+	app.trySendEmail("org invite", email, func() error {
+		return app.mailer.sendOrgInvite(email, orgName, user.Name, signupURL)
+	})
 
 	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "status": "invited"})
 }

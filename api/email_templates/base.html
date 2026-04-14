@@ -1,0 +1,23 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{template "title" .}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+<tr><td style="padding:32px 32px 0;">
+  <span style="font-size:18px;font-weight:700;color:#18181b;letter-spacing:-0.02em;">velori</span>
+</td></tr>
+<tr><td style="padding:24px 32px 32px;">
+  {{template "content" .}}
+</td></tr>
+</table>
+<p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;text-align:center;">Velori &mdash; Shared prototype playground</p>
+</td></tr>
+</table>
+</body>
+</html>{{end}}

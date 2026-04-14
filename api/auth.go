@@ -116,11 +116,11 @@ func (app *application) requireSessionUser(r *http.Request) (sessionUser, error)
 	hashed := hashToken(cookie.Value)
 	var user sessionUser
 	err = app.db.QueryRow(r.Context(), `
-		select u.id, u.email, u.name, u.username
+		select u.id, u.email, u.name, u.username, u.email_verified_at
 		from sessions s
 		join users u on u.id = s.user_id
 		where s.token_hash = $1 and s.expires_at > now()
-	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username)
+	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username, &user.EmailVerifiedAt)
 	if err != nil {
 		return sessionUser{}, err
 	}
@@ -144,11 +144,11 @@ func (app *application) authenticateBearer(r *http.Request) (sessionUser, error)
 	hashed := hashToken(token)
 	var user sessionUser
 	err := app.db.QueryRow(r.Context(), `
-		select u.id, u.email, u.name, u.username
+		select u.id, u.email, u.name, u.username, u.email_verified_at
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = $1
-	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username)
+	`, hashed).Scan(&user.ID, &user.Email, &user.Name, &user.Username, &user.EmailVerifiedAt)
 	if err != nil {
 		return sessionUser{}, err
 	}
@@ -167,10 +167,10 @@ func (app *application) authenticateUser(ctx context.Context, email string, pass
 	var user sessionUser
 	var passwordHash string
 	err := app.db.QueryRow(ctx, `
-		select id, email, name, username, password_hash
+		select id, email, name, username, password_hash, email_verified_at
 		from users
 		where email = $1
-	`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.Name, &user.Username, &passwordHash)
+	`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.Name, &user.Username, &passwordHash, &user.EmailVerifiedAt)
 	if err != nil {
 		return sessionUser{}, err
 	}
@@ -233,6 +233,7 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 	}
 
 	// Auto-accept any pending org invites for this email
+	hadInvites := false
 	inviteRows, err := tx.Query(ctx, `
 		select org_id, role from org_invites where email = $1 and expires_at > now()
 	`, user.Email)
@@ -241,6 +242,7 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 	}
 	defer inviteRows.Close()
 	for inviteRows.Next() {
+		hadInvites = true
 		var invOrgID, invRole string
 		if err := inviteRows.Scan(&invOrgID, &invRole); err != nil {
 			return sessionUser{}, err
@@ -256,8 +258,21 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 		return sessionUser{}, err
 	}
 
+	// Invited users are already verified (the invite email proves ownership)
+	if hadInvites {
+		if _, err := tx.Exec(ctx, `update users set email_verified_at = $2 where id = $1`, user.ID, now); err != nil {
+			return sessionUser{}, err
+		}
+		user.EmailVerifiedAt = &now
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return sessionUser{}, err
+	}
+
+	// Organic signups get a verification email
+	if !hadInvites {
+		app.sendVerificationEmail(ctx, user.ID, user.Email, user.Name)
 	}
 
 	orgs, err := loadUserOrgs(ctx, app.db, user.ID)
@@ -303,6 +318,74 @@ func (app *application) newSessionCookie(value string, maxAge int) *http.Cookie 
 		cookie.Domain = app.cookieDomain
 	}
 	return cookie
+}
+
+func (app *application) sendVerificationEmail(ctx context.Context, userID string, email string, name string) {
+	token, err := createEmailToken(ctx, app.db, userID, tokenTypeVerify, "24 hours")
+	if err != nil {
+		log.Printf("create verification token: %v", err)
+		return
+	}
+
+	verifyURL := app.appOrigin + "/?verify-token=" + token
+	app.trySendEmail("verify email", email, func() error {
+		return app.mailer.sendVerifyEmail(email, name, verifyURL)
+	})
+}
+
+func (app *application) verifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.Token == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
+		return
+	}
+
+	userID, err := consumeEmailToken(r.Context(), app.db, payload.Token, tokenTypeVerify)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or expired token"})
+		return
+	}
+
+	if _, err := app.db.Exec(r.Context(), `update users set email_verified_at = now() where id = $1 and email_verified_at is null`, userID); err != nil {
+		log.Printf("verify email: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not verify email"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (app *application) resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	if user.EmailVerifiedAt != nil {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+
+	_, _ = app.db.Exec(r.Context(), `
+		update email_tokens set used_at = now()
+		where user_id = $1 and type = $2 and used_at is null
+	`, user.ID, tokenTypeVerify)
+
+	app.sendVerificationEmail(r.Context(), user.ID, user.Email, user.Name)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func uniqueUsername(ctx context.Context, tx pgx.Tx, email string) (string, error) {

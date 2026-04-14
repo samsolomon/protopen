@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Project, SessionUser } from './types'
+import { resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
 import { ProjectCard } from './ProjectCard'
 import { ProjectsTable } from './ProjectsTable'
@@ -27,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Terminal, Upload, FolderOpen } from 'lucide-react'
+import { Plus, Terminal, Upload, FolderOpen, Mail } from 'lucide-react'
 
 type DashboardView = 'dashboard' | 'settings'
 
@@ -64,6 +65,7 @@ export function Dashboard({
   const [settingsTab, setSettingsTab] = useState('account')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
+  const [verificationSent, setVerificationSent] = useState(false)
 
   const switchView = (next: DashboardView) => {
     if (next === 'settings') setSettingsTab('account')
@@ -151,6 +153,26 @@ export function Dashboard({
           }
         }}
       >
+        {!user.emailVerifiedAt ? (
+          <div className="mb-6 flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3">
+            <Mail className="size-4 shrink-0 text-muted-foreground" />
+            <p className="flex-1 text-sm text-muted-foreground">
+              Check your email to verify your account.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={verificationSent}
+              onClick={() => {
+                setVerificationSent(true)
+                void resendVerification().catch(() => setVerificationSent(false))
+              }}
+            >
+              {verificationSent ? 'Sent' : 'Resend'}
+            </Button>
+          </div>
+        ) : null}
+
         {view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">

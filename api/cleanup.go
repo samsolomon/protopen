@@ -15,6 +15,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				app.cleanupExpiredAnonymousDeploys(ctx)
+				app.cleanupExpiredTokens(ctx)
 			case <-ctx.Done():
 				ticker.Stop()
 				return
@@ -73,6 +74,17 @@ func (app *application) cleanupExpiredAnonymousDeploys(ctx context.Context) {
 	}
 
 	log.Printf("cleanup: removed %d expired anonymous deploys", cleaned)
+}
+
+func (app *application) cleanupExpiredTokens(ctx context.Context) {
+	result, err := app.db.Exec(ctx, `delete from email_tokens where expires_at < now()`)
+	if err != nil {
+		log.Printf("cleanup: expired tokens: %v", err)
+		return
+	}
+	if n := result.RowsAffected(); n > 0 {
+		log.Printf("cleanup: removed %d expired email tokens", n)
+	}
 }
 
 func (app *application) cleanupOneDeploy(ctx context.Context, e expiredDeploy) error {

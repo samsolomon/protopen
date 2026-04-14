@@ -35,17 +35,20 @@ type application struct {
 	contentOrigin  string
 	cookieDomain   string
 
+	mailer *emailClient
+
 	publishLimiter *rateLimiter
 	authLimiter    *rateLimiter
 }
 
 type sessionUser struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	Name          string    `json:"name"`
-	Username      string    `json:"username"`
-	Orgs          []orgInfo `json:"orgs"`
-	isBearerToken bool
+	ID              string     `json:"id"`
+	Email           string     `json:"email"`
+	Name            string     `json:"name"`
+	Username        string     `json:"username"`
+	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
+	Orgs            []orgInfo  `json:"orgs"`
+	isBearerToken   bool
 }
 
 type orgInfo struct {
@@ -158,6 +161,14 @@ func main() {
 
 	cookieDomain := getenv("COOKIE_DOMAIN", "")
 
+	var mailer *emailClient
+	if apiKey := getenv("RESEND_API_KEY", ""); apiKey != "" {
+		mailer = newEmailClient(apiKey, getenv("RESEND_FROM_ADDRESS", "Velori <noreply@velori.dev>"))
+		log.Printf("email sending enabled via Resend")
+	} else {
+		log.Printf("email sending disabled (no RESEND_API_KEY)")
+	}
+
 	app := &application{
 		db:             db,
 		store:          store,
@@ -167,6 +178,7 @@ func main() {
 		appOrigin:      appOrigin,
 		contentOrigin:  contentOrigin,
 		cookieDomain:   cookieDomain,
+		mailer:         mailer,
 	}
 	app.publishLimiter = newRateLimiter(5, 1*time.Hour)
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
@@ -195,6 +207,10 @@ func main() {
 	appMux.HandleFunc("/api/account/", app.accountHandler)
 	appMux.HandleFunc("/api/orgs", app.orgsHandler)
 	appMux.HandleFunc("/api/orgs/", app.orgByIDHandler)
+	appMux.HandleFunc("/api/verify-email", app.verifyEmailHandler)
+	appMux.HandleFunc("/api/resend-verification", app.rateLimit(app.authLimiter, app.resendVerificationHandler))
+	appMux.HandleFunc("/api/forgot-password", app.rateLimit(app.authLimiter, app.forgotPasswordHandler))
+	appMux.HandleFunc("/api/reset-password", app.resetPasswordHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))
 	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
 	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))

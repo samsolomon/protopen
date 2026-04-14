@@ -1,0 +1,7 @@
+{{define "title"}}You're invited to {{.OrgName}} on Velori{{end}}
+{{template "base" .}}
+{{define "content"}}
+<p style="margin:0 0 16px;font-size:15px;color:#18181b;line-height:1.5;"><strong>{{.InviterName}}</strong> invited you to <strong>{{.OrgName}}</strong> on Velori.</p>
+<p style="margin:0 0 24px;font-size:15px;color:#3f3f46;line-height:1.5;">Sign up to join the team and start collaborating on prototypes.</p>
+<a href="{{.SignupURL}}" style="display:inline-block;padding:10px 24px;background-color:#18181b;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">Sign up</a>
+{{end}}

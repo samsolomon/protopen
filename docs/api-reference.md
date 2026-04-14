@@ -38,6 +38,7 @@ No auth required.
     "email": "sam@velori.dev",
     "name": "Sam Solomon",
     "username": "sam",
+    "emailVerifiedAt": "2026-04-14T12:00:00Z",
     "orgs": [
       {"id": "org_...", "slug": "sam", "name": "Sam Solomon", "isPersonal": true, "role": "admin"}
     ]
@@ -45,7 +46,7 @@ No auth required.
 }
 ```
 
-Sets `velori_session` cookie.
+Sets `velori_session` cookie. `emailVerifiedAt` is null if the user hasn't verified their email.
 
 ### `POST /api/sign-up`
 
@@ -56,7 +57,7 @@ No auth required.
 {"email": "...", "password": "...", "name": "..."}
 ```
 
-Password must be at least 8 characters.
+Password must be at least 8 characters. If the email has a pending org invite, the account is created as verified. Otherwise, a verification email is sent.
 
 **Response (201):** Same shape as sign-in.
 
@@ -74,6 +75,67 @@ Auth required. Clears session cookie.
 ```json
 {"ok": true}
 ```
+
+### `POST /api/verify-email`
+
+No auth required.
+
+**Request:**
+```json
+{"token": "..."}
+```
+
+Verifies the user's email address using a token from the verification email.
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+**Errors:** 400 (invalid or expired token)
+
+### `POST /api/resend-verification`
+
+Auth required. Rate limited. Sends a new verification email to the authenticated user. No-op if already verified.
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+### `POST /api/forgot-password`
+
+No auth required. Rate limited. Always returns 200 to prevent email enumeration.
+
+**Request:**
+```json
+{"email": "sam@velori.dev"}
+```
+
+If the email exists, a password reset link is sent (1-hour expiry).
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+### `POST /api/reset-password`
+
+No auth required.
+
+**Request:**
+```json
+{"token": "...", "password": "..."}
+```
+
+Password must be at least 8 characters. Invalidates all existing sessions. Also verifies the user's email if not already verified.
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+**Errors:** 400 (invalid/expired token, missing fields, short password)
 
 ---
 
@@ -435,7 +497,7 @@ Auth required. Must be admin.
 {"ok": true, "status": "added"}
 ```
 
-Status is `"added"` if user exists, `"invited"` if not (7-day invite).
+Status is `"added"` if user exists, `"invited"` if not (7-day invite). When invited, an email is sent to the invitee with a signup link.
 
 ### `PATCH /api/orgs/{orgID}/members/{memberID}`
 
@@ -475,6 +537,8 @@ Auth required. Must be admin. Cannot remove last admin.
 | Anonymous publish expiry | 24 hours |
 | Session cookie expiry | 30 days |
 | Password minimum | 8 characters |
+| Email verification token expiry | 24 hours |
+| Password reset token expiry | 1 hour |
 
 ## Miscellaneous
 

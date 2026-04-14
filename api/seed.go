@@ -138,10 +138,11 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 		}
 		hashedPassword = string(generated)
 	}
+	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `
-		insert into users (id, email, auth_ref, username, name, password_hash, created_at)
-		values ($1, $2, $3, $4, $5, $6, $7)
-	`, id, strings.ToLower(strings.TrimSpace(email)), "demo-auth", username, name, hashedPassword, time.Now().UTC()); err != nil {
+		insert into users (id, email, auth_ref, username, name, password_hash, created_at, email_verified_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, id, strings.ToLower(strings.TrimSpace(email)), "demo-auth", username, name, hashedPassword, now, now); err != nil {
 		return "", "", err
 	}
 

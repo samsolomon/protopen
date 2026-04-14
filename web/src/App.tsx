@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Project, SessionUser } from './types'
-import { fetchSession, fetchProjects, postSignOut, deleteProjectById, updateProjectVisibility, SessionExpiredError } from './api'
+import { fetchSession, fetchProjects, postSignOut, deleteProjectById, updateProjectVisibility, verifyEmail, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
 import { CLIAuthPage } from './CLIAuthPage'
 import { Dashboard } from './Dashboard'
@@ -17,7 +17,18 @@ function App() {
   const [deletingProjectID, setDeletingProjectID] = useState<string | null>(null)
 
   useEffect(() => {
-    void loadSession()
+    const params = new URLSearchParams(window.location.search)
+    const verifyToken = params.get('verify-token')
+    if (verifyToken) {
+      void verifyEmail(verifyToken)
+        .catch(() => {})
+        .finally(() => {
+          window.history.replaceState({}, '', window.location.pathname)
+          void loadSession()
+        })
+    } else {
+      void loadSession()
+    }
   }, [])
 
   useEffect(() => {
