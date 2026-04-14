@@ -86,10 +86,12 @@ func anonFrameSnippet(appOrigin string, claimURL string) string {
 	origin := html.EscapeString(appOrigin)
 	claim := html.EscapeString(claimURL)
 
-	return fmt.Sprintf(`<script data-velori-badge>(function(){
+	return fmt.Sprintf(`<script data-velori-frame>(function(){
 var h=document.createElement('div');
+h.id='velori-frame';
 var s=h.attachShadow({mode:'closed'});
-s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;bottom:12px;right:12px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.badge{display:flex;align-items:center;gap:6px;padding:6px 12px;background:oklch(0.9753 0.0039 107.3/85%%%%);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);border:1px solid #e4e4e7;border-radius:8px;font-size:12px;color:#3f3f46;box-shadow:0 1px 3px rgba(0,0,0,.08)}.badge a{color:#18181b;text-decoration:none;font-weight:500}.badge a:hover{text-decoration:underline}.badge .sep{color:#d4d4d8}</style><div class="badge"><a href="%s">Velori</a><span class="sep">&middot;</span><a href="%s">Claim this site</a></div>';
+s.innerHTML='<style>@font-face{font-family:Geist;font-style:normal;font-weight:400 700;font-display:swap;src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff2) format("woff2")}:host{all:initial;position:fixed;top:0;left:0;right:0;height:40px;z-index:2147483647;font-family:Geist,Inter,system-ui,-apple-system,sans-serif;pointer-events:auto;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.bar{display:flex;align-items:center;height:40px;background:oklch(0.9753 0.0039 107.3/70%%);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);color:#18181b;padding:0 12px;font-size:13px;border-bottom:1px solid #e4e4e7}.logo{color:#18181b;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.02em;flex-shrink:0}.logo:hover{opacity:.7}.actions{flex:1;display:flex;justify-content:flex-end}.actions a{color:#71717a;text-decoration:none;font-family:inherit;font-size:12px;font-weight:500;padding:4px 10px;border-radius:6px;transition:background .1s,color .1s}.actions a:hover{background:rgba(0,0,0,.06);color:#18181b}</style><div class="bar"><a class="logo" href="%s">Velori</a><div class="actions"><a href="%s">Claim this site</a></div></div>';
+document.body.style.marginTop=(parseFloat(getComputedStyle(document.body).marginTop)||0)+40+'px';
 document.body.appendChild(h);
 })();</script>`, origin, claim)
 }
