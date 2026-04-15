@@ -12,7 +12,6 @@ import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -28,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Terminal, Upload, FolderOpen, Mail, Download, Copy, Check } from 'lucide-react'
+import { Plus, Upload, FolderOpen, Mail, Copy, Check } from 'lucide-react'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -56,50 +55,26 @@ const installCommand = 'curl -fsSL https://app.velori.dev/install.sh | bash'
 
 function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <Card>
-        <CardContent className="py-6">
-          <div className="flex flex-col gap-5">
-            <div className="flex items-start gap-3">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Download className="size-4" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">Install the skill</p>
-                  <Badge variant="secondary" className="text-[10px]">Step 1</Badge>
-                </div>
-                <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
-                  <code className="flex-1 font-mono text-xs">{installCommand}</code>
-                  <CopyButton text={installCommand} />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Terminal className="size-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">Tell your agent to deploy</p>
-                  <Badge variant="secondary" className="text-[10px]">Step 2</Badge>
-                </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori deploy my-site</code> from your terminal. Your project will appear here.
-                </p>
-              </div>
-            </div>
+    <div className="rounded-xl bg-muted/60 px-7 pb-7 pt-6">
+      <p className="text-[13px] text-muted-foreground">Get started</p>
+
+      <div className="mt-5 flex flex-col gap-5">
+        <div>
+          <p className="text-[13px] font-medium">Install the skill</p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <code className="font-mono text-[13px] text-muted-foreground">{installCommand}</code>
+            <CopyButton text={installCommand} />
           </div>
-        </CardContent>
-      </Card>
-      <div className="flex items-center gap-4 px-1 text-sm text-muted-foreground">
-        <button type="button" className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={onUploadOpen}>
-          <Upload className="size-3.5" />
-          Drag and drop
-        </button>
-        <button type="button" className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={onUploadOpen}>
-          <FolderOpen className="size-3.5" />
-          Select a folder
+        </div>
+        <div>
+          <p className="text-[13px] font-medium">Deploy from your terminal</p>
+          <code className="mt-1.5 block font-mono text-[13px] text-muted-foreground">velori deploy my-site</code>
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-center gap-4 text-[13px] text-muted-foreground">
+        <button type="button" className="hover:text-foreground transition-colors" onClick={onUploadOpen}>
+          or drag and drop
         </button>
       </div>
     </div>
