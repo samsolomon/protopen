@@ -99,8 +99,8 @@ func (app *application) prepareUpload(w http.ResponseWriter, r *http.Request) (p
 }
 
 func (app *application) prepareMultipartUpload(w http.ResponseWriter, r *http.Request) (prepared preparedUpload, err error) {
-	r.Body = http.MaxBytesReader(w, r.Body, 110*1024*1024)
-	if err := r.ParseMultipartForm(128 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 260*1024*1024)
+	if err := r.ParseMultipartForm(256 << 20); err != nil {
 		return preparedUpload{}, fmt.Errorf("invalid upload payload")
 	}
 
@@ -277,7 +277,7 @@ func extractZipToDir(zipPath string, destinationRoot string) error {
 	defer reader.Close()
 
 	const maxArchiveFiles = 5000
-	const maxArchiveBytes = int64(100 * 1024 * 1024)
+	const maxArchiveBytes = int64(250 * 1024 * 1024)
 
 	var totalBytes int64
 	fileCount := 0
@@ -444,8 +444,8 @@ func validateUpload(payload uploadRequest) error {
 		return fmt.Errorf("select a folder or zip to deploy")
 	}
 
-	const maxDeploySize = 100 * 1024 * 1024
-	const maxFileSize = 20 * 1024 * 1024
+	const maxDeploySize = 250 * 1024 * 1024
+	const maxFileSize = 250 * 1024 * 1024
 
 	totalSize := int64(0)
 	hasIndexHTML := false
@@ -455,7 +455,7 @@ func validateUpload(payload uploadRequest) error {
 		totalSize += file.Size
 
 		if file.Size > maxFileSize {
-			return fmt.Errorf("%s exceeds the 20MB per-file limit", file.Name)
+			return fmt.Errorf("%s exceeds the 250MB per-file limit", file.Name)
 		}
 
 		path := strings.ToLower(strings.TrimSpace(file.Path))
@@ -470,7 +470,7 @@ func validateUpload(payload uploadRequest) error {
 	}
 
 	if totalSize > maxDeploySize {
-		return fmt.Errorf("deploy exceeds the 100MB upload limit")
+		return fmt.Errorf("deploy exceeds the 250MB upload limit")
 	}
 
 	if payload.Mode == "zip" {

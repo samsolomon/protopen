@@ -324,7 +324,7 @@ func TestValidateUploadRejectsOversizedFile(t *testing.T) {
 		Mode: "files",
 		Files: []fileMeta{
 			{Name: "index.html", Path: "index.html", Size: 128},
-			{Name: "huge.bin", Path: "huge.bin", Size: 21 * 1024 * 1024},
+			{Name: "huge.bin", Path: "huge.bin", Size: 251 * 1024 * 1024},
 		},
 	}
 	err := validateUpload(payload)
@@ -339,8 +339,8 @@ func TestValidateUploadRejectsOversizedFile(t *testing.T) {
 func TestValidateUploadRejectsTotalOverLimit(t *testing.T) {
 	t.Parallel()
 
-	files := make([]fileMeta, 0, 11)
-	for i := 0; i < 11; i++ {
+	files := make([]fileMeta, 0, 26)
+	for i := 0; i < 26; i++ {
 		files = append(files, fileMeta{Name: "chunk.bin", Path: "chunk.bin", Size: 10 * 1024 * 1024})
 	}
 	files = append(files, fileMeta{Name: "index.html", Path: "index.html", Size: 128})
@@ -348,10 +348,10 @@ func TestValidateUploadRejectsTotalOverLimit(t *testing.T) {
 	payload := uploadRequest{Name: "Test", Mode: "files", Files: files}
 	err := validateUpload(payload)
 	if err == nil {
-		t.Fatal("expected total size over 100MB to be rejected")
+		t.Fatal("expected total size over 250MB to be rejected")
 	}
-	if !strings.Contains(err.Error(), "100MB") {
-		t.Fatalf("expected error to mention 100MB limit, got: %v", err)
+	if !strings.Contains(err.Error(), "250MB") {
+		t.Fatalf("expected error to mention 250MB limit, got: %v", err)
 	}
 }
 

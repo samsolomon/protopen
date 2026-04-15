@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -181,6 +182,18 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 			return project{}, err
 		}
 	} else {
+		// Check site count limit for non-anonymous orgs
+		if orgID != sentinelOrgID {
+			var projectCount int
+			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&projectCount); err != nil {
+				return project{}, err
+			}
+			const maxProjects = 1000
+			if projectCount >= maxProjects {
+				return project{}, fmt.Errorf("site limit exceeded (1,000 sites)")
+			}
+		}
+
 		slug, err := uniqueSlug(ctx, tx, orgID, slugify(payload.Name))
 		if err != nil {
 			return project{}, err
@@ -199,6 +212,23 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 			values ($1, $2, $3, $4, $5, $5)
 		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now); err != nil {
 			return project{}, err
+		}
+	}
+
+	// Check storage quota for non-anonymous orgs
+	if orgID != sentinelOrgID {
+		var currentStorage int64
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(d.size_bytes), 0)
+			FROM deploys d
+			JOIN projects p ON p.id = d.project_id
+			WHERE p.org_id = $1 AND p.deleted_at IS NULL
+		`, orgID).Scan(&currentStorage); err != nil {
+			return project{}, err
+		}
+		const maxOrgStorage = int64(10 * 1024 * 1024 * 1024) // 10 GB
+		if currentStorage+totalSize > maxOrgStorage {
+			return project{}, fmt.Errorf("storage limit exceeded (10 GB)")
 		}
 	}
 
@@ -233,8 +263,48 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		return project{}, err
 	}
 
+	// Collect old deploy prefixes for R2 cleanup, then delete from DB
+	var oldPrefixes []string
+	if orgID != sentinelOrgID {
+		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID)
+		if err != nil {
+			return project{}, err
+		}
+		for rows.Next() {
+			var prefix string
+			if err := rows.Scan(&prefix); err != nil {
+				rows.Close()
+				return project{}, err
+			}
+			oldPrefixes = append(oldPrefixes, prefix)
+		}
+		rows.Close()
+
+		if _, err := tx.Exec(ctx, `DELETE FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID); err != nil {
+			return project{}, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return project{}, err
+	}
+
+	// Clean up old deploy files from R2 in background
+	if app.store != nil && len(oldPrefixes) > 0 {
+		go func() {
+			for _, prefix := range oldPrefixes {
+				keys, err := app.store.listObjects(context.Background(), prefix+"/")
+				if err != nil {
+					log.Printf("cleanup old deploy list: %v", err)
+					continue
+				}
+				if len(keys) > 0 {
+					if err := app.store.deleteObjects(context.Background(), keys); err != nil {
+						log.Printf("cleanup old deploy delete: %v", err)
+					}
+				}
+			}
+		}()
 	}
 
 	var isPublic bool

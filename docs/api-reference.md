@@ -528,8 +528,8 @@ Auth required. Must be admin. Cannot remove last admin.
 
 | Constraint | Value |
 |-----------|-------|
-| Max upload size | 100 MB total |
-| Max file size | 20 MB per file |
+| Max upload size | 250 MB total |
+| Max file size | 250 MB per file |
 | Max files (zip) | 5,000 |
 | Required entry file | `index.html` |
 | Symlinks | Not allowed |

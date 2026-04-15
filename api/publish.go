@@ -122,6 +122,23 @@ func (app *application) publishHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var anonStorage int64
+	if err := app.db.QueryRow(r.Context(), `
+		SELECT COALESCE(SUM(d.size_bytes), 0)
+		FROM deploys d
+		JOIN projects p ON p.id = d.project_id
+		WHERE p.org_id = $1
+	`, sentinelOrgID).Scan(&anonStorage); err != nil {
+		log.Printf("anonymous storage check: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	const maxAnonStorage = int64(1000 * 1024 * 1024 * 1024) // 1 TB
+	if anonStorage > maxAnonStorage {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "anonymous storage limit reached, try again later"})
+		return
+	}
+
 	slug := generateAnonSlug()
 
 	var storagePrefix string

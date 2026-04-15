@@ -98,7 +98,7 @@ API tokens can deploy, delete sites, change visibility, rollback, and manage tok
 ## Constraints
 
 - Must contain `index.html` at the root or in a subdirectory
-- 20 MB per file, 100 MB total per deploy
+- 250 MB per file, 250 MB total per deploy
 - 5 anonymous publishes per hour per IP
 - Anonymous sites expire in 24 hours unless claimed
 - Allowed file types: HTML, CSS, JS/TS, JSON, images, fonts, PDF, video, audio, WASM, text, source maps, 3D models
