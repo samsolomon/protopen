@@ -209,7 +209,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
             )}
           </Card>
         ) : (
-          <Tabs value={authMode} onValueChange={(value) => { setAuthMode(value as AuthMode); setAuthError(null) }}>
+          <Tabs value={authMode} onValueChange={(value) => { setAuthMode(value as AuthMode); setAuthError(null); window.history.replaceState(null, '', value === 'sign-up' ? '/sign-up' : '/sign-in') }}>
             <TabsList className="w-full">
               <TabsTrigger value="sign-in">Sign in</TabsTrigger>
               <TabsTrigger value="sign-up">Create account</TabsTrigger>
