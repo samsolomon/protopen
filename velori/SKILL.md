@@ -50,7 +50,7 @@ Or pass inline: `./scripts/publish.sh {dir} --api-key vtk_...`
 
 ## Token permissions
 
-API tokens (`$VELORI_TOKEN`) can **publish and read only**. Deleting projects, changing settings, and managing teams require signing in to the dashboard.
+API tokens (`$VELORI_TOKEN`) can deploy, delete sites, change visibility, rollback, and manage tokens. User management and account settings require signing in to the dashboard.
 
 ## Constraints
 
