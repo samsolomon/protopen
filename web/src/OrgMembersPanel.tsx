@@ -4,7 +4,6 @@ import { fetchOrgMembers, addOrgMember, removeOrgMember, updateMemberRole, Sessi
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import {
@@ -111,99 +110,94 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Team Members</CardTitle>
-        <CardDescription>People who can view and manage projects in your workspace.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        ) : (
-          <div className="space-y-2">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                    {member.name.charAt(0).toUpperCase()}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium">{member.name}</p>
-                    <p className="text-xs text-muted-foreground">{member.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isAdmin && member.userId !== user.id ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        className="cursor-pointer focus:outline-none"
-                      >
-                        <Badge variant={roleBadgeVariant(member.role)} render={<button />}>
-                          {member.role}
-                          <ChevronDown className="ml-1 h-3 w-3" />
-                        </Badge>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuRadioGroup
-                          value={member.role}
-                          onValueChange={(value) => handleRoleChange(member.id, value)}
-                        >
-                          <DropdownMenuRadioItem value="admin">Admin</DropdownMenuRadioItem>
-                          <DropdownMenuRadioItem value="member">Member</DropdownMenuRadioItem>
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : (
-                    <Badge variant={roleBadgeVariant(member.role)}>
-                      {member.role}
-                    </Badge>
-                  )}
-                  {isAdmin && member.userId !== user.id && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setRemovingMember({ id: member.id, name: member.name })}
-                          aria-label="Remove member"
-                        >
-                          <Trash2 />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Remove member</TooltipContent>
-                    </Tooltip>
-                  )}
+    <section>
+      <h3 className="mb-1 text-sm font-medium">Team members</h3>
+      <p className="mb-3 text-sm text-muted-foreground">People who can view and manage projects in your workspace.</p>
+
+      {isAdmin && (
+        <form onSubmit={handleInvite} className="mb-4 flex gap-2">
+          <div className="flex-1">
+            <Label htmlFor="invite-email" className="sr-only">Email address</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              placeholder="colleague@company.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+          </div>
+          <Button type="submit" size="sm" disabled={inviting || !inviteEmail.trim()}>
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+            {inviting ? 'Adding...' : 'Add'}
+          </Button>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : members.length > 0 ? (
+        <div className="rounded-lg border bg-card">
+          {members.map((member, i) => (
+            <div
+              key={member.id}
+              className={`flex items-center justify-between px-4 py-3${i < members.length - 1 ? ' border-b' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                  {member.name.charAt(0).toUpperCase()}
+                </span>
+                <div>
+                  <p className="text-sm">{member.name}</p>
+                  <p className="text-xs text-muted-foreground">{member.email}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {isAdmin && (
-          <form onSubmit={handleInvite} className="flex gap-2 pt-2">
-            <div className="flex-1">
-              <Label htmlFor="invite-email" className="sr-only">
-                Email address
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="colleague@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
+              <div className="flex items-center gap-2">
+                {isAdmin && member.userId !== user.id ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="cursor-pointer focus:outline-none">
+                      <Badge variant={roleBadgeVariant(member.role)} render={<button />}>
+                        {member.role}
+                        <ChevronDown className="ml-1 h-3 w-3" />
+                      </Badge>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuRadioGroup
+                        value={member.role}
+                        onValueChange={(value) => handleRoleChange(member.id, value)}
+                      >
+                        <DropdownMenuRadioItem value="admin">Admin</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="member">Member</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Badge variant={roleBadgeVariant(member.role)}>
+                    {member.role}
+                  </Badge>
+                )}
+                {isAdmin && member.userId !== user.id && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setRemovingMember({ id: member.id, name: member.name })}
+                        aria-label="Remove member"
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Remove member</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             </div>
-            <Button type="submit" size="sm" disabled={inviting || !inviteEmail.trim()}>
-              <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-              {inviting ? 'Adding...' : 'Add'}
-            </Button>
-          </form>
-        )}
-      </CardContent>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No team members yet.</p>
+      )}
 
       <Dialog open={removingMember !== null} onOpenChange={(open) => { if (!open) setRemovingMember(null) }}>
         <DialogContent className="sm:max-w-sm">
@@ -221,6 +215,6 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </section>
   )
 }

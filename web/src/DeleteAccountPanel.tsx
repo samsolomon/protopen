@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { deleteAccount, SessionExpiredError } from './api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -51,21 +50,18 @@ export function DeleteAccountPanel({ onAccountDeleted, onSessionExpired }: Delet
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-semibold tracking-tight">Danger zone</h2>
-      <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle>Delete account</CardTitle>
-          <CardDescription>
-            Permanently delete your account and all associated data, including projects, deploys, and
-            API tokens. This action cannot be undone.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" onClick={() => handleOpen(true)}>
+      <h3 className="mb-3 text-sm font-medium text-destructive">Danger zone</h3>
+      <div className="rounded-lg border border-destructive/30 bg-card">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div>
+            <p className="text-sm">Delete account</p>
+            <p className="text-sm text-muted-foreground">Permanently delete your account and all data.</p>
+          </div>
+          <Button variant="destructive" size="sm" onClick={() => handleOpen(true)}>
             Delete account
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Dialog open={open} onOpenChange={handleOpen}>
         <DialogContent className="sm:max-w-md">

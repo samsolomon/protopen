@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Sun, Moon, Monitor } from 'lucide-react'
 import { type Theme, applyTheme, getStoredTheme, setStoredTheme } from './theme'
 
@@ -26,31 +25,32 @@ export function AppearancePanel() {
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-semibold tracking-tight">Appearance</h2>
-      <Card>
-        <CardHeader>
-          <CardTitle>Theme</CardTitle>
-          <CardDescription>Choose how Velori looks for you.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
+      <h3 className="mb-3 text-sm font-medium">Appearance</h3>
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div>
+            <p className="text-sm">Theme</p>
+            <p className="text-sm text-muted-foreground">Choose how Velori looks for you.</p>
+          </div>
+          <div className="flex gap-1">
             {options.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
+                type="button"
                 onClick={() => setTheme(value)}
-                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
                   theme === value
                     ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border text-muted-foreground hover:bg-muted'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Icon className="size-4" />
+                <Icon className="size-3.5" />
                 {label}
               </button>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </section>
   )
 }
