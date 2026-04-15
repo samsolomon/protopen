@@ -86,15 +86,37 @@ echo ""
 echo "  Binary:  ${INSTALL_DIR}/velori"
 echo "  Skill:   ${SKILL_DIR}"
 
-# Check if already on PATH
+# Auto-configure PATH
 if command -v velori >/dev/null 2>&1; then
   echo ""
   echo "velori is on your PATH. You're ready to go."
 else
-  echo ""
-  echo "Add velori to your PATH:"
-  echo ""
-  echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-  echo ""
-  echo "Add that line to your ~/.zshrc or ~/.bashrc to make it permanent."
+  case "$SHELL" in
+    */zsh)  SHELL_RC="$HOME/.zshrc" ;;
+    */bash)
+      if [ "$(uname -s)" = "Darwin" ]; then
+        SHELL_RC="$HOME/.bash_profile"
+      else
+        SHELL_RC="$HOME/.bashrc"
+      fi
+      ;;
+    *)      SHELL_RC="" ;;
+  esac
+
+  EXPORT_LINE='export PATH="$HOME/.velori/bin:$PATH"'
+
+  if [ -n "$SHELL_RC" ]; then
+    if ! grep -qF '.velori/bin' "$SHELL_RC" 2>/dev/null; then
+      echo "" >> "$SHELL_RC"
+      echo "$EXPORT_LINE" >> "$SHELL_RC"
+    fi
+    echo ""
+    echo "Added velori to PATH in $SHELL_RC"
+    echo "Open a new terminal to use it."
+  else
+    echo ""
+    echo "Add velori to your PATH:"
+    echo ""
+    echo "  $EXPORT_LINE"
+  fi
 fi
