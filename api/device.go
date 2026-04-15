@@ -71,8 +71,9 @@ func (app *application) pollDeviceCode(w http.ResponseWriter, r *http.Request, c
 	}
 
 	if status == "complete" && token != nil {
-		// Mark as consumed so token can't be read again
-		app.db.Exec(r.Context(), `update device_codes set status = 'consumed', token = null where code = $1`, code)
+		if _, err := app.db.Exec(r.Context(), `update device_codes set status = 'consumed', token = null where code = $1`, code); err != nil {
+			log.Printf("consume device code: %v", err)
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": *token})
 		return
 	}
@@ -87,9 +88,16 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Verify the device code exists and is pending
+	tx, err := app.db.Begin(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// Verify and lock the device code
 	var id string
-	err = app.db.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		select id from device_codes
 		where code = $1 and status = 'pending' and expires_at > now()
 	`, code).Scan(&id)
@@ -103,7 +111,7 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 	tokenID := generateID("tok")
 	now := time.Now().UTC()
 
-	if _, err := app.db.Exec(r.Context(), `
+	if _, err := tx.Exec(r.Context(), `
 		insert into api_tokens (id, user_id, token_hash, name, created_at)
 		values ($1, $2, $3, $4, $5)
 	`, tokenID, user.ID, hashToken(rawToken), "cli", now); err != nil {
@@ -112,13 +120,18 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Update device code with the token
-	if _, err := app.db.Exec(r.Context(), `
+	// Update device code — WHERE status = 'pending' prevents concurrent approvals
+	tag, err := tx.Exec(r.Context(), `
 		update device_codes set user_id = $1, token = $2, status = 'complete'
-		where id = $3
-	`, user.ID, rawToken, id); err != nil {
-		log.Printf("approve device code: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not approve device code"})
+		where id = $3 and status = 'pending'
+	`, user.ID, rawToken, id)
+	if err != nil || tag.RowsAffected() == 0 {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "device code already approved"})
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
