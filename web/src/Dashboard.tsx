@@ -27,7 +27,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Upload, FolderOpen, Mail, Copy, Check } from 'lucide-react'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Plus, Upload, Mail, Terminal, Copy, Check } from 'lucide-react'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -55,29 +56,34 @@ const installCommand = 'curl -fsSL https://app.velori.dev/install.sh | bash'
 
 function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   return (
-    <div className="rounded-xl bg-muted/60 px-7 pb-7 pt-6">
-      <p className="text-[13px] text-muted-foreground">Get started</p>
-
-      <div className="mt-5 flex flex-col gap-5">
-        <div>
-          <p className="text-[13px] font-medium">Install the skill</p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <code className="font-mono text-[13px] text-muted-foreground">{installCommand}</code>
-            <CopyButton text={installCommand} />
-          </div>
-        </div>
-        <div>
-          <p className="text-[13px] font-medium">Deploy from your terminal</p>
-          <code className="mt-1.5 block font-mono text-[13px] text-muted-foreground">velori deploy my-site</code>
-        </div>
-      </div>
-
-      <div className="mt-6 flex items-center gap-4 text-[13px] text-muted-foreground">
-        <button type="button" className="hover:text-foreground transition-colors" onClick={onUploadOpen}>
-          or drag and drop
-        </button>
-      </div>
-    </div>
+    <Card className="bg-muted border-0 shadow-none">
+      <CardContent className="py-10">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Terminal />
+            </EmptyMedia>
+            <EmptyTitle>No projects yet</EmptyTitle>
+            <EmptyDescription>
+              Install the Velori skill, then tell your agent to deploy.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2">
+              <code className="font-mono text-xs text-muted-foreground">{installCommand}</code>
+              <CopyButton text={installCommand} />
+            </div>
+          </EmptyContent>
+          <button
+            type="button"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onUploadOpen}
+          >
+            or drag and drop
+          </button>
+        </Empty>
+      </CardContent>
+    </Card>
   )
 }
 
