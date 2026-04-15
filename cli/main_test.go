@@ -41,8 +41,8 @@ func TestResolveURLDefaults(t *testing.T) {
 	t.Setenv("VELORI_URL", "")
 
 	got := resolveURL("")
-	if got != "http://localhost:8080" {
-		t.Fatalf("expected http://localhost:8080, got %q", got)
+	if got != "https://app.velori.dev" {
+		t.Fatalf("expected https://app.velori.dev, got %q", got)
 	}
 }
 

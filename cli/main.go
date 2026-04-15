@@ -296,7 +296,7 @@ func resolveURL(flag string) string {
 	if cfg := loadConfig().URL; cfg != "" {
 		return cfg
 	}
-	return "http://localhost:8080"
+	return "https://app.velori.dev"
 }
 
 func resolveOrg(flag string) string {
