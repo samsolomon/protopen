@@ -121,7 +121,11 @@ func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Requ
 
 	if !*payload.IsPublic {
 		var plan string
-		app.db.QueryRow(r.Context(), `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan)
+		if err := app.db.QueryRow(r.Context(), `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan); err != nil {
+			log.Printf("load org plan: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not check plan"})
+			return
+		}
 		if !getPlanLimits(plan).PrivateSites {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "private sites require a Pro or Team plan"})
 			return

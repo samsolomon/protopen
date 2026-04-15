@@ -162,10 +162,12 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 
 	// Load plan limits for the org (anonymous orgs use defaults)
 	var limits planLimits
-	isAuthenticated := orgID != sentinelOrgID
-	if isAuthenticated {
+	isOwnedOrg := orgID != sentinelOrgID
+	if isOwnedOrg {
 		var plan string
-		tx.QueryRow(ctx, `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan)
+		if err := tx.QueryRow(ctx, `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan); err != nil {
+			return project{}, fmt.Errorf("could not load organization")
+		}
 		limits = getPlanLimits(plan)
 
 		if plan == "team" {
@@ -199,7 +201,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 			return project{}, err
 		}
 	} else {
-		if isAuthenticated && limits.MaxProjects > 0 {
+		if isOwnedOrg && limits.MaxProjects > 0 {
 			var projectCount int
 			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&projectCount); err != nil {
 				return project{}, err
@@ -230,7 +232,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		}
 	}
 
-	if isAuthenticated {
+	if isOwnedOrg {
 		var currentStorage int64
 		if err := tx.QueryRow(ctx, `
 			SELECT COALESCE(SUM(d.size_bytes), 0)
@@ -277,7 +279,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	}
 
 	var oldPrefixes []string
-	if isAuthenticated && !limits.DeployHistory {
+	if isOwnedOrg && !limits.DeployHistory {
 		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID)
 		if err != nil {
 			return project{}, err
