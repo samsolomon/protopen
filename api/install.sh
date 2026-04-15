@@ -78,7 +78,7 @@ atomic_download "${SKILL_BASE}/scripts/publish.sh" "$SCRIPTS_DIR/publish.sh"
 chmod +x "$SCRIPTS_DIR/publish.sh"
 
 # --- PATH setup ---
-version="$("${INSTALL_DIR}/velori" version 2>/dev/null || echo "")"
+version="$("${INSTALL_DIR}/velori" version 2>/dev/null | awk '{print $2}' || echo "")"
 
 echo ""
 echo "done — velori${version:+ ${version}}"
