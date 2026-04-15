@@ -63,6 +63,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 	if !deployment.isPublic {
 		user, _ := app.requireSessionUser(r)
 		if user.ID == "" || !userInOrg(user, orgSlug) {
+			w.Header().Set("Cache-Control", "private, no-cache")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, privateSiteHTML, app.frontendOrigin)

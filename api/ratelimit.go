@@ -90,9 +90,10 @@ func (app *application) rateLimit(rl *rateLimiter, next http.HandlerFunc) http.H
 		if idx := strings.LastIndex(ip, ":"); idx != -1 {
 			ip = ip[:idx]
 		}
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			parts := strings.Split(forwarded, ",")
-			ip = strings.TrimSpace(parts[len(parts)-1])
+		if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+			ip = strings.TrimSpace(cfIP)
+		} else if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			ip = strings.TrimSpace(strings.Split(forwarded, ",")[0])
 		}
 
 		allowed, retryAfter := rl.allow(ip)
