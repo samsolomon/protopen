@@ -25,12 +25,12 @@ To install or update: `curl -fsSL https://app.velori.dev/install.sh | sh`
 When the user asks to log in or authenticate, run this command:
 
 ```bash
-velori login
+~/.velori/bin/velori login
 ```
 
 This opens the browser automatically. The user approves access, and the token is saved. Do not ask the user to copy or paste a token — the command handles everything.
 
-If the user already has a token: `velori login --token vtk_...`
+If the user already has a token: `~/.velori/bin/velori login --token vtk_...`
 
 Without authentication, deploys are anonymous and expire in 24 hours.
 
