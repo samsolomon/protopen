@@ -13,7 +13,7 @@ import (
 
 func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, string, ...any) (pgx.Rows, error) }, userID string) ([]orgInfo, error) {
 	rows, err := db.Query(ctx, `
-		select o.id, o.slug, o.name, o.is_personal, m.role
+		select o.id, o.slug, o.name, o.is_personal, m.role, o.plan
 		from org_members m
 		join organizations o on o.id = m.org_id
 		where m.user_id = $1
@@ -27,7 +27,7 @@ func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, stri
 	var orgs []orgInfo
 	for rows.Next() {
 		var o orgInfo
-		if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.IsPersonal, &o.Role); err != nil {
+		if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.IsPersonal, &o.Role, &o.Plan); err != nil {
 			return nil, err
 		}
 		orgs = append(orgs, o)
@@ -160,6 +160,23 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 
 	payload := prepared.request
 
+	// Load plan limits for the org (anonymous orgs use defaults)
+	var limits planLimits
+	isAuthenticated := orgID != sentinelOrgID
+	if isAuthenticated {
+		var plan string
+		tx.QueryRow(ctx, `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan)
+		limits = getPlanLimits(plan)
+
+		if plan == "team" {
+			var seatCount int
+			tx.QueryRow(ctx, `SELECT COUNT(*) FROM org_members WHERE org_id = $1`, orgID).Scan(&seatCount)
+			if seatCount > 0 {
+				limits.MaxStorageBytes *= int64(seatCount)
+			}
+		}
+	}
+
 	matches, err := exactNameMatches(ctx, tx, orgID, strings.TrimSpace(payload.Name))
 	if err != nil {
 		return project{}, err
@@ -182,15 +199,13 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 			return project{}, err
 		}
 	} else {
-		// Check site count limit for non-anonymous orgs
-		if orgID != sentinelOrgID {
+		if isAuthenticated && limits.MaxProjects > 0 {
 			var projectCount int
 			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&projectCount); err != nil {
 				return project{}, err
 			}
-			const maxProjects = 1000
-			if projectCount >= maxProjects {
-				return project{}, fmt.Errorf("site limit exceeded (1,000 sites)")
+			if projectCount >= limits.MaxProjects {
+				return project{}, fmt.Errorf("site limit exceeded (%d sites)", limits.MaxProjects)
 			}
 		}
 
@@ -215,8 +230,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		}
 	}
 
-	// Check storage quota for non-anonymous orgs
-	if orgID != sentinelOrgID {
+	if isAuthenticated {
 		var currentStorage int64
 		if err := tx.QueryRow(ctx, `
 			SELECT COALESCE(SUM(d.size_bytes), 0)
@@ -226,9 +240,8 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		`, orgID).Scan(&currentStorage); err != nil {
 			return project{}, err
 		}
-		const maxOrgStorage = int64(10 * 1024 * 1024 * 1024) // 10 GB
-		if currentStorage+totalSize > maxOrgStorage {
-			return project{}, fmt.Errorf("storage limit exceeded (10 GB)")
+		if currentStorage+totalSize > limits.MaxStorageBytes {
+			return project{}, fmt.Errorf("storage limit exceeded")
 		}
 	}
 
@@ -263,9 +276,8 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		return project{}, err
 	}
 
-	// Collect old deploy prefixes for R2 cleanup, then delete from DB
 	var oldPrefixes []string
-	if orgID != sentinelOrgID {
+	if isAuthenticated && !limits.DeployHistory {
 		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID)
 		if err != nil {
 			return project{}, err

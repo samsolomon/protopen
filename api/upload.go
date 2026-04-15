@@ -321,7 +321,7 @@ func extractZipToDir(zipPath string, destinationRoot string) error {
 		if totalBytes > maxArchiveBytes {
 			output.Close()
 			input.Close()
-			return fmt.Errorf("zip upload exceeds the 100MB extracted size limit")
+			return fmt.Errorf("zip upload exceeds the 250MB extracted size limit")
 		}
 		closeErr := output.Close()
 		inputErr := input.Close()

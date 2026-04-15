@@ -26,6 +26,7 @@ export type OrgInfo = {
   name: string
   isPersonal: boolean
   role: 'admin' | 'member'
+  plan: string
 }
 
 export type OrgMember = {

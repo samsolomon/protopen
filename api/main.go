@@ -57,6 +57,7 @@ type orgInfo struct {
 	Name       string `json:"name"`
 	IsPersonal bool   `json:"isPersonal"`
 	Role       string `json:"role"`
+	Plan       string `json:"plan"`
 }
 
 type authRequest struct {

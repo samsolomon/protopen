@@ -91,6 +91,13 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	var plan string
+	app.db.QueryRow(r.Context(), `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan)
+	if !getPlanLimits(plan).Rollback {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "rollback requires a Pro or Team plan"})
+		return
+	}
+
 	var payload struct {
 		DeployID string `json:"deployId"`
 	}
