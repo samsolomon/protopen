@@ -211,6 +211,8 @@ func main() {
 	appMux.HandleFunc("/api/resend-verification", app.rateLimit(app.authLimiter, app.resendVerificationHandler))
 	appMux.HandleFunc("/api/forgot-password", app.rateLimit(app.authLimiter, app.forgotPasswordHandler))
 	appMux.HandleFunc("/api/reset-password", app.resetPasswordHandler)
+	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
+	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))
 	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
 	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))

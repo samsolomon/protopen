@@ -362,7 +362,7 @@ func parseAnonymousPath(rawPath string) (slug string, assetPath string, ok bool)
 	parts := strings.SplitN(trimmed, "/", 2)
 	slug = parts[0]
 
-	if strings.HasPrefix(slug, "~") || strings.HasPrefix(slug, "_") || slug == "api" || slug == "healthz" || slug == "sign-in" || slug == "sign-up" || slug == "claim" || slug == "verify" || slug == "reset-password" {
+	if strings.HasPrefix(slug, "~") || strings.HasPrefix(slug, "_") || slug == "api" || slug == "healthz" || slug == "sign-in" || slug == "sign-up" || slug == "claim" || slug == "verify" || slug == "reset-password" || slug == "auth" {
 		return "", "", false
 	}
 

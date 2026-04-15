@@ -1,13 +1,15 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var version = "dev"
@@ -380,27 +382,7 @@ func cmdLogin(args []string) {
 
 	t := *token
 	if t == "" {
-		baseURL := strings.TrimRight(resolveURL(*url), "/")
-		browserURL := baseURL + "?cli-auth"
-
-		reader := bufio.NewReader(os.Stdin)
-
-		fmt.Println("Press Enter to open your browser and log in.")
-		reader.ReadString('\n')
-
-		if err := openBrowser(browserURL); err != nil {
-			fmt.Printf("Open this URL in your browser: %s\n\n", browserURL)
-		} else {
-			fmt.Println()
-		}
-
-		fmt.Print("Paste your API token: ")
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error reading input: %v\n", err)
-			os.Exit(1)
-		}
-		t = strings.TrimSpace(line)
+		t = loginWithDeviceCode(resolveURL(*url))
 	}
 
 	if t == "" {
@@ -426,6 +408,72 @@ func cmdLogin(args []string) {
 	fmt.Printf("Token saved to %s\n", configPath())
 	fmt.Println("\nYou're ready to deploy:")
 	fmt.Println("  velori deploy ./my-site")
+}
+
+func loginWithDeviceCode(baseURL string) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	// Create device code
+	resp, err := http.Post(baseURL+"/api/auth/device", "application/json", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: could not connect to %s\n", baseURL)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		fmt.Fprintf(os.Stderr, "error: could not create device code (HTTP %d)\n", resp.StatusCode)
+		os.Exit(1)
+	}
+
+	var device struct {
+		DeviceCode string `json:"deviceCode"`
+		VerifyURL  string `json:"verifyUrl"`
+		ExpiresIn  int    `json:"expiresIn"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
+		fmt.Fprintf(os.Stderr, "error: invalid response\n")
+		os.Exit(1)
+	}
+
+	// Open browser
+	fmt.Printf("Opening browser to approve access...\n")
+	if err := openBrowser(device.VerifyURL); err != nil {
+		fmt.Printf("\nOpen this URL in your browser:\n  %s\n", device.VerifyURL)
+	}
+	fmt.Printf("\nWaiting for approval... (press Ctrl+C to cancel)\n")
+
+	// Poll for result
+	httpClient := &http.Client{}
+	deadline := time.Now().Add(time.Duration(device.ExpiresIn) * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(2 * time.Second)
+
+		pollResp, err := httpClient.Get(baseURL + "/api/auth/device/" + device.DeviceCode)
+		if err != nil {
+			continue
+		}
+
+		var result struct {
+			Status string `json:"status"`
+			Token  string `json:"token"`
+		}
+		json.NewDecoder(pollResp.Body).Decode(&result)
+		pollResp.Body.Close()
+
+		if result.Status == "complete" && result.Token != "" {
+			return result.Token
+		}
+
+		if pollResp.StatusCode == 404 {
+			fmt.Fprintln(os.Stderr, "\nDevice code expired.")
+			os.Exit(1)
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "\nTimed out waiting for approval.")
+	os.Exit(1)
+	return ""
 }
 
 func openBrowser(url string) error {

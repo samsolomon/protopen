@@ -1,0 +1,126 @@
+package main
+
+import (
+	"log"
+	"net/http"
+	"strings"
+	"time"
+)
+
+func (app *application) deviceCodeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := generateToken(4) // 8 hex chars
+	id := generateID("dvc")
+	now := time.Now().UTC()
+	expiresAt := now.Add(10 * time.Minute)
+
+	if _, err := app.db.Exec(r.Context(), `
+		insert into device_codes (id, code, status, created_at, expires_at)
+		values ($1, $2, 'pending', $3, $4)
+	`, id, code, now, expiresAt); err != nil {
+		log.Printf("create device code: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create device code"})
+		return
+	}
+
+	verifyURL := app.appOrigin + "/auth/device?code=" + code
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"deviceCode": code,
+		"verifyUrl":  verifyURL,
+		"expiresIn":  600,
+	})
+}
+
+func (app *application) deviceCodePollHandler(w http.ResponseWriter, r *http.Request) {
+	code := strings.TrimPrefix(r.URL.Path, "/api/auth/device/")
+	code = strings.TrimRight(code, "/")
+	if code == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		app.pollDeviceCode(w, r, code)
+	case http.MethodPost:
+		app.approveDeviceCode(w, r, code)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *application) pollDeviceCode(w http.ResponseWriter, r *http.Request, code string) {
+	var status string
+	var token *string
+	err := app.db.QueryRow(r.Context(), `
+		select status, token from device_codes
+		where code = $1 and expires_at > now()
+	`, code).Scan(&status, &token)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
+		return
+	}
+
+	if status == "pending" {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
+		return
+	}
+
+	if status == "complete" && token != nil {
+		// Mark as consumed so token can't be read again
+		app.db.Exec(r.Context(), `update device_codes set status = 'consumed', token = null where code = $1`, code)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": *token})
+		return
+	}
+
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
+}
+
+func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request, code string) {
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	// Verify the device code exists and is pending
+	var id string
+	err = app.db.QueryRow(r.Context(), `
+		select id from device_codes
+		where code = $1 and status = 'pending' and expires_at > now()
+	`, code).Scan(&id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
+		return
+	}
+
+	// Create an API token
+	rawToken := "vtk_" + generateToken(32)
+	tokenID := generateID("tok")
+	now := time.Now().UTC()
+
+	if _, err := app.db.Exec(r.Context(), `
+		insert into api_tokens (id, user_id, token_hash, name, created_at)
+		values ($1, $2, $3, $4, $5)
+	`, tokenID, user.ID, hashToken(rawToken), "cli", now); err != nil {
+		log.Printf("create token for device code: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create token"})
+		return
+	}
+
+	// Update device code with the token
+	if _, err := app.db.Exec(r.Context(), `
+		update device_codes set user_id = $1, token = $2, status = 'complete'
+		where id = $3
+	`, user.ID, rawToken, id); err != nil {
+		log.Printf("approve device code: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not approve device code"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}

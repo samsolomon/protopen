@@ -22,19 +22,14 @@ To install or update: `curl -fsSL https://app.velori.dev/install.sh | sh`
 
 ## Login
 
-Authenticate to make deploys permanent:
-
 ```bash
-velori login --token vtk_your_token
+velori login
 ```
 
-Or set the environment variable:
+Opens the browser for the user to approve access. The token is saved automatically.
 
-```bash
-export VELORI_TOKEN=vtk_...
-```
+To provide a token directly (non-interactive): `velori login --token vtk_...`
 
-Tokens can be created at https://app.velori.dev under Settings > API Tokens.
 Without a token, deploys are anonymous and expire in 24 hours.
 
 ## Deploy a site

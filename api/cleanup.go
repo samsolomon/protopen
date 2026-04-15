@@ -16,6 +16,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 			case <-ticker.C:
 				app.cleanupExpiredAnonymousDeploys(ctx)
 				app.cleanupExpiredTokens(ctx)
+				app.cleanupExpiredDeviceCodes(ctx)
 			case <-ctx.Done():
 				ticker.Stop()
 				return
@@ -122,4 +123,15 @@ func (app *application) cleanupOneDeploy(ctx context.Context, e expiredDeploy) e
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (app *application) cleanupExpiredDeviceCodes(ctx context.Context) {
+	tag, err := app.db.Exec(ctx, `delete from device_codes where expires_at < now()`)
+	if err != nil {
+		log.Printf("cleanup device codes: %v", err)
+		return
+	}
+	if tag.RowsAffected() > 0 {
+		log.Printf("cleaned up %d expired device codes", tag.RowsAffected())
+	}
 }

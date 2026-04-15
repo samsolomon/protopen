@@ -3,10 +3,12 @@ import type { Project, SessionUser } from './types'
 import { fetchSession, fetchProjects, postSignOut, deleteProjectById, updateProjectVisibility, verifyEmail, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
 import { CLIAuthPage } from './CLIAuthPage'
+import { DeviceAuthPage } from './DeviceAuthPage'
 import { Dashboard } from './Dashboard'
 import { Toaster } from '@/components/ui/sonner'
 
 const isCLIAuth = new URLSearchParams(window.location.search).has('cli-auth')
+const isDeviceAuth = window.location.pathname === '/auth/device'
 
 function App() {
   const [user, setUser] = useState<SessionUser | null>(null)
@@ -120,6 +122,8 @@ function App() {
     )
   } else if (!user) {
     content = <AuthPage onLogin={setUser} />
+  } else if (isDeviceAuth) {
+    content = <DeviceAuthPage onSessionExpired={handleSessionExpired} />
   } else if (isCLIAuth) {
     content = <CLIAuthPage onSessionExpired={handleSessionExpired} />
   } else {
