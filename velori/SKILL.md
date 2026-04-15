@@ -13,82 +13,66 @@ description: >
 
 Deploy any folder with an `index.html` to a live URL instantly.
 
-To install or update: `npx skills add samsolomon/velori --skill velori -g`
+To install or update: `curl -fsSL https://app.velori.dev/install.sh | sh`
 
 ## Requirements
 
-- Required binaries: `curl`, `zip`
-- Optional environment variable: `$VELORI_TOKEN`
+- The `velori` CLI (installed by the install script above)
+- For anonymous deploys without the CLI: `curl` and `zip`
+
+## Login
+
+Authenticate to make deploys permanent:
+
+```bash
+velori login --token vtk_your_token
+```
+
+Or set the environment variable:
+
+```bash
+export VELORI_TOKEN=vtk_...
+```
+
+Tokens can be created at https://app.velori.dev under Settings > API Tokens.
+Without a token, deploys are anonymous and expire in 24 hours.
 
 ## Deploy a site
+
+```bash
+velori deploy {file-or-dir}
+```
+
+Requires authentication. Outputs the live URL.
+
+### Deploy with a name
+
+```bash
+velori deploy {file-or-dir} --name "My Prototype"
+```
+
+### Additional flags
+
+- `--label` — deploy label (e.g. "sprint 4 demo")
+- `--private` — make the site private
+- `--org` — deploy to an organization
+- `--json` — machine-readable JSON output
+
+### Anonymous deploy (no account)
+
+Use the publish script for quick, anonymous sharing (expires in 24 hours):
 
 ```bash
 ./scripts/publish.sh {file-or-dir}
 ```
 
-Outputs the live URL (e.g. `https://sites.velori.dev/bright-canvas-a7k2`).
-
-Without an API token this creates an **anonymous site** that expires in 24 hours.
-With a saved token (`$VELORI_TOKEN`), the site is permanent.
-
-**File structure:** Place `index.html` at the root of the directory you publish. The directory's contents become the site root.
-
-## Deploy with a name
-
-```bash
-./scripts/publish.sh {file-or-dir} --name "My Prototype"
-```
-
-## Authenticated deploy (permanent)
-
-```bash
-export VELORI_TOKEN=vtk_...
-./scripts/publish.sh {file-or-dir} --name "My Project"
-```
-
-Or pass inline: `./scripts/publish.sh {dir} --api-key vtk_...`
-
 ## Manage sites
 
-All management commands require `$VELORI_TOKEN`.
-
-### List sites
-
 ```bash
-curl -s https://app.velori.dev/api/projects \
-  -H "Authorization: Bearer $VELORI_TOKEN"
-```
-
-### Delete a site
-
-```bash
-curl -X DELETE https://app.velori.dev/api/projects/{projectId} \
-  -H "Authorization: Bearer $VELORI_TOKEN"
-```
-
-### Set visibility
-
-```bash
-curl -X PATCH https://app.velori.dev/api/projects/{projectId} \
-  -H "Authorization: Bearer $VELORI_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"isPublic": false}'
-```
-
-### Rollback
-
-```bash
-curl -X POST https://app.velori.dev/api/projects/{projectId}/rollback \
-  -H "Authorization: Bearer $VELORI_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"deployId": "dep_..."}'
-```
-
-### List deploys
-
-```bash
-curl -s https://app.velori.dev/api/projects/{projectId}/deploys \
-  -H "Authorization: Bearer $VELORI_TOKEN"
+velori list                                    # List all sites
+velori deploys {name}                          # List deploy history
+velori rollback {name} {deploy-id}             # Rollback to a previous deploy
+velori visibility {name} public|private        # Set site visibility
 ```
 
 ## Token permissions
@@ -105,10 +89,10 @@ API tokens can deploy, delete sites, change visibility, rollback, and manage tok
 
 ## Building for Velori
 
-Velori is **static-only** — no server-side code runs. Everything must work in the browser.
+Velori runs everything in the browser — no server, no backend, no infrastructure.
 
 - **Simple data**: hardcode it in JS arrays or objects. Most prototypes don't need a database.
-- **Queryable data**: use [sql.js](https://github.com/nicolewindows/sql.js/) (SQLite compiled to WASM). Load from CDN and seed data in JS — do not bundle `.db` files.
+- **Queryable data**: use [sql.js](https://github.com/sql-js/sql.js/) (SQLite compiled to WASM). Load from CDN and seed data in JS — do not bundle `.db` files.
 - **SPA routing**: Velori falls back to `index.html` for unmatched paths, so client-side routers work.
 
 ### sql.js quick start
