@@ -118,17 +118,56 @@ export function Dashboard({
   onProjectsChanged,
   onSessionExpired,
 }: DashboardProps) {
-  const [view, setView] = useState<DashboardView>('dashboard')
-  const [settingsTab, setSettingsTab] = useState('account')
+  const [view, setView] = useState<DashboardView>(() => {
+    return window.location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
+  })
+  const [settingsTab, setSettingsTab] = useState(() => {
+    const path = window.location.pathname
+    if (path === '/settings/appearance') return 'appearance'
+    if (path === '/settings/team') return 'team'
+    if (path === '/settings/tokens') return 'tokens'
+    return 'account'
+  })
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
   const [verificationSent, setVerificationSent] = useState(false)
 
+  const navigateTo = (path: string) => {
+    window.history.pushState(null, '', path)
+  }
+
   const switchView = (next: DashboardView) => {
-    if (next === 'settings') setSettingsTab('account')
+    if (next === 'settings') {
+      setSettingsTab('account')
+      navigateTo('/settings')
+    } else {
+      navigateTo('/')
+    }
     setView(next)
     window.scrollTo(0, 0)
   }
+
+  const switchSettingsTab = (tab: string) => {
+    setSettingsTab(tab)
+    navigateTo(tab === 'account' ? '/settings' : `/settings/${tab}`)
+  }
+
+  useEffect(() => {
+    const onPopState = () => {
+      const path = window.location.pathname
+      if (path.startsWith('/settings')) {
+        setView('settings')
+        if (path === '/settings/appearance') setSettingsTab('appearance')
+        else if (path === '/settings/team') setSettingsTab('team')
+        else if (path === '/settings/tokens') setSettingsTab('tokens')
+        else setSettingsTab('account')
+      } else {
+        setView('dashboard')
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   const handleUploadOpenChange = (open: boolean) => {
     setUploadOpen(open)
@@ -149,7 +188,7 @@ export function Dashboard({
               <Button variant="ghost">{user.name}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => { setSettingsTab('account'); setView('settings') }}>
+              <DropdownMenuItem onClick={() => { switchView('settings') }}>
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => switchView('settings')}>
@@ -214,13 +253,12 @@ export function Dashboard({
         ) : null}
 
         {view === 'settings' ? (
-          <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="gap-8">
+          <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
               <TabsTrigger value="team">Team</TabsTrigger>
               <TabsTrigger value="tokens">API Tokens</TabsTrigger>
-              <TabsTrigger value="danger">Delete Account</TabsTrigger>
             </TabsList>
             <TabsContent value="account" className="max-w-2xl">
               <div className="flex flex-col gap-8">
@@ -230,6 +268,10 @@ export function Dashboard({
                   onSessionExpired={onSessionExpired}
                 />
                 <PasswordPanel onSessionExpired={onSessionExpired} />
+                <DeleteAccountPanel
+                  onAccountDeleted={onSignOut}
+                  onSessionExpired={onSessionExpired}
+                />
               </div>
             </TabsContent>
             <TabsContent value="appearance" className="max-w-2xl">
@@ -243,12 +285,6 @@ export function Dashboard({
             </TabsContent>
             <TabsContent value="tokens" className="max-w-2xl">
               <TokensPanel
-                onSessionExpired={onSessionExpired}
-              />
-            </TabsContent>
-            <TabsContent value="danger" className="max-w-2xl">
-              <DeleteAccountPanel
-                onAccountDeleted={onSignOut}
                 onSessionExpired={onSessionExpired}
               />
             </TabsContent>
