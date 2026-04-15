@@ -48,9 +48,52 @@ export VELORI_TOKEN=vtk_...
 
 Or pass inline: `./scripts/publish.sh {dir} --api-key vtk_...`
 
+## Manage sites
+
+All management commands require `$VELORI_TOKEN`.
+
+### List sites
+
+```bash
+curl -s https://app.velori.dev/api/projects \
+  -H "Authorization: Bearer $VELORI_TOKEN"
+```
+
+### Delete a site
+
+```bash
+curl -X DELETE https://app.velori.dev/api/projects/{projectId} \
+  -H "Authorization: Bearer $VELORI_TOKEN"
+```
+
+### Set visibility
+
+```bash
+curl -X PATCH https://app.velori.dev/api/projects/{projectId} \
+  -H "Authorization: Bearer $VELORI_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"isPublic": false}'
+```
+
+### Rollback
+
+```bash
+curl -X POST https://app.velori.dev/api/projects/{projectId}/rollback \
+  -H "Authorization: Bearer $VELORI_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"deployId": "dep_..."}'
+```
+
+### List deploys
+
+```bash
+curl -s https://app.velori.dev/api/projects/{projectId}/deploys \
+  -H "Authorization: Bearer $VELORI_TOKEN"
+```
+
 ## Token permissions
 
-API tokens (`$VELORI_TOKEN`) can deploy, delete sites, change visibility, rollback, and manage tokens. User management and account settings require signing in to the dashboard.
+API tokens can deploy, delete sites, change visibility, rollback, and manage tokens. User management and account settings require signing in to the dashboard.
 
 ## Constraints
 
