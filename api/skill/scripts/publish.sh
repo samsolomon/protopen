@@ -66,6 +66,8 @@ if [[ -n "$API_KEY" ]]; then
   ENDPOINT="${BASE_URL}/api/uploads"
   AUTH_HEADER="Authorization: Bearer ${API_KEY}"
 else
+  echo "⚠ No VELORI_TOKEN set — deploying anonymously (site expires in 24 hours)" >&2
+  echo "  Run 'velori login' or set VELORI_TOKEN for permanent deploys." >&2
   ENDPOINT="${BASE_URL}/api/v1/publish"
   AUTH_HEADER=""
 fi
