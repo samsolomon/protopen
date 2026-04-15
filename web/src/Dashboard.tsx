@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Project, SessionUser } from './types'
 import { resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
@@ -28,7 +28,83 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, Terminal, Upload, FolderOpen, Mail } from 'lucide-react'
+import { Plus, Terminal, Upload, FolderOpen, Mail, Download, Copy, Check } from 'lucide-react'
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="size-7 shrink-0"
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true)
+          if (timerRef.current) clearTimeout(timerRef.current)
+          timerRef.current = setTimeout(() => setCopied(false), 2000)
+        })
+      }}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </Button>
+  )
+}
+
+const installCommand = 'curl -fsSL https://app.velori.dev/install.sh | bash'
+
+function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <Card>
+        <CardContent className="py-6">
+          <div className="flex flex-col gap-5">
+            <div className="flex items-start gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Download className="size-4" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">Install the skill</p>
+                  <Badge variant="secondary" className="text-[10px]">Step 1</Badge>
+                </div>
+                <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
+                  <code className="flex-1 font-mono text-xs">{installCommand}</code>
+                  <CopyButton text={installCommand} />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Terminal className="size-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">Tell your agent to deploy</p>
+                  <Badge variant="secondary" className="text-[10px]">Step 2</Badge>
+                </div>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori deploy my-site</code> from your terminal. Your project will appear here.
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="flex items-center gap-4 px-1 text-sm text-muted-foreground">
+        <button type="button" className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={onUploadOpen}>
+          <Upload className="size-3.5" />
+          Drag and drop
+        </button>
+        <button type="button" className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={onUploadOpen}>
+          <FolderOpen className="size-3.5" />
+          Select a folder
+        </button>
+      </div>
+    </div>
+  )
+}
 
 type DashboardView = 'dashboard' | 'settings'
 
@@ -83,26 +159,9 @@ export function Dashboard({
       <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-[40px] backdrop-saturate-150">
         <div className="mx-auto grid h-14 max-w-[1440px] grid-cols-3 items-center px-4">
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold tracking-tight">Velori</h1>
+            <a href="/" className="text-xl font-semibold tracking-tight hover:opacity-70 transition-opacity" onClick={(e) => { e.preventDefault(); switchView('dashboard') }}>Velori</a>
           </div>
-          <nav className="flex items-center justify-center gap-1">
-            <Button
-              variant="ghost"
-              size="default"
-              className={view === 'dashboard' ? 'bg-muted' : ''}
-              onClick={() => switchView('dashboard')}
-            >
-              Projects
-            </Button>
-            <Button
-              variant="ghost"
-              size="default"
-              className={view === 'settings' ? 'bg-muted' : ''}
-              onClick={() => switchView('settings')}
-            >
-              Settings
-            </Button>
-          </nav>
+          <div />
           <div className="flex items-center justify-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -230,48 +289,7 @@ export function Dashboard({
                   </CardContent>
                 </Card>
               ) : projects.length === 0 ? (
-                <Card>
-                  <CardContent className="py-8">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          <Terminal className="size-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium">Tell the agent</p>
-                            <Badge variant="secondary" className="text-[10px]">Easiest</Badge>
-                          </div>
-                          <p className="mt-0.5 text-sm text-muted-foreground">
-                            Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori deploy my-site</code> from your terminal.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          <Upload className="size-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Drag and drop</p>
-                          <p className="mt-0.5 text-sm text-muted-foreground">
-                            Drag a folder or zip file onto this page.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          <FolderOpen className="size-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Select a folder</p>
-                          <p className="mt-0.5 text-sm text-muted-foreground">
-                            Click <span className="font-medium text-foreground">Create project</span> above to browse your files.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <EmptyState onUploadOpen={() => setUploadOpen(true)} />
               ) : (
                 <>
                   <div className="hidden sm:block">
