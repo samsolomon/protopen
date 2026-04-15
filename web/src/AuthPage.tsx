@@ -50,7 +50,9 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     const params = new URLSearchParams(window.location.search)
     return params.has('reset-token') ? 'reset' : 'auth'
   })
-  const [authMode, setAuthMode] = useState<AuthMode>('sign-in')
+  const [authMode, setAuthMode] = useState<AuthMode>(
+    window.location.pathname === '/sign-up' ? 'sign-up' : 'sign-in'
+  )
   const [authForm, setAuthForm] = useState<AuthFormState>(() => {
     const params = new URLSearchParams(window.location.search)
     return { name: '', email: params.get('email') ?? '', password: '' }
