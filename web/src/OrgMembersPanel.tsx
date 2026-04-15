@@ -126,9 +126,8 @@ export function OrgMembersPanel({ user, onSessionExpired }: OrgMembersPanelProps
               onChange={(e) => setInviteEmail(e.target.value)}
             />
           </div>
-          <Button type="submit" size="sm" disabled={inviting || !inviteEmail.trim()}>
-            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-            {inviting ? 'Adding...' : 'Add'}
+          <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
+            {inviting ? 'Adding...' : 'Add member'}
           </Button>
         </form>
       )}

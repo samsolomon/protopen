@@ -97,7 +97,7 @@ export function TokensPanel({ onSessionExpired }: TokensPanelProps) {
           placeholder="Token name (e.g. my-agent)"
           onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
         />
-        <Button onClick={() => void handleCreate()} disabled={creating} size="sm">
+        <Button onClick={() => void handleCreate()} disabled={creating}>
           {creating ? 'Creating...' : 'Create token'}
         </Button>
       </div>
