@@ -188,9 +188,6 @@ export function Dashboard({
               <Button variant="ghost">{user.name}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => { switchView('settings') }}>
-                Profile
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => switchView('settings')}>
                 Settings
               </DropdownMenuItem>
