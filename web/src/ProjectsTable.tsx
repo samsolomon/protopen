@@ -185,9 +185,14 @@ export function ProjectsTable({
                       ) : (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="inline-flex items-center justify-center size-7 text-muted-foreground">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              disabled
+                              aria-label="Upgrade to Pro for private sites"
+                            >
                               <Globe />
-                            </span>
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent>Upgrade to Pro for private sites</TooltipContent>
                         </Tooltip>
