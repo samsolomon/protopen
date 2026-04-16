@@ -21,9 +21,11 @@ type ProjectCardProps = {
   onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
+  canMakePrivate?: boolean
+  canRollback?: boolean
 }
 
-export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired }: ProjectCardProps) {
+export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle, onProjectsChanged, onSessionExpired, canMakePrivate, canRollback }: ProjectCardProps) {
   const [showHistory, setShowHistory] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -51,14 +53,19 @@ export function ProjectCard({ project, isDeleting, onDelete, onVisibilityToggle,
               projectId={project.id}
               onRollback={onProjectsChanged}
               onSessionExpired={onSessionExpired}
+              canRollback={canRollback}
             />
           </div>
         ) : null}
       </CardContent>
       <CardFooter className="gap-2">
-        <Button variant="ghost" size="sm" onClick={() => onVisibilityToggle(project.id, !project.isPublic)}>
-          {project.isPublic ? 'Public' : 'Private'}
-        </Button>
+        {canMakePrivate ? (
+          <Button variant="ghost" size="sm" onClick={() => onVisibilityToggle(project.id, !project.isPublic)}>
+            {project.isPublic ? 'Public' : 'Private'}
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground px-3 py-1.5">Public</span>
+        )}
         <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)}>
           {showHistory ? 'Hide history' : 'History'}
         </Button>

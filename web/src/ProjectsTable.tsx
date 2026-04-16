@@ -56,6 +56,8 @@ type ProjectsTableProps = {
   onVisibilityToggle: (projectID: string, isPublic: boolean) => void
   onProjectsChanged: () => void
   onSessionExpired: () => void
+  canMakePrivate?: boolean
+  canRollback?: boolean
 }
 
 export function ProjectsTable({
@@ -65,6 +67,8 @@ export function ProjectsTable({
   onVisibilityToggle,
   onProjectsChanged,
   onSessionExpired,
+  canMakePrivate,
+  canRollback,
 }: ProjectsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
@@ -164,19 +168,30 @@ export function ProjectsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
-                            aria-label={project.isPublic ? 'Make private' : 'Make public'}
-                          >
-                            {project.isPublic ? <Globe /> : <Lock />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{project.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
-                      </Tooltip>
+                      {canMakePrivate ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
+                              aria-label={project.isPublic ? 'Make private' : 'Make public'}
+                            >
+                              {project.isPublic ? <Globe /> : <Lock />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{project.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center justify-center size-7 text-muted-foreground">
+                              <Globe />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Upgrade to Pro for private sites</TooltipContent>
+                        </Tooltip>
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -202,6 +217,7 @@ export function ProjectsTable({
                         projectId={project.id}
                         onRollback={onProjectsChanged}
                         onSessionExpired={onSessionExpired}
+                        canRollback={canRollback}
                       />
                     </TableCell>
                   </TableRow>

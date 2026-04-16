@@ -11,9 +11,10 @@ type DeployHistoryProps = {
   projectId: string
   onRollback: () => void
   onSessionExpired: () => void
+  canRollback?: boolean
 }
 
-export function DeployHistory({ projectId, onRollback, onSessionExpired }: DeployHistoryProps) {
+export function DeployHistory({ projectId, onRollback, onSessionExpired, canRollback }: DeployHistoryProps) {
   const [deploys, setDeploys] = useState<Deploy[]>([])
   const [loading, setLoading] = useState(true)
   const [rollingBack, setRollingBack] = useState<string | null>(null)
@@ -101,7 +102,7 @@ export function DeployHistory({ projectId, onRollback, onSessionExpired }: Deplo
             ) : null}
             {!deploy.gitCommitHash ? <span className="text-muted-foreground">{deploy.fileCount} files</span> : null}
           </div>
-          {!deploy.isCurrent ? (
+          {!deploy.isCurrent && canRollback ? (
             <Button
               variant="ghost"
               size="xs"

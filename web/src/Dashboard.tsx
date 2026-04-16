@@ -133,6 +133,11 @@ export function Dashboard({
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
   const [verificationSent, setVerificationSent] = useState(false)
 
+  const currentOrg = user.orgs.find(o => o.isPersonal)
+  const plan = currentOrg?.plan ?? 'tinkerer'
+  const canMakePrivate = plan === 'pro' || plan === 'team'
+  const canRollback = plan === 'pro' || plan === 'team'
+
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path)
   }
@@ -322,6 +327,8 @@ export function Dashboard({
                       onVisibilityToggle={onVisibilityToggle}
                       onProjectsChanged={onProjectsChanged}
                       onSessionExpired={onSessionExpired}
+                      canMakePrivate={canMakePrivate}
+                      canRollback={canRollback}
                     />
                   </div>
                   <div className="flex flex-col gap-4 sm:hidden">
@@ -334,6 +341,8 @@ export function Dashboard({
                         onVisibilityToggle={onVisibilityToggle}
                         onProjectsChanged={onProjectsChanged}
                         onSessionExpired={onSessionExpired}
+                        canMakePrivate={canMakePrivate}
+                        canRollback={canRollback}
                       />
                     ))}
                   </div>
