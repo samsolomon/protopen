@@ -144,10 +144,12 @@ export function UploadPanel({ error, setError, onProjectsChanged, onSessionExpir
         {import.meta.env.DEV ? (
           <Button
             size="sm"
-            onClick={() =>
+            onClick={() => {
+              const suffix = Math.random().toString(36).slice(2, 8)
+              const name = `prototype-${suffix}`
               void startUpload(
                 {
-                  name: 'prototype',
+                  name,
                   mode: 'files',
                   fileCount: 2,
                   totalBytes: 2600,
@@ -155,22 +157,22 @@ export function UploadPanel({ error, setError, onProjectsChanged, onSessionExpir
                 },
                 [
                   {
-                    file: new File(['<!doctype html><html><body><h1>Velori demo</h1></body></html>'], 'index.html', {
+                    file: new File([`<!doctype html><html><body><h1>${name}</h1></body></html>`], 'index.html', {
                       type: 'text/html',
                     }),
                     name: 'index.html',
                     size: 1800,
-                    path: 'prototype/index.html',
+                    path: `${name}/index.html`,
                   },
                   {
                     file: new File(['body { font-family: sans-serif; }'], 'styles.css', { type: 'text/css' }),
                     name: 'styles.css',
                     size: 800,
-                    path: 'prototype/styles.css',
+                    path: `${name}/styles.css`,
                   },
                 ],
               )
-            }
+            }}
           >
             Simulate upload
           </Button>

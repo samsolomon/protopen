@@ -13,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -71,16 +70,10 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	deploys := app.listToolbarDeploys(r.Context(), orgSlug, slug)
-	baseURL := fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, slug)
-	snippet := frameSnippet(deployment.projectName, app.frontendOrigin, deploys, deployment.deployID, baseURL)
-	fw := newFrameWriter(w, snippet)
-	defer fw.Close()
-
 	if app.store != nil {
-		app.serveFromR2(fw, r, deployment.siteRoot, assetPath)
+		app.serveFromR2(w, r, deployment.siteRoot, assetPath)
 	} else {
-		app.serveFromFilesystem(fw, r, deployment.siteRoot, assetPath)
+		app.serveFromFilesystem(w, r, deployment.siteRoot, assetPath)
 	}
 }
 
@@ -228,48 +221,6 @@ func (app *application) lookupDeployByID(ctx context.Context, orgSlug string, sl
 	return d, nil
 }
 
-type toolbarDeploy struct {
-	ID            string  `json:"id"`
-	Label         string  `json:"label"`
-	Time          string  `json:"time"`
-	IsCurrent     bool    `json:"isCurrent"`
-	GitCommitHash *string `json:"gitCommitHash,omitempty"`
-	GitBranch     *string `json:"gitBranch,omitempty"`
-}
-
-func (app *application) listToolbarDeploys(ctx context.Context, orgSlug string, slug string) []toolbarDeploy {
-	rows, err := app.db.Query(ctx, `
-		select d.id, d.label, d.created_at, (d.id = p.current_deploy_id) as is_current,
-			d.git_commit_hash, d.git_branch
-		from deploys d
-		join projects p on p.id = d.project_id
-		join organizations o on o.id = p.org_id
-		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-		order by d.created_at asc
-		limit 50
-	`, orgSlug, slug)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var deploys []toolbarDeploy
-	for rows.Next() {
-		var d toolbarDeploy
-		var label *string
-		var createdAt time.Time
-		if err := rows.Scan(&d.ID, &label, &createdAt, &d.IsCurrent, &d.GitCommitHash, &d.GitBranch); err != nil {
-			return nil
-		}
-		if label != nil {
-			d.Label = *label
-		}
-		d.Time = relativeTime(createdAt)
-		deploys = append(deploys, d)
-	}
-	return deploys
-}
-
 func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, slug string) (liveDeploy, error) {
 	var d liveDeploy
 	err := app.db.QueryRow(ctx, `
@@ -394,14 +345,9 @@ func (app *application) serveAnonymousDeploy(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 
-	claimURL := app.frontendOrigin + "/claim/" + slug
-	snippet := anonFrameSnippet(app.frontendOrigin, claimURL)
-	fw := newFrameWriter(w, snippet)
-	defer fw.Close()
-
 	if app.store != nil {
-		app.serveFromR2(fw, r, storagePrefix, assetPath)
+		app.serveFromR2(w, r, storagePrefix, assetPath)
 	} else {
-		app.serveFromFilesystem(fw, r, storagePrefix, assetPath)
+		app.serveFromFilesystem(w, r, storagePrefix, assetPath)
 	}
 }
