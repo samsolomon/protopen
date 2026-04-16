@@ -227,6 +227,8 @@ func main() {
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
 	appMux.HandleFunc("/api/admin/orgs/", app.adminOrgByIDHandler)
+	appMux.HandleFunc("/api/admin/projects", app.adminProjectsHandler)
+	appMux.HandleFunc("/api/admin/projects/", app.adminProjectByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))

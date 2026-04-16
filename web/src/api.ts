@@ -469,3 +469,41 @@ export async function adminDeleteUser(userId: string): Promise<void> {
   }
 }
 
+export type AdminProject = {
+  id: string
+  name: string
+  slug: string
+  updatedAt: string
+  deployCount: number
+  storageBytes: number
+  orgSlug: string
+  orgName: string
+  isPublic: boolean
+  liveUrl: string
+}
+
+export async function fetchAdminProjects(): Promise<AdminProject[]> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/projects`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (response.status === 403) throw new Error('Forbidden')
+
+  const data = (await response.json()) as { projects?: AdminProject[] }
+  return data.projects ?? []
+}
+
+export async function adminDeleteProject(projectId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/projects/${projectId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not delete project')
+  }
+}
+

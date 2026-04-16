@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -176,4 +177,97 @@ func (app *application) adminOrgByIDHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "plan": payload.Plan})
+}
+
+type adminProject struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	UpdatedAt    string `json:"updatedAt"`
+	DeployCount  int    `json:"deployCount"`
+	StorageBytes int64  `json:"storageBytes"`
+	OrgSlug      string `json:"orgSlug"`
+	OrgName      string `json:"orgName"`
+	IsPublic     bool   `json:"isPublic"`
+	LiveURL      string `json:"liveUrl"`
+}
+
+func (app *application) adminProjectsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := app.requireAdmin(w, r); !ok {
+		return
+	}
+
+	rows, err := app.db.Query(r.Context(), `
+		SELECT p.id, p.name, p.slug, p.updated_at,
+		       COUNT(d.id) as deploy_count,
+		       COALESCE(SUM(d.size_bytes), 0) as storage_bytes,
+		       o.slug, o.name, p.is_public
+		FROM projects p
+		JOIN organizations o ON o.id = p.org_id
+		LEFT JOIN deploys d ON d.project_id = p.id
+		WHERE p.deleted_at IS NULL
+		GROUP BY p.id, o.slug, o.name
+		ORDER BY p.updated_at DESC
+		LIMIT 200
+	`)
+	if err != nil {
+		log.Printf("admin list projects: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load projects"})
+		return
+	}
+	defer rows.Close()
+
+	var projects []adminProject
+	for rows.Next() {
+		var p adminProject
+		var updatedAt time.Time
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &updatedAt, &p.DeployCount, &p.StorageBytes, &p.OrgSlug, &p.OrgName, &p.IsPublic); err != nil {
+			log.Printf("admin scan project: %v", err)
+			continue
+		}
+		p.UpdatedAt = relativeTime(updatedAt)
+		p.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, p.OrgSlug, p.Slug)
+		projects = append(projects, p)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (app *application) adminProjectByIDHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, ok := app.requireAdmin(w, r); !ok {
+		return
+	}
+
+	projectID := strings.TrimPrefix(r.URL.Path, "/api/admin/projects/")
+	projectID = strings.TrimRight(projectID, "/")
+	if projectID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project ID is required"})
+		return
+	}
+
+	tag, err := app.db.Exec(r.Context(), `
+		UPDATE projects SET deleted_at = now(), current_deploy_id = null, updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, projectID)
+	if err != nil {
+		log.Printf("admin delete project: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
