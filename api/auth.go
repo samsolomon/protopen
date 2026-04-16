@@ -105,6 +105,7 @@ func (app *application) signOutHandler(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) requireSessionUser(r *http.Request) (sessionUser, error) {
 	if user, err := app.authenticateBearer(r); err == nil {
+		user.IsAdmin = app.isAdmin(user.Email)
 		return user, nil
 	}
 
@@ -130,8 +131,18 @@ func (app *application) requireSessionUser(r *http.Request) (sessionUser, error)
 		return sessionUser{}, err
 	}
 	user.Orgs = orgs
+	user.IsAdmin = app.isAdmin(user.Email)
 
 	return user, nil
+}
+
+func (app *application) isAdmin(email string) bool {
+	for _, e := range app.adminEmails {
+		if strings.EqualFold(e, email) {
+			return true
+		}
+	}
+	return false
 }
 
 func (app *application) authenticateBearer(r *http.Request) (sessionUser, error) {

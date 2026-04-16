@@ -416,3 +416,56 @@ export async function createOrg(name: string, slug: string): Promise<OrgInfo> {
   return data.org
 }
 
+// ---- Admin ----
+
+export type AdminUser = {
+  id: string
+  email: string
+  name: string
+  username: string
+  emailVerifiedAt?: string | null
+  createdAt: string
+  orgId?: string | null
+  plan?: string | null
+}
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (response.status === 403) throw new Error('Forbidden')
+
+  const data = (await response.json()) as { users?: AdminUser[] }
+  return data.users ?? []
+}
+
+export async function adminUpdatePlan(orgId: string, plan: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/orgs/${orgId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not update plan')
+  }
+}
+
+export async function adminDeleteUser(userId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string }
+    throw new Error(data.error ?? 'Could not delete user')
+  }
+}
+

@@ -39,6 +39,7 @@ type application struct {
 
 	publishLimiter *rateLimiter
 	authLimiter    *rateLimiter
+	adminEmails    []string
 }
 
 type sessionUser struct {
@@ -48,6 +49,7 @@ type sessionUser struct {
 	Username        string     `json:"username"`
 	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
 	Orgs            []orgInfo  `json:"orgs"`
+	IsAdmin         bool       `json:"isAdmin,omitempty"`
 	isBearerToken   bool
 }
 
@@ -170,6 +172,15 @@ func main() {
 		log.Printf("email sending disabled (no RESEND_API_KEY)")
 	}
 
+	var adminEmails []string
+	if raw := getenv("ADMIN_EMAILS", ""); raw != "" {
+		for _, e := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(e); trimmed != "" {
+				adminEmails = append(adminEmails, trimmed)
+			}
+		}
+	}
+
 	app := &application{
 		db:             db,
 		store:          store,
@@ -180,6 +191,7 @@ func main() {
 		contentOrigin:  contentOrigin,
 		cookieDomain:   cookieDomain,
 		mailer:         mailer,
+		adminEmails:    adminEmails,
 	}
 	app.publishLimiter = newRateLimiter(5, 1*time.Hour)
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
@@ -212,6 +224,9 @@ func main() {
 	appMux.HandleFunc("/api/resend-verification", app.rateLimit(app.authLimiter, app.resendVerificationHandler))
 	appMux.HandleFunc("/api/forgot-password", app.rateLimit(app.authLimiter, app.forgotPasswordHandler))
 	appMux.HandleFunc("/api/reset-password", app.resetPasswordHandler)
+	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
+	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
+	appMux.HandleFunc("/api/admin/orgs/", app.adminOrgByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))

@@ -10,6 +10,7 @@ import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { OrgMembersPanel } from './OrgMembersPanel'
+import { AdminPanel } from './AdminPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -87,7 +88,7 @@ function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   )
 }
 
-type DashboardView = 'dashboard' | 'settings'
+type DashboardView = 'dashboard' | 'settings' | 'admin'
 
 type DashboardProps = {
   user: SessionUser
@@ -191,6 +192,11 @@ export function Dashboard({
               <DropdownMenuItem onClick={() => switchView('settings')}>
                 Settings
               </DropdownMenuItem>
+              {user.isAdmin && (
+                <DropdownMenuItem onClick={() => switchView('admin')}>
+                  Admin
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onSignOut()}>
                 Sign out
@@ -249,7 +255,9 @@ export function Dashboard({
           </div>
         ) : null}
 
-        {view === 'settings' ? (
+        {view === 'admin' && user.isAdmin ? (
+          <AdminPanel onSessionExpired={onSessionExpired} />
+        ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>

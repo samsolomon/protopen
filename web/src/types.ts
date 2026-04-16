@@ -18,6 +18,7 @@ export type SessionUser = {
   username: string
   emailVerifiedAt?: string | null
   orgs: OrgInfo[]
+  isAdmin?: boolean
 }
 
 export type OrgInfo = {
