@@ -49,8 +49,12 @@ func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request
 		SELECT u.id, u.email, u.name, u.username, u.email_verified_at, u.created_at,
 		       o.id, o.plan
 		FROM users u
-		LEFT JOIN org_members m ON m.user_id = u.id
-		LEFT JOIN organizations o ON o.id = m.org_id AND o.is_personal = true
+		LEFT JOIN LATERAL (
+			SELECT o.id, o.plan FROM org_members m
+			JOIN organizations o ON o.id = m.org_id AND o.is_personal = true
+			WHERE m.user_id = u.id
+			LIMIT 1
+		) o ON true
 		ORDER BY u.created_at DESC
 	`)
 	if err != nil {
@@ -92,8 +96,14 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Delete personal org (cascades to projects, deploys, org_members)
-	if _, err := app.db.Exec(r.Context(), `
+	tx, err := app.db.Begin(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete user"})
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	if _, err := tx.Exec(r.Context(), `
 		DELETE FROM organizations WHERE id IN (
 			SELECT o.id FROM organizations o
 			JOIN org_members m ON m.org_id = o.id
@@ -105,8 +115,7 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Delete user (cascades remaining org_members, sessions, tokens)
-	tag, err := app.db.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, userID)
+	tag, err := tx.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
 		log.Printf("admin delete user: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete user"})
@@ -114,6 +123,11 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 	}
 	if tag.RowsAffected() == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete user"})
 		return
 	}
 
