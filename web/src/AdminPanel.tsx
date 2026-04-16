@@ -117,10 +117,11 @@ export function AdminPanel({ onSessionExpired }: AdminPanelProps) {
                 {user.orgId ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 px-2">
+                      <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
                         <Badge variant="secondary" className="cursor-pointer">
                           {user.plan ?? 'tinkerer'}
                         </Badge>
+                        <svg className="size-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
