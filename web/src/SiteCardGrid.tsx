@@ -53,8 +53,6 @@ type SiteCardGridProps = {
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
-  canMakePrivate?: boolean
-  canRollback?: boolean
 }
 
 export function SiteCardGrid({
@@ -64,8 +62,6 @@ export function SiteCardGrid({
   onVisibilityToggle,
   onSitesChanged,
   onSessionExpired,
-  canMakePrivate,
-  canRollback,
 }: SiteCardGridProps) {
   const [historySite, setHistorySite] = useState<Site | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Site | null>(null)
@@ -144,22 +140,15 @@ export function SiteCardGrid({
                         Deploy history
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      {canMakePrivate ? (
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onVisibilityToggle(site.id, !site.isPublic)
-                          }}
-                        >
-                          {site.isPublic ? <Lock /> : <Globe />}
-                          {site.isPublic ? 'Make private' : 'Make public'}
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem disabled>
-                          <Globe />
-                          Upgrade to Pro for private sites
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onVisibilityToggle(site.id, !site.isPublic)
+                        }}
+                      >
+                        {site.isPublic ? <Lock /> : <Globe />}
+                        {site.isPublic ? 'Make private' : 'Make public'}
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
@@ -195,7 +184,6 @@ export function SiteCardGrid({
               projectId={historySite.id}
               onRollback={onSitesChanged}
               onSessionExpired={onSessionExpired}
-              canRollback={canRollback}
             />
           ) : null}
         </DialogContent>

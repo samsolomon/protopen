@@ -119,19 +119,6 @@ func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !*payload.IsPublic {
-		var plan string
-		if err := app.db.QueryRow(r.Context(), `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan); err != nil {
-			log.Printf("load org plan: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not check plan"})
-			return
-		}
-		if !getPlanLimits(plan).PrivateSites {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "private sites require a Pro or Team plan"})
-			return
-		}
-	}
-
 	commandTag, err := app.db.Exec(r.Context(), `
 		update sites set is_public = $1, updated_at = now()
 		where id = $2 and deleted_at is null and org_id = $3

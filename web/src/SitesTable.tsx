@@ -56,8 +56,6 @@ type SitesTableProps = {
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
-  canMakePrivate?: boolean
-  canRollback?: boolean
 }
 
 export function SitesTable({
@@ -67,8 +65,6 @@ export function SitesTable({
   onVisibilityToggle,
   onSitesChanged,
   onSessionExpired,
-  canMakePrivate,
-  canRollback,
 }: SitesTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<Site | null>(null)
@@ -168,35 +164,19 @@ export function SitesTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {canMakePrivate ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => onVisibilityToggle(site.id, !site.isPublic)}
-                              aria-label={site.isPublic ? 'Make private' : 'Make public'}
-                            >
-                              {site.isPublic ? <Globe /> : <Lock />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{site.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              disabled
-                              aria-label="Upgrade to Pro for private sites"
-                            >
-                              <Globe />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Upgrade to Pro for private sites</TooltipContent>
-                        </Tooltip>
-                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => onVisibilityToggle(site.id, !site.isPublic)}
+                            aria-label={site.isPublic ? 'Make private' : 'Make public'}
+                          >
+                            {site.isPublic ? <Globe /> : <Lock />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{site.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
+                      </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -222,7 +202,6 @@ export function SitesTable({
                         projectId={site.id}
                         onRollback={onSitesChanged}
                         onSessionExpired={onSessionExpired}
-                        canRollback={canRollback}
                       />
                     </TableCell>
                   </TableRow>

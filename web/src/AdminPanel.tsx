@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AdminUser, AdminProject } from './api'
-import { fetchAdminUsers, adminUpdatePlan, adminDeleteUser, fetchAdminProjects, adminDeleteProject, SessionExpiredError } from './api'
+import { fetchAdminUsers, adminDeleteUser, fetchAdminProjects, adminDeleteProject, SessionExpiredError } from './api'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -17,12 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 
@@ -86,17 +80,6 @@ export function AdminPanel({ onSessionExpired }: AdminPanelProps) {
     }
   }
 
-  const changePlan = async (user: AdminUser, plan: string) => {
-    if (!user.orgId) return
-    try {
-      await adminUpdatePlan(user.orgId, plan)
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, plan } : u)))
-    } catch (err) {
-      if (err instanceof SessionExpiredError) { onSessionExpired(); return }
-      setError(err instanceof Error ? err.message : 'Could not update plan')
-    }
-  }
-
   const confirmDeleteUser = async () => {
     if (!deleteUserTarget) return
     try {
@@ -145,7 +128,6 @@ export function AdminPanel({ onSessionExpired }: AdminPanelProps) {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Plan</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
@@ -155,33 +137,6 @@ export function AdminPanel({ onSessionExpired }: AdminPanelProps) {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.email}</TableCell>
                     <TableCell>{user.name}</TableCell>
-                    <TableCell>
-                      {user.orgId ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
-                              <Badge variant="secondary" className="cursor-pointer">
-                                {user.plan ?? 'tinkerer'}
-                              </Badge>
-                              <svg className="size-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            {['tinkerer', 'pro', 'team'].map((plan) => (
-                              <DropdownMenuItem
-                                key={plan}
-                                onClick={() => void changePlan(user, plan)}
-                                className={user.plan === plan ? 'font-medium' : ''}
-                              >
-                                {plan}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-muted-foreground">{user.createdAt}</TableCell>
                     <TableCell>
                       <Button

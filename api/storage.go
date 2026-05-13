@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, string, ...any) (pgx.Rows, error) }, userID string) ([]orgInfo, error) {
 	rows, err := db.Query(ctx, `
-		select o.id, o.slug, o.name, o.is_personal, m.role, o.plan
+		select o.id, o.slug, o.name, o.is_personal, m.role
 		from org_members m
 		join organizations o on o.id = m.org_id
 		where m.user_id = $1
@@ -27,7 +26,7 @@ func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, stri
 	var orgs []orgInfo
 	for rows.Next() {
 		var o orgInfo
-		if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.IsPersonal, &o.Role, &o.Plan); err != nil {
+		if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.IsPersonal, &o.Role); err != nil {
 			return nil, err
 		}
 		orgs = append(orgs, o)
@@ -160,25 +159,6 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 
 	payload := prepared.request
 
-	// Load plan limits for the org (anonymous orgs use defaults)
-	var limits planLimits
-	isOwnedOrg := orgID != sentinelOrgID
-	if isOwnedOrg {
-		var plan string
-		if err := tx.QueryRow(ctx, `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan); err != nil {
-			return site{}, fmt.Errorf("could not load organization")
-		}
-		limits = getPlanLimits(plan)
-
-		if plan == "team" {
-			var seatCount int
-			tx.QueryRow(ctx, `SELECT COUNT(*) FROM org_members WHERE org_id = $1`, orgID).Scan(&seatCount)
-			if seatCount > 0 {
-				limits.MaxStorageBytes *= int64(seatCount)
-			}
-		}
-	}
-
 	matches, err := exactNameMatches(ctx, tx, orgID, strings.TrimSpace(payload.Name))
 	if err != nil {
 		return site{}, err
@@ -201,16 +181,6 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 			return site{}, err
 		}
 	} else {
-		if isOwnedOrg && limits.MaxSites > 0 {
-			var siteCount int
-			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM sites WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&siteCount); err != nil {
-				return site{}, err
-			}
-			if siteCount >= limits.MaxSites {
-				return site{}, fmt.Errorf("site limit exceeded (%d sites)", limits.MaxSites)
-			}
-		}
-
 		slug, err := uniqueSlug(ctx, tx, orgID, slugify(payload.Name))
 		if err != nil {
 			return site{}, err
@@ -229,21 +199,6 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 			values ($1, $2, $3, $4, $5, $5)
 		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now); err != nil {
 			return site{}, err
-		}
-	}
-
-	if isOwnedOrg {
-		var currentStorage int64
-		if err := tx.QueryRow(ctx, `
-			SELECT COALESCE(SUM(d.size_bytes), 0)
-			FROM deploys d
-			JOIN sites p ON p.id = d.site_id
-			WHERE p.org_id = $1 AND p.deleted_at IS NULL
-		`, orgID).Scan(&currentStorage); err != nil {
-			return site{}, err
-		}
-		if currentStorage+totalSize > limits.MaxStorageBytes {
-			return site{}, fmt.Errorf("storage limit exceeded")
 		}
 	}
 
@@ -278,47 +233,8 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 		return site{}, err
 	}
 
-	var oldPrefixes []string
-	if isOwnedOrg && !limits.DeployHistory {
-		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE site_id = $1 AND id != $2`, entry.ID, deployID)
-		if err != nil {
-			return site{}, err
-		}
-		for rows.Next() {
-			var prefix string
-			if err := rows.Scan(&prefix); err != nil {
-				rows.Close()
-				return site{}, err
-			}
-			oldPrefixes = append(oldPrefixes, prefix)
-		}
-		rows.Close()
-
-		if _, err := tx.Exec(ctx, `DELETE FROM deploys WHERE site_id = $1 AND id != $2`, entry.ID, deployID); err != nil {
-			return site{}, err
-		}
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return site{}, err
-	}
-
-	// Clean up old deploy files from R2 in background
-	if app.store != nil && len(oldPrefixes) > 0 {
-		go func() {
-			for _, prefix := range oldPrefixes {
-				keys, err := app.store.listObjects(context.Background(), prefix+"/")
-				if err != nil {
-					log.Printf("cleanup old deploy list: %v", err)
-					continue
-				}
-				if len(keys) > 0 {
-					if err := app.store.deleteObjects(context.Background(), keys); err != nil {
-						log.Printf("cleanup old deploy delete: %v", err)
-					}
-				}
-			}
-		}()
 	}
 
 	var isPublic bool

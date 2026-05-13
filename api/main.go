@@ -59,7 +59,6 @@ type orgInfo struct {
 	Name       string `json:"name"`
 	IsPersonal bool   `json:"isPersonal"`
 	Role       string `json:"role"`
-	Plan       string `json:"plan"`
 }
 
 type authRequest struct {
@@ -226,7 +225,6 @@ func main() {
 	appMux.HandleFunc("/api/reset-password", app.resetPasswordHandler)
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
-	appMux.HandleFunc("/api/admin/orgs/", app.adminOrgByIDHandler)
 	appMux.HandleFunc("/api/admin/sites", app.adminSitesHandler)
 	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))

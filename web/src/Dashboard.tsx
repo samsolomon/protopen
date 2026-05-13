@@ -136,11 +136,6 @@ export function Dashboard({
     localStorage.getItem('velori-project-view') === 'list' ? 'list' : 'grid'
   )
 
-  const currentOrg = user.orgs.find(o => o.isPersonal)
-  const plan = currentOrg?.plan ?? 'tinkerer'
-  const canMakePrivate = plan === 'pro' || plan === 'team'
-  const canRollback = plan === 'pro' || plan === 'team'
-
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path)
   }
@@ -353,8 +348,6 @@ export function Dashboard({
                     onVisibilityToggle={onVisibilityToggle}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
-                    canMakePrivate={canMakePrivate}
-                    canRollback={canRollback}
                   />
                 ) : (
                   <SitesTable
@@ -364,8 +357,6 @@ export function Dashboard({
                     onVisibilityToggle={onVisibilityToggle}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
-                    canMakePrivate={canMakePrivate}
-                    canRollback={canRollback}
                   />
                 )
               )}

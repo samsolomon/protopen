@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -33,7 +32,6 @@ type adminUser struct {
 	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
 	CreatedAt       string     `json:"createdAt"`
 	OrgID           *string    `json:"orgId,omitempty"`
-	Plan            *string    `json:"plan,omitempty"`
 }
 
 func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -48,10 +46,10 @@ func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request
 
 	rows, err := app.db.Query(r.Context(), `
 		SELECT u.id, u.email, u.name, u.username, u.email_verified_at, u.created_at,
-		       o.id, o.plan
+		       o.id
 		FROM users u
 		LEFT JOIN LATERAL (
-			SELECT o.id, o.plan FROM org_members m
+			SELECT o.id FROM org_members m
 			JOIN organizations o ON o.id = m.org_id AND o.is_personal = true
 			WHERE m.user_id = u.id
 			LIMIT 1
@@ -69,7 +67,7 @@ func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var u adminUser
 		var createdAt time.Time
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Username, &u.EmailVerifiedAt, &createdAt, &u.OrgID, &u.Plan); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Username, &u.EmailVerifiedAt, &createdAt, &u.OrgID); err != nil {
 			log.Printf("admin scan user: %v", err)
 			continue
 		}
@@ -133,50 +131,6 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-func (app *application) adminOrgByIDHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if _, ok := app.requireAdmin(w, r); !ok {
-		return
-	}
-
-	orgID := strings.TrimPrefix(r.URL.Path, "/api/admin/orgs/")
-	orgID = strings.TrimRight(orgID, "/")
-	if orgID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "org ID is required"})
-		return
-	}
-
-	var payload struct {
-		Plan string `json:"plan"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
-		return
-	}
-
-	if _, ok := plans[payload.Plan]; !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid plan: must be tinkerer, pro, or team"})
-		return
-	}
-
-	tag, err := app.db.Exec(r.Context(), `UPDATE organizations SET plan = $1 WHERE id = $2`, payload.Plan, orgID)
-	if err != nil {
-		log.Printf("admin update org plan: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update plan"})
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "organization not found"})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "plan": payload.Plan})
 }
 
 type adminSite struct {
