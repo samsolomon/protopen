@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
-import { fetchSession, fetchProjects, postAuth, deleteProjectById, SessionExpiredError } from './api'
+import { fetchSession, fetchSites, postAuth, deleteSiteById, SessionExpiredError } from './api'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -72,37 +72,37 @@ describe('postAuth', () => {
 })
 
 
-describe('fetchProjects', () => {
-  it('returns projects on success', async () => {
-    const projects = [{ id: '1', name: 'Test', slug: 'test' }]
-    mockFetch.mockResolvedValue(jsonResponse(200, { projects }))
+describe('fetchSites', () => {
+  it('returns sites on success', async () => {
+    const sites = [{ id: '1', name: 'Test', slug: 'test' }]
+    mockFetch.mockResolvedValue(jsonResponse(200, { sites }))
 
-    const result = await fetchProjects()
-    expect(result).toEqual(projects)
+    const result = await fetchSites()
+    expect(result).toEqual(sites)
   })
 
   it('throws SessionExpiredError on 401', async () => {
     mockFetch.mockResolvedValue(jsonResponse(401, {}))
 
-    await expect(fetchProjects()).rejects.toBeInstanceOf(SessionExpiredError)
+    await expect(fetchSites()).rejects.toBeInstanceOf(SessionExpiredError)
   })
 
-  it('returns empty array when projects is null', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(200, { projects: null }))
+  it('returns empty array when sites is null', async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { sites: null }))
 
-    const result = await fetchProjects()
+    const result = await fetchSites()
     expect(result).toEqual([])
   })
 })
 
 
-describe('deleteProjectById', () => {
+describe('deleteSiteById', () => {
   it('succeeds on 200', async () => {
     mockFetch.mockResolvedValue(jsonResponse(200, {}))
 
-    await expect(deleteProjectById('proj_1')).resolves.toBeUndefined()
+    await expect(deleteSiteById('site_1')).resolves.toBeUndefined()
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/projects/proj_1'),
+      expect.stringContaining('/api/sites/site_1'),
       expect.objectContaining({ method: 'DELETE', credentials: 'include' }),
     )
   })
@@ -110,12 +110,12 @@ describe('deleteProjectById', () => {
   it('throws SessionExpiredError on 401', async () => {
     mockFetch.mockResolvedValue(jsonResponse(401, {}))
 
-    await expect(deleteProjectById('proj_1')).rejects.toBeInstanceOf(SessionExpiredError)
+    await expect(deleteSiteById('site_1')).rejects.toBeInstanceOf(SessionExpiredError)
   })
 
   it('throws with server error message on failure', async () => {
     mockFetch.mockResolvedValue(jsonResponse(403, { error: 'Not authorized' }))
 
-    await expect(deleteProjectById('proj_1')).rejects.toThrow('Not authorized')
+    await expect(deleteSiteById('site_1')).rejects.toThrow('Not authorized')
   })
 })

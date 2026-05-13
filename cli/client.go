@@ -19,12 +19,12 @@ type client struct {
 }
 
 type deployResult struct {
-	projectID string
-	liveURL   string
-	raw       string
+	siteID  string
+	liveURL string
+	raw     string
 }
 
-type projectInfo struct {
+type siteInfo struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
@@ -137,22 +137,22 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 	}
 
 	var result struct {
-		Project struct {
+		Site struct {
 			ID      string `json:"id"`
 			LiveURL string `json:"liveUrl"`
-		} `json:"project"`
+		} `json:"site"`
 	}
 	json.Unmarshal(respBody, &result)
 
 	return deployResult{
-		projectID: result.Project.ID,
-		liveURL:   result.Project.LiveURL,
-		raw:       string(respBody),
+		siteID:  result.Site.ID,
+		liveURL: result.Site.LiveURL,
+		raw:     string(respBody),
 	}, nil
 }
 
-func (c *client) listProjects(org string) ([]projectInfo, error) {
-	endpoint := c.baseURL + "/api/projects"
+func (c *client) listSites(org string) ([]siteInfo, error) {
+	endpoint := c.baseURL + "/api/sites"
 	if org != "" {
 		endpoint += "?org=" + org
 	}
@@ -176,13 +176,13 @@ func (c *client) listProjects(org string) ([]projectInfo, error) {
 	}
 
 	var result struct {
-		Projects []projectInfo `json:"projects"`
+		Sites []siteInfo `json:"sites"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	return result.Projects, nil
+	return result.Sites, nil
 }
 
 func (c *client) getSession() (userInfo, error) {
@@ -212,24 +212,24 @@ func (c *client) getSession() (userInfo, error) {
 	return result.User, nil
 }
 
-func (c *client) findProject(nameOrSlug string, org string) (projectInfo, error) {
-	projects, err := c.listProjects(org)
+func (c *client) findSite(nameOrSlug string, org string) (siteInfo, error) {
+	sites, err := c.listSites(org)
 	if err != nil {
-		return projectInfo{}, err
+		return siteInfo{}, err
 	}
 
 	nameOrSlug = strings.ToLower(strings.TrimSpace(nameOrSlug))
-	for _, p := range projects {
-		if strings.ToLower(p.Name) == nameOrSlug || strings.ToLower(p.Slug) == nameOrSlug {
-			return p, nil
+	for _, s := range sites {
+		if strings.ToLower(s.Name) == nameOrSlug || strings.ToLower(s.Slug) == nameOrSlug {
+			return s, nil
 		}
 	}
 
-	return projectInfo{}, fmt.Errorf("project %q not found", nameOrSlug)
+	return siteInfo{}, fmt.Errorf("site %q not found", nameOrSlug)
 }
 
-func (c *client) listDeploys(projectID string) ([]deployInfo, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/api/projects/"+projectID+"/deploys", nil)
+func (c *client) listDeploys(siteID string) ([]deployInfo, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/api/sites/"+siteID+"/deploys", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -258,9 +258,9 @@ func (c *client) listDeploys(projectID string) ([]deployInfo, error) {
 	return result.Deploys, nil
 }
 
-func (c *client) rollback(projectID string, deployID string) error {
+func (c *client) rollback(siteID string, deployID string) error {
 	body, _ := json.Marshal(map[string]string{"deployId": deployID})
-	req, err := http.NewRequest("POST", c.baseURL+"/api/projects/"+projectID+"/rollback", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", c.baseURL+"/api/sites/"+siteID+"/rollback", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -288,9 +288,9 @@ func (c *client) rollback(projectID string, deployID string) error {
 	return nil
 }
 
-func (c *client) updateVisibility(projectID string, isPublic bool) error {
+func (c *client) updateVisibility(siteID string, isPublic bool) error {
 	body, _ := json.Marshal(map[string]bool{"isPublic": isPublic})
-	req, err := http.NewRequest("PATCH", c.baseURL+"/api/projects/"+projectID, bytes.NewReader(body))
+	req, err := http.NewRequest("PATCH", c.baseURL+"/api/sites/"+siteID, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

@@ -200,7 +200,7 @@ func (app *application) deleteAccountHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Delete personal org first (cascades to projects), then delete user
+	// Delete personal org first (cascades to sites), then delete user
 	if _, err := app.db.Exec(r.Context(), `
 		delete from organizations where id in (
 			select o.id from organizations o

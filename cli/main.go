@@ -58,10 +58,10 @@ func printUsage() {
 
 Commands:
   deploy <path>                Deploy a folder or zip to Velori
-  list                         List your projects
-  deploys <name>               Show deploy history for a project
+  list                         List your sites
+  deploys <name>               Show deploy history for a site
   rollback <name> <deploy-id>  Roll back to a previous deploy
-  visibility <name> <public|private>  Set project visibility
+  visibility <name> <public|private>  Set site visibility
   token                        Show current token info
   login                        Authenticate and save your API token
   logout                       Remove saved token
@@ -74,9 +74,9 @@ Configuration:
 
 func cmdDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
-	name := fs.String("name", "", "Project name (defaults to directory/zip name)")
+	name := fs.String("name", "", "Site name (defaults to directory/zip name)")
 	label := fs.String("label", "", "Deploy label (e.g. 'v2 with new header')")
-	private := fs.Bool("private", false, "Make the project private after deploy")
+	private := fs.Bool("private", false, "Make the site private after deploy")
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
@@ -97,11 +97,11 @@ func cmdDeploy(args []string) {
 		os.Exit(1)
 	}
 
-	projectName := *name
-	if projectName == "" {
-		projectName = info.Name()
+	siteName := *name
+	if siteName == "" {
+		siteName = info.Name()
 		if !info.IsDir() {
-			projectName = stripZipExt(projectName)
+			siteName = stripZipExt(siteName)
 		}
 	}
 
@@ -110,9 +110,9 @@ func cmdDeploy(args []string) {
 
 	var result deployResult
 	if info.IsDir() {
-		result, err = client.deployDirectory(path, projectName, *label, resolvedOrg, git)
+		result, err = client.deployDirectory(path, siteName, *label, resolvedOrg, git)
 	} else {
-		result, err = client.deployZip(path, projectName, *label, resolvedOrg, git)
+		result, err = client.deployZip(path, siteName, *label, resolvedOrg, git)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -120,7 +120,7 @@ func cmdDeploy(args []string) {
 	}
 
 	if *private {
-		if err := client.updateVisibility(result.projectID, false); err != nil {
+		if err := client.updateVisibility(result.siteID, false); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: deployed but could not set private: %v\n", err)
 		}
 	}
@@ -151,18 +151,18 @@ func cmdList(args []string) {
 	fs.Parse(args)
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	projects, err := client.listProjects(resolveOrg(*org))
+	sites, err := client.listSites(resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(projects) == 0 {
-		fmt.Fprintln(os.Stderr, "no projects")
+	if len(sites) == 0 {
+		fmt.Fprintln(os.Stderr, "no sites")
 		return
 	}
 
-	for _, p := range projects {
+	for _, p := range sites {
 		vis := "public"
 		if !p.IsPublic {
 			vis = "private"
@@ -179,12 +179,12 @@ func cmdDeploys(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: velori deploys <project-name>")
+		fmt.Fprintln(os.Stderr, "usage: velori deploys <site-name>")
 		os.Exit(1)
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findProject(fs.Arg(0), resolveOrg(*org))
+	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -236,12 +236,12 @@ func cmdRollback(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: velori rollback <project-name> <deploy-id>")
+		fmt.Fprintln(os.Stderr, "usage: velori rollback <site-name> <deploy-id>")
 		os.Exit(1)
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findProject(fs.Arg(0), resolveOrg(*org))
+	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -341,11 +341,11 @@ func cmdVisibility(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: velori visibility <project-name> <public|private>")
+		fmt.Fprintln(os.Stderr, "usage: velori visibility <site-name> <public|private>")
 		os.Exit(1)
 	}
 
-	projectName := fs.Arg(0)
+	siteName := fs.Arg(0)
 	visibility := fs.Arg(1)
 
 	var isPublic bool
@@ -360,7 +360,7 @@ func cmdVisibility(args []string) {
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findProject(projectName, resolveOrg(*org))
+	proj, err := client.findSite(siteName, resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

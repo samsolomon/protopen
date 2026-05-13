@@ -60,11 +60,11 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.upsertProjectFromUpload(r.Context(), orgID, orgSlug, prepared)
+	result, err := app.upsertSiteFromUpload(r.Context(), orgID, orgSlug, prepared)
 	if err != nil {
 		cleanupPreparedUpload(prepared)
 		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "multiple existing projects") {
+		if strings.Contains(err.Error(), "multiple existing sites") {
 			status = http.StatusConflict
 		}
 
@@ -80,7 +80,7 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"message": "Upload staged and recorded.",
 		"status":  "queued",
-		"project": result,
+		"site":    result,
 	})
 }
 

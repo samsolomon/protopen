@@ -19,10 +19,10 @@ type claimRequest struct {
 }
 
 type claimResponse struct {
-	ProjectID string `json:"projectId"`
-	LiveURL   string `json:"liveUrl"`
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
+	SiteID  string `json:"siteId"`
+	LiveURL string `json:"liveUrl"`
+	Name    string `json:"name"`
+	Slug    string `json:"slug"`
 }
 
 func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +65,7 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		anonID         string
 		oldDeployID    string
-		oldProjectID   string
+		oldSiteID      string
 		claimTokenHash string
 		expiresAt      time.Time
 		claimedAt      *time.Time
@@ -74,13 +74,13 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 		fileCount      int
 	)
 	err = tx.QueryRow(ctx, `
-		select ad.id, ad.deploy_id, ad.project_id, ad.claim_token_hash,
+		select ad.id, ad.deploy_id, ad.site_id, ad.claim_token_hash,
 		       ad.expires_at, ad.claimed_at, d.storage_prefix, d.size_bytes, d.file_count
 		from anonymous_deploys ad
 		join deploys d on d.id = ad.deploy_id
 		where ad.slug = $1
 	`, payload.Slug).Scan(
-		&anonID, &oldDeployID, &oldProjectID, &claimTokenHash,
+		&anonID, &oldDeployID, &oldSiteID, &claimTokenHash,
 		&expiresAt, &claimedAt, &storagePrefix, &sizeBytes, &fileCount,
 	)
 	if err != nil {
@@ -106,7 +106,7 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 		name = payload.Slug
 	}
 
-	newProjectSlug, err := uniqueSlug(ctx, tx, orgID, slugify(name))
+	newSiteSlug, err := uniqueSlug(ctx, tx, orgID, slugify(name))
 	if err != nil {
 		log.Printf("unique slug (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -114,50 +114,50 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	newProjectID := generateID("proj")
+	newSiteID := generateID("site")
 
 	if _, err := tx.Exec(ctx, `
-		insert into projects (id, org_id, slug, name, is_public, created_at, updated_at)
+		insert into sites (id, org_id, slug, name, is_public, created_at, updated_at)
 		values ($1, $2, $3, $4, true, $5, $5)
-	`, newProjectID, orgID, newProjectSlug, name, now); err != nil {
-		log.Printf("insert project (claim): %v", err)
+	`, newSiteID, orgID, newSiteSlug, name, now); err != nil {
+		log.Printf("insert site (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	newDeployID := generateID("dep")
 	if _, err := tx.Exec(ctx, `
-		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at)
+		insert into deploys (id, site_id, status, size_bytes, file_count, storage_prefix, created_at)
 		values ($1, $2, 'validated', $3, $4, $5, $6)
-	`, newDeployID, newProjectID, sizeBytes, fileCount, storagePrefix, now); err != nil {
+	`, newDeployID, newSiteID, sizeBytes, fileCount, storagePrefix, now); err != nil {
 		log.Printf("insert deploy (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	if _, err := tx.Exec(ctx, `
-		update projects set current_deploy_id = $2, updated_at = $3 where id = $1
-	`, newProjectID, newDeployID, now); err != nil {
+		update sites set current_deploy_id = $2, updated_at = $3 where id = $1
+	`, newSiteID, newDeployID, now); err != nil {
 		log.Printf("set current deploy (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
-	// Repoint FKs to new project+deploy so old records can be deleted
+	// Repoint FKs to new site+deploy so old records can be deleted
 	if _, err := tx.Exec(ctx, `
 		update anonymous_deploys
-		set claimed_at = $4, deploy_id = $2, project_id = $3
+		set claimed_at = $4, deploy_id = $2, site_id = $3
 		where id = $1
-	`, anonID, newDeployID, newProjectID, now); err != nil {
+	`, anonID, newDeployID, newSiteID, now); err != nil {
 		log.Printf("mark claimed (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
-	// Hard-delete old project + deploy (FK-safe order)
+	// Hard-delete old site + deploy (FK-safe order)
 	if _, err := tx.Exec(ctx, `
-		update projects set current_deploy_id = null where id = $1
-	`, oldProjectID); err != nil {
+		update sites set current_deploy_id = null where id = $1
+	`, oldSiteID); err != nil {
 		log.Printf("null old current_deploy (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
@@ -169,8 +169,8 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := tx.Exec(ctx, `delete from projects where id = $1`, oldProjectID); err != nil {
-		log.Printf("delete old project (claim): %v", err)
+	if _, err := tx.Exec(ctx, `delete from sites where id = $1`, oldSiteID); err != nil {
+		log.Printf("delete old site (claim): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -182,9 +182,9 @@ func (app *application) claimHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, claimResponse{
-		ProjectID: newProjectID,
-		LiveURL:   fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, newProjectSlug),
-		Name:      name,
-		Slug:      newProjectSlug,
+		SiteID:  newSiteID,
+		LiveURL: fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, newSiteSlug),
+		Name:    name,
+		Slug:    newSiteSlug,
 	})
 }

@@ -179,7 +179,7 @@ func (app *application) adminOrgByIDHandler(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "plan": payload.Plan})
 }
 
-type adminProject struct {
+type adminSite struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Slug         string `json:"slug"`
@@ -192,7 +192,7 @@ type adminProject struct {
 	LiveURL      string `json:"liveUrl"`
 }
 
-func (app *application) adminProjectsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) adminSitesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -207,38 +207,38 @@ func (app *application) adminProjectsHandler(w http.ResponseWriter, r *http.Requ
 		       COUNT(d.id) as deploy_count,
 		       COALESCE(SUM(d.size_bytes), 0) as storage_bytes,
 		       o.slug, o.name, p.is_public
-		FROM projects p
+		FROM sites p
 		JOIN organizations o ON o.id = p.org_id
-		LEFT JOIN deploys d ON d.project_id = p.id
+		LEFT JOIN deploys d ON d.site_id = p.id
 		WHERE p.deleted_at IS NULL
 		GROUP BY p.id, o.slug, o.name
 		ORDER BY p.updated_at DESC
 		LIMIT 200
 	`)
 	if err != nil {
-		log.Printf("admin list projects: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load projects"})
+		log.Printf("admin list sites: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load sites"})
 		return
 	}
 	defer rows.Close()
 
-	var projects []adminProject
+	var sites []adminSite
 	for rows.Next() {
-		var p adminProject
+		var s adminSite
 		var updatedAt time.Time
-		if err := rows.Scan(&p.ID, &p.Name, &p.Slug, &updatedAt, &p.DeployCount, &p.StorageBytes, &p.OrgSlug, &p.OrgName, &p.IsPublic); err != nil {
-			log.Printf("admin scan project: %v", err)
+		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &updatedAt, &s.DeployCount, &s.StorageBytes, &s.OrgSlug, &s.OrgName, &s.IsPublic); err != nil {
+			log.Printf("admin scan site: %v", err)
 			continue
 		}
-		p.UpdatedAt = relativeTime(updatedAt)
-		p.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, p.OrgSlug, p.Slug)
-		projects = append(projects, p)
+		s.UpdatedAt = relativeTime(updatedAt)
+		s.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, s.OrgSlug, s.Slug)
+		sites = append(sites, s)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
 }
 
-func (app *application) adminProjectByIDHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) adminSiteByIDHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -248,24 +248,24 @@ func (app *application) adminProjectByIDHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	projectID := strings.TrimPrefix(r.URL.Path, "/api/admin/projects/")
-	projectID = strings.TrimRight(projectID, "/")
-	if projectID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project ID is required"})
+	siteID := strings.TrimPrefix(r.URL.Path, "/api/admin/sites/")
+	siteID = strings.TrimRight(siteID, "/")
+	if siteID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "site ID is required"})
 		return
 	}
 
 	tag, err := app.db.Exec(r.Context(), `
-		UPDATE projects SET deleted_at = now(), current_deploy_id = null, updated_at = now()
+		UPDATE sites SET deleted_at = now(), current_deploy_id = null, updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
-	`, projectID)
+	`, siteID)
 	if err != nil {
-		log.Printf("admin delete project: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+		log.Printf("admin delete site: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete site"})
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 		return
 	}
 

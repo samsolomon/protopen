@@ -117,34 +117,34 @@ func TestResolveAssetPathFallsBackToRootIndexForSpaRoute(t *testing.T) {
 	}
 }
 
-func TestParseProjectPath(t *testing.T) {
+func TestParseSitePath(t *testing.T) {
 	t.Parallel()
 
-	username, slug, deployID, assetPath, ok := parseProjectPath("/~sam/product-teardown/docs/index.html")
+	username, slug, deployID, assetPath, ok := parseSitePath("/~sam/product-teardown/docs/index.html")
 	if !ok {
-		t.Fatal("expected parseProjectPath to succeed")
+		t.Fatal("expected parseSitePath to succeed")
 	}
 	if username != "sam" || slug != "product-teardown" || deployID != "" || assetPath != "docs/index.html" {
 		t.Fatalf("unexpected parse result: %q %q %q %q", username, slug, deployID, assetPath)
 	}
 
 	// Versioned path
-	username, slug, deployID, assetPath, ok = parseProjectPath("/~sam/product-teardown/_v/dep_abc123/styles.css")
+	username, slug, deployID, assetPath, ok = parseSitePath("/~sam/product-teardown/_v/dep_abc123/styles.css")
 	if !ok {
-		t.Fatal("expected versioned parseProjectPath to succeed")
+		t.Fatal("expected versioned parseSitePath to succeed")
 	}
 	if username != "sam" || slug != "product-teardown" || deployID != "dep_abc123" || assetPath != "styles.css" {
 		t.Fatalf("unexpected versioned parse result: %q %q %q %q", username, slug, deployID, assetPath)
 	}
 
 	// Versioned root (no asset)
-	_, _, deployID, assetPath, ok = parseProjectPath("/~sam/product-teardown/_v/dep_abc123/")
+	_, _, deployID, assetPath, ok = parseSitePath("/~sam/product-teardown/_v/dep_abc123/")
 	if !ok || deployID != "dep_abc123" || assetPath != "" {
 		t.Fatalf("unexpected versioned root result: deployID=%q assetPath=%q ok=%v", deployID, assetPath, ok)
 	}
 
 	// Invalid: _v without deploy ID
-	_, _, _, _, ok = parseProjectPath("/~sam/product-teardown/_v/")
+	_, _, _, _, ok = parseSitePath("/~sam/product-teardown/_v/")
 	if ok {
 		t.Fatal("expected _v without deploy ID to fail")
 	}
@@ -163,44 +163,44 @@ func TestHashTokenIsDeterministic(t *testing.T) {
 	}
 }
 
-func TestCountForMatchReturnsOneForNewProject(t *testing.T) {
+func TestCountForMatchReturnsOneForNewSite(t *testing.T) {
 	t.Parallel()
 
 	got := countForMatch(nil)
 	if got != 1 {
-		t.Fatalf("expected new project deploy count 1, got %d", got)
+		t.Fatalf("expected new site deploy count 1, got %d", got)
 	}
 }
 
-func TestCountForMatchIncrementsExistingProjectDeploys(t *testing.T) {
+func TestCountForMatchIncrementsExistingSiteDeploys(t *testing.T) {
 	t.Parallel()
 
-	got := countForMatch([]projectRecord{{Deploys: 4}})
+	got := countForMatch([]siteRecord{{Deploys: 4}})
 	if got != 5 {
 		t.Fatalf("expected redeploy count 5, got %d", got)
 	}
 }
 
-func TestValidateProjectMatchCountAllowsZeroAndOneMatch(t *testing.T) {
+func TestValidateSiteMatchCountAllowsZeroAndOneMatch(t *testing.T) {
 	t.Parallel()
 
-	if err := validateProjectMatchCount(nil, "Prototype"); err != nil {
+	if err := validateSiteMatchCount(nil, "Prototype"); err != nil {
 		t.Fatalf("expected zero matches to be allowed, got %v", err)
 	}
 
-	if err := validateProjectMatchCount([]projectRecord{{ID: "proj_1"}}, "Prototype"); err != nil {
+	if err := validateSiteMatchCount([]siteRecord{{ID: "site_1"}}, "Prototype"); err != nil {
 		t.Fatalf("expected one exact match to be allowed, got %v", err)
 	}
 }
 
-func TestValidateProjectMatchCountRejectsMultipleMatches(t *testing.T) {
+func TestValidateSiteMatchCountRejectsMultipleMatches(t *testing.T) {
 	t.Parallel()
 
-	err := validateProjectMatchCount([]projectRecord{{ID: "proj_1"}, {ID: "proj_2"}}, "Prototype")
+	err := validateSiteMatchCount([]siteRecord{{ID: "site_1"}, {ID: "site_2"}}, "Prototype")
 	if err == nil {
 		t.Fatal("expected multiple exact matches to be rejected")
 	}
-	if !strings.Contains(err.Error(), "multiple existing projects match") {
+	if !strings.Contains(err.Error(), "multiple existing sites match") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -536,7 +536,7 @@ func TestParseAnonymousPath(t *testing.T) {
 		{"/singleword/", "", "", false},
 		{"/~sam/project", "", "", false},
 		{"/_internal/foo", "", "", false},
-		{"/api/projects", "", "", false},
+		{"/api/sites", "", "", false},
 		{"/healthz", "", "", false},
 		{"/", "", "", false},
 		{"", "", "", false},

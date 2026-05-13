@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { Project } from './types'
+import type { Site } from './types'
 import { DeployHistory } from './DeployHistory'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -49,29 +49,29 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-type ProjectsTableProps = {
-  projects: Project[]
-  deletingProjectID: string | null
-  onDelete: (projectID: string) => void
-  onVisibilityToggle: (projectID: string, isPublic: boolean) => void
-  onProjectsChanged: () => void
+type SitesTableProps = {
+  sites: Site[]
+  deletingSiteID: string | null
+  onDelete: (siteID: string) => void
+  onVisibilityToggle: (siteID: string, isPublic: boolean) => void
+  onSitesChanged: () => void
   onSessionExpired: () => void
   canMakePrivate?: boolean
   canRollback?: boolean
 }
 
-export function ProjectsTable({
-  projects,
-  deletingProjectID,
+export function SitesTable({
+  sites,
+  deletingSiteID,
   onDelete,
   onVisibilityToggle,
-  onProjectsChanged,
+  onSitesChanged,
   onSessionExpired,
   canMakePrivate,
   canRollback,
-}: ProjectsTableProps) {
+}: SitesTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Site | null>(null)
 
   const toggleExpand = (id: string) => {
     setExpandedRows((prev) => {
@@ -99,62 +99,62 @@ export function ProjectsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {projects.map((project) => {
-            const isExpanded = expandedRows.has(project.id)
-            const isDeleting = deletingProjectID === project.id
+          {sites.map((site) => {
+            const isExpanded = expandedRows.has(site.id)
+            const isDeleting = deletingSiteID === site.id
 
             return (
-              <Fragment key={project.id}>
+              <Fragment key={site.id}>
                 <TableRow>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        onClick={() => toggleExpand(project.id)}
+                        onClick={() => toggleExpand(site.id)}
                         aria-label={isExpanded ? 'Hide history' : 'Show history'}
                       >
                         {isExpanded ? <ChevronDown /> : <ChevronRight />}
                       </Button>
-                      <span className="block max-w-[200px] truncate">{project.name}</span>
+                      <span className="block max-w-[200px] truncate">{site.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <a
-                        href={project.liveUrl}
+                        href={site.liveUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 max-w-[260px] truncate text-primary underline-offset-4 hover:underline"
                       >
-                        <span className="truncate">{project.liveUrl}</span>
+                        <span className="truncate">{site.liveUrl}</span>
                         <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                       </a>
-                      <CopyButton text={project.liveUrl} />
+                      <CopyButton text={site.liveUrl} />
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="secondary">{project.deployCount}</Badge>
+                    <Badge variant="secondary">{site.deployCount}</Badge>
                   </TableCell>
                   <TableCell>
-                    {project.gitBranch ? (
+                    {site.gitBranch ? (
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <GitBranch className="size-3 shrink-0" />
-                        <span className="truncate max-w-[120px]">{project.gitBranch}</span>
-                        {project.gitCommitHash ? (
-                          project.gitRemoteURL ? (
+                        <span className="truncate max-w-[120px]">{site.gitBranch}</span>
+                        {site.gitCommitHash ? (
+                          site.gitRemoteURL ? (
                             <a
-                              href={commitURL(project.gitRemoteURL, project.gitCommitHash)}
+                              href={commitURL(site.gitRemoteURL, site.gitCommitHash)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="font-mono text-xs hover:underline"
-                              title={project.gitCommitHash}
+                              title={site.gitCommitHash}
                             >
-                              {project.gitCommitHash.slice(0, 8)}
+                              {site.gitCommitHash.slice(0, 8)}
                             </a>
                           ) : (
-                            <span className="font-mono text-xs" title={project.gitCommitHash}>
-                              {project.gitCommitHash.slice(0, 8)}
+                            <span className="font-mono text-xs" title={site.gitCommitHash}>
+                              {site.gitCommitHash.slice(0, 8)}
                             </span>
                           )
                         ) : null}
@@ -164,7 +164,7 @@ export function ProjectsTable({
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {project.updatedAt}
+                    {site.updatedAt}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -174,13 +174,13 @@ export function ProjectsTable({
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={() => onVisibilityToggle(project.id, !project.isPublic)}
-                              aria-label={project.isPublic ? 'Make private' : 'Make public'}
+                              onClick={() => onVisibilityToggle(site.id, !site.isPublic)}
+                              aria-label={site.isPublic ? 'Make private' : 'Make public'}
                             >
-                              {project.isPublic ? <Globe /> : <Lock />}
+                              {site.isPublic ? <Globe /> : <Lock />}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>{project.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
+                          <TooltipContent>{site.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
                         </Tooltip>
                       ) : (
                         <Tooltip>
@@ -204,8 +204,8 @@ export function ProjectsTable({
                             size="icon-xs"
                             className="hover:bg-destructive/10 hover:text-destructive"
                             disabled={isDeleting}
-                            onClick={() => setDeleteTarget(project)}
-                            aria-label="Delete project"
+                            onClick={() => setDeleteTarget(site)}
+                            aria-label="Delete site"
                           >
                             <Trash2 />
                           </Button>
@@ -219,8 +219,8 @@ export function ProjectsTable({
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={6} className="bg-muted/30 px-4 py-3">
                       <DeployHistory
-                        projectId={project.id}
-                        onRollback={onProjectsChanged}
+                        projectId={site.id}
+                        onRollback={onSitesChanged}
                         onSessionExpired={onSessionExpired}
                         canRollback={canRollback}
                       />
@@ -235,7 +235,7 @@ export function ProjectsTable({
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete project</DialogTitle>
+            <DialogTitle>Delete site</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete <span className="font-medium text-foreground">{deleteTarget?.name}</span>? This action cannot be undone.
             </DialogDescription>

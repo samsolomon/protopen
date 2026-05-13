@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Project, SessionUser } from './types'
-import { fetchSession, fetchProjects, postSignOut, deleteProjectById, updateProjectVisibility, verifyEmail, SessionExpiredError } from './api'
+import type { Site, SessionUser } from './types'
+import { fetchSession, fetchSites, postSignOut, deleteSiteById, updateProjectVisibility, verifyEmail, SessionExpiredError } from './api'
 import { AuthPage } from './AuthPage'
 import { CLIAuthPage } from './CLIAuthPage'
 import { DeviceAuthPage } from './DeviceAuthPage'
@@ -13,10 +13,10 @@ const isDeviceAuth = window.location.pathname === '/auth/device'
 function App() {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
-  const [projects, setProjects] = useState<Project[]>([])
+  const [sites, setSites] = useState<Site[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [deletingProjectID, setDeletingProjectID] = useState<string | null>(null)
+  const [deletingSiteID, setDeletingSiteID] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -35,12 +35,12 @@ function App() {
 
   useEffect(() => {
     if (!user) {
-      setProjects([])
+      setSites([])
       setIsLoading(false)
       return
     }
 
-    void loadProjects()
+    void loadSites()
   }, [user?.id])
 
   const loadSession = async () => {
@@ -55,18 +55,18 @@ function App() {
     }
   }
 
-  const loadProjects = async () => {
+  const loadSites = async () => {
     try {
       setIsLoading(true)
-      const loaded = await fetchProjects()
-      setProjects(loaded)
+      const loaded = await fetchSites()
+      setSites(loaded)
       setError(null)
     } catch (loadError) {
       if (loadError instanceof SessionExpiredError) {
         setUser(null)
         return
       }
-      setError(loadError instanceof Error ? loadError.message : 'Could not load projects')
+      setError(loadError instanceof Error ? loadError.message : 'Could not load sites')
     } finally {
       setIsLoading(false)
     }
@@ -75,37 +75,37 @@ function App() {
   const signOut = async () => {
     await postSignOut()
     setUser(null)
-    setProjects([])
+    setSites([])
     setError(null)
   }
 
-  const deleteProject = async (projectID: string) => {
+  const deleteSite = async (siteID: string) => {
     try {
-      setDeletingProjectID(projectID)
+      setDeletingSiteID(siteID)
       setError(null)
-      await deleteProjectById(projectID)
-      setProjects((current) => current.filter((project) => project.id !== projectID))
+      await deleteSiteById(siteID)
+      setSites((current) => current.filter((site) => site.id !== siteID))
     } catch (deleteError) {
       if (deleteError instanceof SessionExpiredError) {
         setUser(null)
       }
-      setError(deleteError instanceof Error ? deleteError.message : 'Could not delete project')
+      setError(deleteError instanceof Error ? deleteError.message : 'Could not delete site')
     } finally {
-      setDeletingProjectID(null)
+      setDeletingSiteID(null)
     }
   }
 
-  const toggleVisibility = async (projectID: string, isPublic: boolean) => {
-    setProjects((current) => current.map((p) => (p.id === projectID ? { ...p, isPublic } : p)))
+  const toggleVisibility = async (siteID: string, isPublic: boolean) => {
+    setSites((current) => current.map((s) => (s.id === siteID ? { ...s, isPublic } : s)))
     try {
-      await updateProjectVisibility(projectID, isPublic)
+      await updateProjectVisibility(siteID, isPublic)
     } catch (toggleError) {
       if (toggleError instanceof SessionExpiredError) {
         setUser(null)
         return
       }
-      setProjects((current) => current.map((p) => (p.id === projectID ? { ...p, isPublic: !isPublic } : p)))
-      setError(toggleError instanceof Error ? toggleError.message : 'Could not update project')
+      setSites((current) => current.map((s) => (s.id === siteID ? { ...s, isPublic: !isPublic } : s)))
+      setError(toggleError instanceof Error ? toggleError.message : 'Could not update site')
     }
   }
 
@@ -130,16 +130,16 @@ function App() {
     content = (
       <Dashboard
         user={user}
-        projects={projects}
+        sites={sites}
         isLoading={isLoading}
-        deletingProjectID={deletingProjectID}
+        deletingSiteID={deletingSiteID}
         error={error}
         setError={setError}
         onSignOut={() => void signOut()}
         onUserUpdated={setUser}
-        onDeleteProject={(id) => void deleteProject(id)}
+        onDeleteSite={(id) => void deleteSite(id)}
         onVisibilityToggle={(id, isPublic) => void toggleVisibility(id, isPublic)}
-        onProjectsChanged={() => void loadProjects()}
+        onSitesChanged={() => void loadSites()}
         onSessionExpired={handleSessionExpired}
       />
     )

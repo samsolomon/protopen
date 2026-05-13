@@ -35,18 +35,18 @@ func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, stri
 	return orgs, rows.Err()
 }
 
-func (app *application) projectOrgID(ctx context.Context, projectID string) (string, error) {
+func (app *application) siteOrgID(ctx context.Context, siteID string) (string, error) {
 	var orgID string
-	err := app.db.QueryRow(ctx, `select org_id from projects where id = $1 and deleted_at is null`, projectID).Scan(&orgID)
+	err := app.db.QueryRow(ctx, `select org_id from sites where id = $1 and deleted_at is null`, siteID).Scan(&orgID)
 	return orgID, err
 }
 
-// requireProjectAccess looks up which org owns a project and verifies the user is a member.
+// requireSiteAccess looks up which org owns a site and verifies the user is a member.
 // Returns orgID and role, or an error distinguishing "not found" from "not a member".
-func (app *application) requireProjectAccess(ctx context.Context, user sessionUser, projectID string) (string, string, error) {
-	orgID, err := app.projectOrgID(ctx, projectID)
+func (app *application) requireSiteAccess(ctx context.Context, user sessionUser, siteID string) (string, string, error) {
+	orgID, err := app.siteOrgID(ctx, siteID)
 	if err != nil {
-		return "", "", fmt.Errorf("project not found")
+		return "", "", fmt.Errorf("site not found")
 	}
 	role, ok := orgRole(user, orgID)
 	if !ok {
@@ -89,20 +89,20 @@ func resolveOrgFromParam(user sessionUser, orgParam string) (string, string, err
 	return "", "", fmt.Errorf("organization not found")
 }
 
-func (app *application) listProjects(ctx context.Context, orgID string) ([]project, error) {
+func (app *application) listSites(ctx context.Context, orgID string) ([]site, error) {
 	rows, err := app.db.Query(ctx, `
 		select
 			p.id,
 			p.name,
 			p.slug,
 			p.updated_at,
-			(select count(*) from deploys where project_id = p.id) as deploy_count,
+			(select count(*) from deploys where site_id = p.id) as deploy_count,
 			o.slug,
 			p.is_public,
 			cd.git_branch,
 			cd.git_commit_hash,
 			cd.git_remote_url
-		from projects p
+		from sites p
 		join organizations o on o.id = p.org_id
 		left join deploys cd on cd.id = p.current_deploy_id
 		where p.org_id = $1 and p.deleted_at is null
@@ -113,10 +113,10 @@ func (app *application) listProjects(ctx context.Context, orgID string) ([]proje
 	}
 	defer rows.Close()
 
-	var projects []project
+	var sites []site
 	for rows.Next() {
 		var (
-			entry       project
+			entry       site
 			updatedAt   time.Time
 			orgSlug     string
 			deployCount int64
@@ -130,20 +130,20 @@ func (app *application) listProjects(ctx context.Context, orgID string) ([]proje
 		entry.DeployCount = int(deployCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
 		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, entry.Slug)
-		projects = append(projects, entry)
+		sites = append(sites, entry)
 	}
 
-	return projects, rows.Err()
+	return sites, rows.Err()
 }
 
-func (app *application) deleteProject(ctx context.Context, orgID string, projectID string) (bool, error) {
+func (app *application) deleteSite(ctx context.Context, orgID string, siteID string) (bool, error) {
 	commandTag, err := app.db.Exec(ctx, `
-		update projects
+		update sites
 		set deleted_at = now(), current_deploy_id = null, updated_at = now()
 		where id = $1
 		  and deleted_at is null
 		  and org_id = $2
-	`, projectID, orgID)
+	`, siteID, orgID)
 	if err != nil {
 		return false, err
 	}
@@ -151,10 +151,10 @@ func (app *application) deleteProject(ctx context.Context, orgID string, project
 	return commandTag.RowsAffected() > 0, nil
 }
 
-func (app *application) upsertProjectFromUpload(ctx context.Context, orgID string, orgSlug string, prepared preparedUpload) (project, error) {
+func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, orgSlug string, prepared preparedUpload) (site, error) {
 	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return project{}, err
+		return site{}, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -166,7 +166,7 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	if isOwnedOrg {
 		var plan string
 		if err := tx.QueryRow(ctx, `SELECT plan FROM organizations WHERE id = $1`, orgID).Scan(&plan); err != nil {
-			return project{}, fmt.Errorf("could not load organization")
+			return site{}, fmt.Errorf("could not load organization")
 		}
 		limits = getPlanLimits(plan)
 
@@ -181,11 +181,11 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 
 	matches, err := exactNameMatches(ctx, tx, orgID, strings.TrimSpace(payload.Name))
 	if err != nil {
-		return project{}, err
+		return site{}, err
 	}
 
-	if err := validateProjectMatchCount(matches, payload.Name); err != nil {
-		return project{}, err
+	if err := validateSiteMatchCount(matches, payload.Name); err != nil {
+		return site{}, err
 	}
 
 	totalSize := int64(0)
@@ -194,30 +194,30 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	}
 
 	now := time.Now().UTC()
-	var entry projectRecord
+	var entry siteRecord
 	if len(matches) == 1 {
 		entry = matches[0]
-		if _, err := tx.Exec(ctx, `update projects set updated_at = $2 where id = $1`, entry.ID, now); err != nil {
-			return project{}, err
+		if _, err := tx.Exec(ctx, `update sites set updated_at = $2 where id = $1`, entry.ID, now); err != nil {
+			return site{}, err
 		}
 	} else {
-		if isOwnedOrg && limits.MaxProjects > 0 {
-			var projectCount int
-			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&projectCount); err != nil {
-				return project{}, err
+		if isOwnedOrg && limits.MaxSites > 0 {
+			var siteCount int
+			if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM sites WHERE org_id = $1 AND deleted_at IS NULL`, orgID).Scan(&siteCount); err != nil {
+				return site{}, err
 			}
-			if projectCount >= limits.MaxProjects {
-				return project{}, fmt.Errorf("site limit exceeded (%d sites)", limits.MaxProjects)
+			if siteCount >= limits.MaxSites {
+				return site{}, fmt.Errorf("site limit exceeded (%d sites)", limits.MaxSites)
 			}
 		}
 
 		slug, err := uniqueSlug(ctx, tx, orgID, slugify(payload.Name))
 		if err != nil {
-			return project{}, err
+			return site{}, err
 		}
 
-		entry = projectRecord{
-			ID:      generateID("proj"),
+		entry = siteRecord{
+			ID:      generateID("site"),
 			OrgID:   orgID,
 			Name:    strings.TrimSpace(payload.Name),
 			Slug:    slug,
@@ -225,10 +225,10 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		}
 
 		if _, err := tx.Exec(ctx, `
-			insert into projects (id, org_id, slug, name, created_at, updated_at)
+			insert into sites (id, org_id, slug, name, created_at, updated_at)
 			values ($1, $2, $3, $4, $5, $5)
 		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now); err != nil {
-			return project{}, err
+			return site{}, err
 		}
 	}
 
@@ -237,13 +237,13 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 		if err := tx.QueryRow(ctx, `
 			SELECT COALESCE(SUM(d.size_bytes), 0)
 			FROM deploys d
-			JOIN projects p ON p.id = d.project_id
+			JOIN sites p ON p.id = d.site_id
 			WHERE p.org_id = $1 AND p.deleted_at IS NULL
 		`, orgID).Scan(&currentStorage); err != nil {
-			return project{}, err
+			return site{}, err
 		}
 		if currentStorage+totalSize > limits.MaxStorageBytes {
-			return project{}, fmt.Errorf("storage limit exceeded")
+			return site{}, fmt.Errorf("storage limit exceeded")
 		}
 	}
 
@@ -262,45 +262,45 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	gitAuthor := stringPtr(payload.GitAuthor)
 	gitRemoteURL := stringPtr(payload.GitRemoteURL)
 	if _, err := tx.Exec(ctx, `
-		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at, label,
+		insert into deploys (id, site_id, status, size_bytes, file_count, storage_prefix, created_at, label,
 			git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`, deployID, entry.ID, "validated", totalSize, len(payload.Files), storagePrefix, now, label,
 		gitCommitHash, gitBranch, gitCommitMessage, payload.GitDirty, gitAuthor, gitRemoteURL); err != nil {
-		return project{}, err
+		return site{}, err
 	}
 
 	if _, err := tx.Exec(ctx, `
-		update projects
+		update sites
 		set current_deploy_id = $2, updated_at = $3
 		where id = $1
 	`, entry.ID, deployID, now); err != nil {
-		return project{}, err
+		return site{}, err
 	}
 
 	var oldPrefixes []string
 	if isOwnedOrg && !limits.DeployHistory {
-		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID)
+		rows, err := tx.Query(ctx, `SELECT storage_prefix FROM deploys WHERE site_id = $1 AND id != $2`, entry.ID, deployID)
 		if err != nil {
-			return project{}, err
+			return site{}, err
 		}
 		for rows.Next() {
 			var prefix string
 			if err := rows.Scan(&prefix); err != nil {
 				rows.Close()
-				return project{}, err
+				return site{}, err
 			}
 			oldPrefixes = append(oldPrefixes, prefix)
 		}
 		rows.Close()
 
-		if _, err := tx.Exec(ctx, `DELETE FROM deploys WHERE project_id = $1 AND id != $2`, entry.ID, deployID); err != nil {
-			return project{}, err
+		if _, err := tx.Exec(ctx, `DELETE FROM deploys WHERE site_id = $1 AND id != $2`, entry.ID, deployID); err != nil {
+			return site{}, err
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return project{}, err
+		return site{}, err
 	}
 
 	// Clean up old deploy files from R2 in background
@@ -322,9 +322,9 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	}
 
 	var isPublic bool
-	app.db.QueryRow(ctx, `select is_public from projects where id = $1`, entry.ID).Scan(&isPublic)
+	app.db.QueryRow(ctx, `select is_public from sites where id = $1`, entry.ID).Scan(&isPublic)
 
-	return project{
+	return site{
 		ID:          entry.ID,
 		Name:        entry.Name,
 		Slug:        entry.Slug,
@@ -335,12 +335,12 @@ func (app *application) upsertProjectFromUpload(ctx context.Context, orgID strin
 	}, nil
 }
 
-func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]projectRecord, error) {
+func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]siteRecord, error) {
 	rows, err := tx.Query(ctx, `
 		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count
-		from projects p
+		from sites p
 		join organizations o on o.id = p.org_id
-		left join deploys d on d.project_id = p.id
+		left join deploys d on d.site_id = p.id
 		where p.org_id = $1 and p.name = $2 and p.deleted_at is null
 		group by p.id, o.slug
 		order by p.updated_at desc
@@ -350,9 +350,9 @@ func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string)
 	}
 	defer rows.Close()
 
-	var matches []projectRecord
+	var matches []siteRecord
 	for rows.Next() {
-		var entry projectRecord
+		var entry siteRecord
 		var deployCount int64
 		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount); err != nil {
 			return nil, err
@@ -387,7 +387,7 @@ func uniqueSlug(ctx context.Context, tx pgx.Tx, orgID string, base string) (stri
 		var exists bool
 		if err := tx.QueryRow(ctx, `
 			select exists(
-				select 1 from projects where org_id = $1 and slug = $2 and deleted_at is null
+				select 1 from sites where org_id = $1 and slug = $2 and deleted_at is null
 			)
 		`, orgID, slug).Scan(&exists); err != nil {
 			return "", err

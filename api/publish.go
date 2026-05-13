@@ -126,7 +126,7 @@ func (app *application) publishHandler(w http.ResponseWriter, r *http.Request) {
 	if err := app.db.QueryRow(r.Context(), `
 		SELECT COALESCE(SUM(d.size_bytes), 0)
 		FROM deploys d
-		JOIN projects p ON p.id = d.project_id
+		JOIN sites p ON p.id = d.site_id
 		WHERE p.org_id = $1
 	`, sentinelOrgID).Scan(&anonStorage); err != nil {
 		log.Printf("anonymous storage check: %v", err)
@@ -166,14 +166,14 @@ func (app *application) publishHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	projectID := generateID("proj")
-	projectName := strings.TrimSpace(prepared.request.Name)
+	siteID := generateID("site")
+	siteName := strings.TrimSpace(prepared.request.Name)
 
 	if _, err := tx.Exec(r.Context(), `
-		insert into projects (id, org_id, slug, name, is_public, created_at, updated_at)
+		insert into sites (id, org_id, slug, name, is_public, created_at, updated_at)
 		values ($1, $2, $3, $4, true, $5, $5)
-	`, projectID, sentinelOrgID, slug, projectName, now); err != nil {
-		log.Printf("insert project (anonymous): %v", err)
+	`, siteID, sentinelOrgID, slug, siteName, now); err != nil {
+		log.Printf("insert site (anonymous): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -185,17 +185,17 @@ func (app *application) publishHandler(w http.ResponseWriter, r *http.Request) {
 
 	deployID := generateID("dep")
 	if _, err := tx.Exec(r.Context(), `
-		insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at)
+		insert into deploys (id, site_id, status, size_bytes, file_count, storage_prefix, created_at)
 		values ($1, $2, 'validated', $3, $4, $5, $6)
-	`, deployID, projectID, totalSize, len(prepared.request.Files), storagePrefix, now); err != nil {
+	`, deployID, siteID, totalSize, len(prepared.request.Files), storagePrefix, now); err != nil {
 		log.Printf("insert deploy (anonymous): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	if _, err := tx.Exec(r.Context(), `
-		update projects set current_deploy_id = $2, updated_at = $3 where id = $1
-	`, projectID, deployID, now); err != nil {
+		update sites set current_deploy_id = $2, updated_at = $3 where id = $1
+	`, siteID, deployID, now); err != nil {
 		log.Printf("set current deploy (anonymous): %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
@@ -203,9 +203,9 @@ func (app *application) publishHandler(w http.ResponseWriter, r *http.Request) {
 
 	anonID := generateID("anon")
 	if _, err := tx.Exec(r.Context(), `
-		insert into anonymous_deploys (id, slug, deploy_id, project_id, claim_token_hash, expires_at, created_at)
+		insert into anonymous_deploys (id, slug, deploy_id, site_id, claim_token_hash, expires_at, created_at)
 		values ($1, $2, $3, $4, $5, $6, $7)
-	`, anonID, slug, deployID, projectID, hashToken(claimToken), expiresAt, now); err != nil {
+	`, anonID, slug, deployID, siteID, hashToken(claimToken), expiresAt, now); err != nil {
 		log.Printf("insert anonymous_deploys: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return

@@ -68,7 +68,7 @@ type authRequest struct {
 	Name     string `json:"name,omitempty"`
 }
 
-type project struct {
+type site struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	Slug          string  `json:"slug"`
@@ -106,7 +106,7 @@ type preparedUpload struct {
 	normalizedTo string
 }
 
-type projectRecord struct {
+type siteRecord struct {
 	ID      string
 	OrgID   string
 	Name    string
@@ -116,11 +116,11 @@ type projectRecord struct {
 }
 
 type liveDeploy struct {
-	projectID   string
-	deployID    string
-	siteRoot    string
-	isPublic    bool
-	projectName string
+	siteID   string
+	deployID string
+	siteRoot string
+	isPublic bool
+	siteName string
 }
 
 func main() {
@@ -212,8 +212,8 @@ func main() {
 	appMux.HandleFunc("/api/sign-in", app.rateLimit(app.authLimiter, app.signInHandler))
 	appMux.HandleFunc("/api/sign-up", app.rateLimit(app.authLimiter, app.signUpHandler))
 	appMux.HandleFunc("/api/sign-out", app.signOutHandler)
-	appMux.HandleFunc("/api/projects", app.projectsHandler)
-	appMux.HandleFunc("/api/projects/", app.projectByIDHandler)
+	appMux.HandleFunc("/api/sites", app.sitesHandler)
+	appMux.HandleFunc("/api/sites/", app.siteByIDHandler)
 	appMux.HandleFunc("/api/uploads", app.uploadsHandler)
 	appMux.HandleFunc("/api/tokens", app.tokensHandler)
 	appMux.HandleFunc("/api/tokens/", app.tokenByIDHandler)
@@ -227,8 +227,8 @@ func main() {
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
 	appMux.HandleFunc("/api/admin/orgs/", app.adminOrgByIDHandler)
-	appMux.HandleFunc("/api/admin/projects", app.adminProjectsHandler)
-	appMux.HandleFunc("/api/admin/projects/", app.adminProjectByIDHandler)
+	appMux.HandleFunc("/api/admin/sites", app.adminSitesHandler)
+	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
 	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))
@@ -236,10 +236,10 @@ func main() {
 	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))
 	appMux.HandleFunc("/skill/SKILL.md", serveSkillFile(skillMD, "text/markdown; charset=utf-8"))
 	appMux.HandleFunc("/skill/scripts/publish.sh", serveSkillFile(publishScript, "text/plain; charset=utf-8"))
-	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveProjectHandler)))
+	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveSiteHandler)))
 
 	contentMux := http.NewServeMux()
-	contentMux.HandleFunc("/", app.serveProjectHandler)
+	contentMux.HandleFunc("/", app.serveSiteHandler)
 
 	if listenAddr != "" {
 		addr := ":" + listenAddr
@@ -270,7 +270,7 @@ func main() {
 		return
 	}
 
-	// Local dev mode: serve content on app port so session cookie works for private projects
+	// Local dev mode: serve content on app port so session cookie works for private sites
 	if os.Getenv("PUBLIC_CONTENT_URL") == "" {
 		app.contentBaseURL = "http://localhost" + appListenAddr
 	}

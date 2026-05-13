@@ -55,13 +55,13 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		}
 	}
 
-	var projectCount int
-	if err := tx.QueryRow(ctx, `select count(*) from projects where org_id = $1 and deleted_at is null`, orgID).Scan(&projectCount); err != nil {
+	var siteCount int
+	if err := tx.QueryRow(ctx, `select count(*) from sites where org_id = $1 and deleted_at is null`, orgID).Scan(&siteCount); err != nil {
 		return err
 	}
 
-	if projectCount == 0 {
-		seedProjects := []struct {
+	if siteCount == 0 {
+		seedSites := []struct {
 			name, slug string
 			deploys    int
 			commits    []seedCommit
@@ -95,8 +95,8 @@ func (app *application) seedDemoData(ctx context.Context) error {
 			}},
 		}
 
-		for _, sp := range seedProjects {
-			if err := insertSeedProject(ctx, tx, orgID, username, app.contentBaseURL, sp.name, sp.slug, sp.deploys, app.ingestRoot, sp.commits); err != nil {
+		for _, sp := range seedSites {
+			if err := insertSeedSite(ctx, tx, orgID, username, app.contentBaseURL, sp.name, sp.slug, sp.deploys, app.ingestRoot, sp.commits); err != nil {
 				return err
 			}
 		}
@@ -185,13 +185,13 @@ type seedCommit struct {
 	dirty                         bool
 }
 
-func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string, commits []seedCommit) error {
-	projectID := generateID("proj")
+func insertSeedSite(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string, contentBaseURL string, name string, slug string, deployCount int, ingestRoot string, commits []seedCommit) error {
+	siteID := generateID("site")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
 	if _, err := tx.Exec(ctx, `
-		insert into projects (id, org_id, slug, name, created_at, updated_at)
+		insert into sites (id, org_id, slug, name, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $5)
-	`, projectID, orgID, slug, name, now); err != nil {
+	`, siteID, orgID, slug, name, now); err != nil {
 		return err
 	}
 
@@ -207,10 +207,10 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug str
 		}
 		commit := commits[index%len(commits)]
 		if _, err := tx.Exec(ctx, `
-			insert into deploys (id, project_id, status, size_bytes, file_count, storage_prefix, created_at,
+			insert into deploys (id, site_id, status, size_bytes, file_count, storage_prefix, created_at,
 				git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url)
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		`, deployID, projectID, "seeded", int64(250000+index*12000), 5+index, seedRoot, deployTime,
+		`, deployID, siteID, "seeded", int64(250000+index*12000), 5+index, seedRoot, deployTime,
 			commit.hash, commit.branch, commit.message, commit.dirty, commit.author, seedRemoteURL); err != nil {
 			return err
 		}
@@ -218,10 +218,10 @@ func insertSeedProject(ctx context.Context, tx pgx.Tx, orgID string, orgSlug str
 	}
 
 	if _, err := tx.Exec(ctx, `
-		update projects
+		update sites
 		set current_deploy_id = $2, updated_at = $3
 		where id = $1
-	`, projectID, latestDeployID, now.Add(time.Duration(deployCount-1)*time.Hour)); err != nil {
+	`, siteID, latestDeployID, now.Add(time.Duration(deployCount-1)*time.Hour)); err != nil {
 		return err
 	}
 
@@ -316,7 +316,7 @@ footer { border-top: 1px solid #e4e4e7; padding: 24px; text-align: center; color
       </div>
     </section>
     <footer>
-      <p>%s &middot; Seed project v%d</p>
+      <p>%s &middot; Seed site v%d</p>
     </footer>
   </body>
 </html>

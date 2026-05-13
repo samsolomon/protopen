@@ -17,7 +17,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 				app.cleanupExpiredAnonymousDeploys(ctx)
 				app.cleanupExpiredTokens(ctx)
 				app.cleanupExpiredDeviceCodes(ctx)
-				app.cleanupSoftDeletedProjects(ctx)
+				app.cleanupSoftDeletedSites(ctx)
 			case <-ctx.Done():
 				ticker.Stop()
 				return
@@ -30,13 +30,13 @@ type expiredDeploy struct {
 	anonID        string
 	slug          string
 	deployID      string
-	projectID     string
+	siteID        string
 	storagePrefix string
 }
 
 func (app *application) cleanupExpiredAnonymousDeploys(ctx context.Context) {
 	rows, err := app.db.Query(ctx, `
-		select ad.id, ad.slug, ad.deploy_id, ad.project_id, d.storage_prefix
+		select ad.id, ad.slug, ad.deploy_id, ad.site_id, d.storage_prefix
 		from anonymous_deploys ad
 		join deploys d on d.id = ad.deploy_id
 		where ad.expires_at < now() and ad.claimed_at is null
@@ -51,7 +51,7 @@ func (app *application) cleanupExpiredAnonymousDeploys(ctx context.Context) {
 	var expired []expiredDeploy
 	for rows.Next() {
 		var e expiredDeploy
-		if err := rows.Scan(&e.anonID, &e.slug, &e.deployID, &e.projectID, &e.storagePrefix); err != nil {
+		if err := rows.Scan(&e.anonID, &e.slug, &e.deployID, &e.siteID, &e.storagePrefix); err != nil {
 			log.Printf("cleanup: scan row: %v", err)
 			return
 		}
@@ -110,7 +110,7 @@ func (app *application) cleanupOneDeploy(ctx context.Context, e expiredDeploy) e
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `update projects set current_deploy_id = null where id = $1`, e.projectID); err != nil {
+	if _, err := tx.Exec(ctx, `update sites set current_deploy_id = null where id = $1`, e.siteID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from anonymous_deploys where id = $1`, e.anonID); err != nil {
@@ -119,7 +119,7 @@ func (app *application) cleanupOneDeploy(ctx context.Context, e expiredDeploy) e
 	if _, err := tx.Exec(ctx, `delete from deploys where id = $1`, e.deployID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from projects where id = $1`, e.projectID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from sites where id = $1`, e.siteID); err != nil {
 		return err
 	}
 
@@ -137,30 +137,30 @@ func (app *application) cleanupExpiredDeviceCodes(ctx context.Context) {
 	}
 }
 
-func (app *application) cleanupSoftDeletedProjects(ctx context.Context) {
+func (app *application) cleanupSoftDeletedSites(ctx context.Context) {
 	rows, err := app.db.Query(ctx, `
 		SELECT p.id, d.id, d.storage_prefix
-		FROM projects p
-		LEFT JOIN deploys d ON d.project_id = p.id
+		FROM sites p
+		LEFT JOIN deploys d ON d.site_id = p.id
 		WHERE p.deleted_at IS NOT NULL AND p.deleted_at < now() - interval '7 days'
 		LIMIT 100
 	`)
 	if err != nil {
-		log.Printf("cleanup soft-deleted projects query: %v", err)
+		log.Printf("cleanup soft-deleted sites query: %v", err)
 		return
 	}
 	defer rows.Close()
 
 	type entry struct {
-		projectID     string
+		siteID        string
 		deployID      *string
 		storagePrefix *string
 	}
 	var entries []entry
 	for rows.Next() {
 		var e entry
-		if err := rows.Scan(&e.projectID, &e.deployID, &e.storagePrefix); err != nil {
-			log.Printf("cleanup soft-deleted projects scan: %v", err)
+		if err := rows.Scan(&e.siteID, &e.deployID, &e.storagePrefix); err != nil {
+			log.Printf("cleanup soft-deleted sites scan: %v", err)
 			continue
 		}
 		entries = append(entries, e)
@@ -178,33 +178,33 @@ func (app *application) cleanupSoftDeletedProjects(ctx context.Context) {
 			}
 			keys, err := app.store.listObjects(ctx, *e.storagePrefix+"/")
 			if err != nil {
-				log.Printf("cleanup soft-deleted project list R2: %v", err)
+				log.Printf("cleanup soft-deleted site list R2: %v", err)
 				continue
 			}
 			if len(keys) > 0 {
 				if err := app.store.deleteObjects(ctx, keys); err != nil {
-					log.Printf("cleanup soft-deleted project delete R2: %v", err)
+					log.Printf("cleanup soft-deleted site delete R2: %v", err)
 				}
 			}
 		}
 	}
 
-	// Collect unique project IDs
-	projectIDs := make(map[string]bool)
+	// Collect unique site IDs
+	siteIDs := make(map[string]bool)
 	for _, e := range entries {
-		projectIDs[e.projectID] = true
+		siteIDs[e.siteID] = true
 	}
 
-	// Hard-delete deploys then projects
-	for pid := range projectIDs {
-		if _, err := app.db.Exec(ctx, `DELETE FROM deploys WHERE project_id = $1`, pid); err != nil {
-			log.Printf("cleanup soft-deleted project deploys: %v", err)
+	// Hard-delete deploys then sites
+	for sid := range siteIDs {
+		if _, err := app.db.Exec(ctx, `DELETE FROM deploys WHERE site_id = $1`, sid); err != nil {
+			log.Printf("cleanup soft-deleted site deploys: %v", err)
 			continue
 		}
-		if _, err := app.db.Exec(ctx, `DELETE FROM projects WHERE id = $1 AND deleted_at IS NOT NULL`, pid); err != nil {
-			log.Printf("cleanup soft-deleted project: %v", err)
+		if _, err := app.db.Exec(ctx, `DELETE FROM sites WHERE id = $1 AND deleted_at IS NOT NULL`, sid); err != nil {
+			log.Printf("cleanup soft-deleted site: %v", err)
 		}
 	}
 
-	log.Printf("cleaned up %d soft-deleted projects", len(projectIDs))
+	log.Printf("cleaned up %d soft-deleted sites", len(siteIDs))
 }

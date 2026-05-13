@@ -27,7 +27,7 @@ func TestDeployDirectorySuccess(t *testing.T) {
 
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(map[string]any{
-			"project": map[string]string{"liveUrl": "https://sites.example.com/~user/test"},
+			"site": map[string]string{"liveUrl": "https://sites.example.com/~user/test"},
 		})
 	}))
 	defer server.Close()
@@ -94,12 +94,12 @@ func TestDeployReturnsErrorMessage(t *testing.T) {
 	}
 }
 
-func TestListProjectsSuccess(t *testing.T) {
+func TestListSitesSuccess(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"projects": []map[string]any{
+			"sites": []map[string]any{
 				{"name": "My Site", "slug": "my-site", "deployCount": 3, "liveUrl": "https://example.com/~user/my-site"},
 			},
 		})
@@ -107,23 +107,23 @@ func TestListProjectsSuccess(t *testing.T) {
 	defer server.Close()
 
 	c := newClient("vtk_test", server.URL)
-	projects, err := c.listProjects("")
+	sites, err := c.listSites("")
 	if err != nil {
-		t.Fatalf("listProjects: %v", err)
+		t.Fatalf("listSites: %v", err)
 	}
 
-	if len(projects) != 1 {
-		t.Fatalf("expected 1 project, got %d", len(projects))
+	if len(sites) != 1 {
+		t.Fatalf("expected 1 site, got %d", len(sites))
 	}
-	if projects[0].Name != "My Site" {
-		t.Fatalf("expected name 'My Site', got %q", projects[0].Name)
+	if sites[0].Name != "My Site" {
+		t.Fatalf("expected name 'My Site', got %q", sites[0].Name)
 	}
-	if projects[0].DeployCount != 3 {
-		t.Fatalf("expected 3 deploys, got %d", projects[0].DeployCount)
+	if sites[0].DeployCount != 3 {
+		t.Fatalf("expected 3 deploys, got %d", sites[0].DeployCount)
 	}
 }
 
-func TestListProjectsUnauthorized(t *testing.T) {
+func TestListSitesUnauthorized(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +132,7 @@ func TestListProjectsUnauthorized(t *testing.T) {
 	defer server.Close()
 
 	c := newClient("vtk_bad", server.URL)
-	_, err := c.listProjects("")
+	_, err := c.listSites("")
 	if err == nil {
 		t.Fatal("expected error for 401")
 	}
@@ -205,61 +205,61 @@ func TestGetSessionUnauthorized(t *testing.T) {
 	}
 }
 
-func TestFindProjectByName(t *testing.T) {
+func TestFindSiteByName(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"projects": []map[string]any{
-				{"id": "proj_1", "name": "My Site", "slug": "my-site"},
-				{"id": "proj_2", "name": "Other", "slug": "other"},
+			"sites": []map[string]any{
+				{"id": "site_1", "name": "My Site", "slug": "my-site"},
+				{"id": "site_2", "name": "Other", "slug": "other"},
 			},
 		})
 	}))
 	defer server.Close()
 
 	c := newClient("vtk_test", server.URL)
-	p, err := c.findProject("My Site", "")
+	s, err := c.findSite("My Site", "")
 	if err != nil {
-		t.Fatalf("findProject: %v", err)
+		t.Fatalf("findSite: %v", err)
 	}
-	if p.ID != "proj_1" {
-		t.Fatalf("expected proj_1, got %q", p.ID)
+	if s.ID != "site_1" {
+		t.Fatalf("expected site_1, got %q", s.ID)
 	}
 }
 
-func TestFindProjectBySlug(t *testing.T) {
+func TestFindSiteBySlug(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"projects": []map[string]any{
-				{"id": "proj_1", "name": "My Site", "slug": "my-site"},
+			"sites": []map[string]any{
+				{"id": "site_1", "name": "My Site", "slug": "my-site"},
 			},
 		})
 	}))
 	defer server.Close()
 
 	c := newClient("vtk_test", server.URL)
-	p, err := c.findProject("my-site", "")
+	s, err := c.findSite("my-site", "")
 	if err != nil {
-		t.Fatalf("findProject: %v", err)
+		t.Fatalf("findSite: %v", err)
 	}
-	if p.ID != "proj_1" {
-		t.Fatalf("expected proj_1, got %q", p.ID)
+	if s.ID != "site_1" {
+		t.Fatalf("expected site_1, got %q", s.ID)
 	}
 }
 
-func TestFindProjectNotFound(t *testing.T) {
+func TestFindSiteNotFound(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"projects": []map[string]any{}})
+		json.NewEncoder(w).Encode(map[string]any{"sites": []map[string]any{}})
 	}))
 	defer server.Close()
 
 	c := newClient("vtk_test", server.URL)
-	_, err := c.findProject("nonexistent", "")
+	_, err := c.findSite("nonexistent", "")
 	if err == nil {
 		t.Fatal("expected not found error")
 	}

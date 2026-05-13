@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Project, SessionUser } from './types'
+import type { Site, SessionUser } from './types'
 import { resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
-import { ProjectCard } from './ProjectCard'
-import { ProjectsTable } from './ProjectsTable'
+import { SiteCardGrid } from './SiteCardGrid'
+import { SitesTable } from './SitesTable'
 import { TokensPanel } from './TokensPanel'
 import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Plus, Upload, Mail, Terminal, Copy, Check } from 'lucide-react'
+import { Plus, Upload, Mail, Terminal, Copy, Check, LayoutGrid, List } from 'lucide-react'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -64,7 +64,7 @@ function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
             <EmptyMedia variant="icon">
               <Terminal />
             </EmptyMedia>
-            <EmptyTitle>No projects yet</EmptyTitle>
+            <EmptyTitle>No sites yet</EmptyTitle>
             <EmptyDescription>
               Install the Velori skill, then tell your agent to deploy.
             </EmptyDescription>
@@ -92,31 +92,31 @@ type DashboardView = 'dashboard' | 'settings' | 'admin'
 
 type DashboardProps = {
   user: SessionUser
-  projects: Project[]
+  sites: Site[]
   isLoading: boolean
-  deletingProjectID: string | null
+  deletingSiteID: string | null
   error: string | null
   setError: (error: string | null) => void
   onSignOut: () => void
   onUserUpdated: (user: SessionUser) => void
-  onDeleteProject: (projectID: string) => void
-  onVisibilityToggle: (projectID: string, isPublic: boolean) => void
-  onProjectsChanged: () => void
+  onDeleteSite: (siteID: string) => void
+  onVisibilityToggle: (siteID: string, isPublic: boolean) => void
+  onSitesChanged: () => void
   onSessionExpired: () => void
 }
 
 export function Dashboard({
   user,
-  projects,
+  sites,
   isLoading,
-  deletingProjectID,
+  deletingSiteID,
   error,
   setError,
   onSignOut,
   onUserUpdated,
-  onDeleteProject,
+  onDeleteSite,
   onVisibilityToggle,
-  onProjectsChanged,
+  onSitesChanged,
   onSessionExpired,
 }: DashboardProps) {
   const [view, setView] = useState<DashboardView>(() => {
@@ -132,6 +132,9 @@ export function Dashboard({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
   const [verificationSent, setVerificationSent] = useState(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
+    localStorage.getItem('velori-project-view') === 'list' ? 'list' : 'grid'
+  )
 
   const currentOrg = user.orgs.find(o => o.isPersonal)
   const plan = currentOrg?.plan ?? 'tinkerer'
@@ -221,7 +224,7 @@ export function Dashboard({
           <UploadPanel
             error={error}
             setError={setError}
-            onProjectsChanged={onProjectsChanged}
+            onProjectsChanged={onSitesChanged}
             onSessionExpired={onSessionExpired}
             onClose={() => handleUploadOpenChange(false)}
             initialFiles={pendingFiles}
@@ -303,50 +306,68 @@ export function Dashboard({
           <div className="flex flex-col gap-8">
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold tracking-tight">Your projects</h2>
-                <Button onClick={() => setUploadOpen(true)}>
-                  <Plus />
-                  Create project
-                </Button>
+                <h2 className="text-lg font-semibold tracking-tight">Your sites</h2>
+                <div className="flex items-center gap-2">
+                  {sites.length > 0 ? (
+                    <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+                      {([['grid', LayoutGrid], ['list', List]] as const).map(([mode, Icon]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setViewMode(mode)
+                            localStorage.setItem('velori-project-view', mode)
+                          }}
+                          className={`flex cursor-pointer items-center rounded-md border p-1.5 transition-colors ${
+                            viewMode === mode
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-transparent text-muted-foreground hover:text-foreground'
+                          }`}
+                          aria-label={mode === 'grid' ? 'Grid view' : 'List view'}
+                        >
+                          <Icon className="size-3.5" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <Button onClick={() => setUploadOpen(true)}>
+                    <Plus />
+                    Create site
+                  </Button>
+                </div>
               </div>
               {isLoading ? (
                 <Card>
                   <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                    Loading projects...
+                    Loading sites...
                   </CardContent>
                 </Card>
-              ) : projects.length === 0 ? (
+              ) : sites.length === 0 ? (
                 <EmptyState onUploadOpen={() => setUploadOpen(true)} />
               ) : (
-                <>
-                  <div className="hidden sm:block">
-                    <ProjectsTable
-                      projects={projects}
-                      deletingProjectID={deletingProjectID}
-                      onDelete={onDeleteProject}
-                      onVisibilityToggle={onVisibilityToggle}
-                      onProjectsChanged={onProjectsChanged}
-                      onSessionExpired={onSessionExpired}
-                      canMakePrivate={canMakePrivate}
-                      canRollback={canRollback}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-4 sm:hidden">
-                    {projects.map((project) => (
-                      <ProjectCard
-                        key={project.id}
-                        project={project}
-                        isDeleting={deletingProjectID === project.id}
-                        onDelete={onDeleteProject}
-                        onVisibilityToggle={onVisibilityToggle}
-                        onProjectsChanged={onProjectsChanged}
-                        onSessionExpired={onSessionExpired}
-                        canMakePrivate={canMakePrivate}
-                        canRollback={canRollback}
-                      />
-                    ))}
-                  </div>
-                </>
+                viewMode === 'grid' ? (
+                  <SiteCardGrid
+                    sites={sites}
+                    deletingSiteID={deletingSiteID}
+                    onDelete={onDeleteSite}
+                    onVisibilityToggle={onVisibilityToggle}
+                    onSitesChanged={onSitesChanged}
+                    onSessionExpired={onSessionExpired}
+                    canMakePrivate={canMakePrivate}
+                    canRollback={canRollback}
+                  />
+                ) : (
+                  <SitesTable
+                    sites={sites}
+                    deletingSiteID={deletingSiteID}
+                    onDelete={onDeleteSite}
+                    onVisibilityToggle={onVisibilityToggle}
+                    onSitesChanged={onSitesChanged}
+                    onSessionExpired={onSessionExpired}
+                    canMakePrivate={canMakePrivate}
+                    canRollback={canRollback}
+                  />
+                )
               )}
             </section>
 

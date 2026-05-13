@@ -23,7 +23,7 @@ const privateSiteHTML = `<!DOCTYPE html>
 <p>This site is private. <a href="%s">Sign in</a> to view it.</p>
 </body></html>`
 
-func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		http.NotFound(w, r)
 		return
@@ -35,7 +35,7 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	orgSlug, slug, deployID, assetPath, ok := parseProjectPath(r.URL.Path)
+	orgSlug, slug, deployID, assetPath, ok := parseSitePath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -54,11 +54,11 @@ func (app *application) serveProjectHandler(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		log.Printf("lookup deploy: %v", err)
-		http.Error(w, "could not load project", http.StatusInternalServerError)
+		http.Error(w, "could not load site", http.StatusInternalServerError)
 		return
 	}
 
-	// For private projects, deny access if not authenticated or not in org.
+	// For private sites, deny access if not authenticated or not in org.
 	if !deployment.isPublic {
 		user, _ := app.requireSessionUser(r)
 		if user.ID == "" || !userInOrg(user, orgSlug) {
@@ -164,7 +164,7 @@ func (app *application) serveFromFilesystem(w http.ResponseWriter, r *http.Reque
 			http.NotFound(w, r)
 			return
 		}
-		log.Printf("serve project file: %v", err)
+		log.Printf("serve site file: %v", err)
 		http.Error(w, "could not serve file", http.StatusInternalServerError)
 	}
 }
@@ -178,7 +178,7 @@ func userInOrg(user sessionUser, orgSlug string) bool {
 	return false
 }
 
-func parseProjectPath(rawPath string) (orgSlug string, slug string, deployID string, assetPath string, ok bool) {
+func parseSitePath(rawPath string) (orgSlug string, slug string, deployID string, assetPath string, ok bool) {
 	trimmed := strings.Trim(rawPath, "/")
 	parts := strings.Split(trimmed, "/")
 	if len(parts) < 2 || !strings.HasPrefix(parts[0], "~") {
@@ -210,11 +210,11 @@ func (app *application) lookupDeployByID(ctx context.Context, orgSlug string, sl
 	var d liveDeploy
 	err := app.db.QueryRow(ctx, `
 		select p.id, d.id, d.storage_prefix, p.is_public, p.name
-		from projects p
+		from sites p
 		join organizations o on o.id = p.org_id
-		join deploys d on d.id = $3 and d.project_id = p.id
+		join deploys d on d.id = $3 and d.site_id = p.id
 		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-	`, orgSlug, slug, deployID).Scan(&d.projectID, &d.deployID, &d.siteRoot, &d.isPublic, &d.projectName)
+	`, orgSlug, slug, deployID).Scan(&d.siteID, &d.deployID, &d.siteRoot, &d.isPublic, &d.siteName)
 	if err != nil {
 		return liveDeploy{}, err
 	}
@@ -225,11 +225,11 @@ func (app *application) lookupLiveDeploy(ctx context.Context, orgSlug string, sl
 	var d liveDeploy
 	err := app.db.QueryRow(ctx, `
 		select p.id, d.id, d.storage_prefix, p.is_public, p.name
-		from projects p
+		from sites p
 		join organizations o on o.id = p.org_id
 		join deploys d on d.id = p.current_deploy_id
 		where o.slug = $1 and p.slug = $2 and p.deleted_at is null
-	`, orgSlug, slug).Scan(&d.projectID, &d.deployID, &d.siteRoot, &d.isPublic, &d.projectName)
+	`, orgSlug, slug).Scan(&d.siteID, &d.deployID, &d.siteRoot, &d.isPublic, &d.siteName)
 	if err != nil {
 		return liveDeploy{}, err
 	}

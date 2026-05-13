@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) sitesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -25,33 +25,33 @@ func (app *application) projectsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	projects, err := app.listProjects(r.Context(), orgID)
+	sites, err := app.listSites(r.Context(), orgID)
 	if err != nil {
-		log.Printf("list projects: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load projects"})
+		log.Printf("list sites: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load sites"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
 }
 
-func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sites/")
 	path = strings.TrimSpace(path)
 
 	parts := strings.SplitN(path, "/", 2)
-	projectID := parts[0]
-	if projectID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid project id"})
+	siteID := parts[0]
+	if siteID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid site id"})
 		return
 	}
 
 	if len(parts) == 2 {
 		switch strings.TrimRight(parts[1], "/") {
 		case "deploys":
-			app.listDeploysHandler(w, r, projectID)
+			app.listDeploysHandler(w, r, siteID)
 		case "rollback":
-			app.rollbackHandler(w, r, projectID)
+			app.rollbackHandler(w, r, siteID)
 		default:
 			http.NotFound(w, r)
 		}
@@ -66,41 +66,41 @@ func (app *application) projectByIDHandler(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+		orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
 		if err != nil {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 			return
 		}
 
-		deleted, err := app.deleteProject(r.Context(), orgID, projectID)
+		deleted, err := app.deleteSite(r.Context(), orgID, siteID)
 		if err != nil {
-			log.Printf("delete project: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete project"})
+			log.Printf("delete site: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete site"})
 			return
 		}
 		if !deleted {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 			return
 		}
 
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 
 	case http.MethodPatch:
-		app.updateProjectHandler(w, r, projectID)
+		app.updateSiteHandler(w, r, siteID)
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Request, projectID string) {
+func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	user, err := app.requireSessionUser(r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
 	if err != nil {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
@@ -133,16 +133,16 @@ func (app *application) updateProjectHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	commandTag, err := app.db.Exec(r.Context(), `
-		update projects set is_public = $1, updated_at = now()
+		update sites set is_public = $1, updated_at = now()
 		where id = $2 and deleted_at is null and org_id = $3
-	`, *payload.IsPublic, projectID, orgID)
+	`, *payload.IsPublic, siteID, orgID)
 	if err != nil {
-		log.Printf("update project visibility: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update project"})
+		log.Printf("update site visibility: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update site"})
 		return
 	}
 	if commandTag.RowsAffected() == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 		return
 	}
 

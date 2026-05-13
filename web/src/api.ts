@@ -1,4 +1,4 @@
-import type { AuthFormState, AuthMode, Deploy, OrgInfo, OrgMember, Project, SessionUser, UploadFile, UploadSummary } from './types'
+import type { AuthFormState, AuthMode, Deploy, OrgInfo, OrgMember, Site, SessionUser, UploadFile, UploadSummary } from './types'
 import { API_BASE_URL } from './constants'
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -18,8 +18,8 @@ export async function fetchSession(): Promise<SessionUser | null> {
   return data.user
 }
 
-export async function fetchProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE_URL}/api/projects`, {
+export async function fetchSites(): Promise<Site[]> {
+  const response = await fetch(`${API_BASE_URL}/api/sites`, {
     credentials: 'include',
   })
 
@@ -28,11 +28,11 @@ export async function fetchProjects(): Promise<Project[]> {
   }
 
   if (!response.ok) {
-    throw new Error('Could not load projects')
+    throw new Error('Could not load sites')
   }
 
-  const data = (await response.json()) as { projects: Project[] }
-  return data.projects ?? []
+  const data = (await response.json()) as { sites: Site[] }
+  return data.sites ?? []
 }
 
 export async function postAuth(mode: AuthMode, form: AuthFormState): Promise<SessionUser> {
@@ -85,8 +85,8 @@ export async function postUpload(summary: UploadSummary, files: UploadFile[]): P
   }
 }
 
-export async function deleteProjectById(projectID: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectID}`, {
+export async function deleteSiteById(siteID: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}`, {
     method: 'DELETE',
     credentials: 'include',
   })
@@ -97,7 +97,7 @@ export async function deleteProjectById(projectID: string): Promise<void> {
 
   if (!response.ok) {
     const body = (await response.json()) as { error?: string }
-    throw new Error(body.error ?? 'Could not delete project')
+    throw new Error(body.error ?? 'Could not delete site')
   }
 }
 

@@ -1,6 +1,6 @@
 CREATE TABLE comments (
     id          text PRIMARY KEY,
-    project_id  text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    site_id     text NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     deploy_id   text NOT NULL REFERENCES deploys(id) ON DELETE CASCADE,
     user_id     text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     page_path   text NOT NULL DEFAULT '',
@@ -15,4 +15,4 @@ CREATE TABLE comments (
 );
 
 CREATE INDEX comments_deploy_page_idx ON comments (deploy_id, page_path) WHERE resolved_at IS NULL;
-CREATE INDEX comments_project_idx ON comments (project_id, created_at DESC);
+CREATE INDEX comments_site_idx ON comments (site_id, created_at DESC);

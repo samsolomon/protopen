@@ -54,16 +54,16 @@ func relativeTime(value time.Time) string {
 	}
 }
 
-func countForMatch(matches []projectRecord) int {
+func countForMatch(matches []siteRecord) int {
 	if len(matches) == 1 {
 		return matches[0].Deploys + 1
 	}
 	return 1
 }
 
-func validateProjectMatchCount(matches []projectRecord, name string) error {
+func validateSiteMatchCount(matches []siteRecord, name string) error {
 	if len(matches) > 1 {
-		return fmt.Errorf("multiple existing projects match %q", name)
+		return fmt.Errorf("multiple existing sites match %q", name)
 	}
 	return nil
 }

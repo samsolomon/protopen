@@ -12,7 +12,7 @@ cookie_file="${tmp_dir}/cookies.txt"
 site_dir="${tmp_dir}/prototype"
 mkdir -p "${site_dir}"
 
-project_name="smoke-test"
+site_name="smoke-test"
 
 cleanup() {
   rm -rf "${tmp_dir}"
@@ -50,7 +50,7 @@ curl -sS -c "${cookie_file}" \
 
 echo "Uploading smoke-test prototype"
 upload_response="$(curl -sS -b "${cookie_file}" \
-  -F "name=${project_name}" \
+  -F "name=${site_name}" \
   -F 'mode=files' \
   -F 'paths=["prototype/index.html","prototype/styles.css"]' \
   -F "files=@${site_dir}/index.html;filename=index.html;type=text/html" \
@@ -60,7 +60,7 @@ upload_response="$(curl -sS -b "${cookie_file}" \
 live_url="$(python3 - <<'PY' "${upload_response}"
 import json, sys
 payload = json.loads(sys.argv[1])
-print(payload["project"]["liveUrl"])
+print(payload["site"]["liveUrl"])
 PY
 )"
 
@@ -90,7 +90,7 @@ cat > "${site_dir}/index.html" <<'EOF'
 </html>
 EOF
 
-echo "Redeploying the same project name to verify stable URL updates"
+echo "Redeploying the same site name to verify stable URL updates"
 second_upload_response="$(curl -sS -b "${cookie_file}" \
   -F "name=${project_name}" \
   -F 'mode=files' \

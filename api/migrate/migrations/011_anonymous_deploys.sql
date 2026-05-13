@@ -8,7 +8,7 @@ CREATE TABLE anonymous_deploys (
   id TEXT PRIMARY KEY,
   slug TEXT UNIQUE NOT NULL,
   deploy_id TEXT NOT NULL REFERENCES deploys(id),
-  project_id TEXT NOT NULL REFERENCES projects(id),
+  site_id TEXT NOT NULL REFERENCES sites(id),
   claim_token_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   claimed_at TIMESTAMPTZ,

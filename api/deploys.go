@@ -23,7 +23,7 @@ type deployRecord struct {
 	GitRemoteURL     *string `json:"gitRemoteURL,omitempty"`
 }
 
-func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Request, projectID string) {
+func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -35,7 +35,7 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
 	if err != nil {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
@@ -45,10 +45,10 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 		select d.id, d.status, d.label, d.size_bytes, d.file_count, d.created_at, (d.id = p.current_deploy_id) as is_current,
 			d.git_commit_hash, d.git_branch, d.git_commit_message, d.git_dirty, d.git_author, d.git_remote_url
 		from deploys d
-		join projects p on p.id = d.project_id
-		where d.project_id = $1 and p.org_id = $2 and p.deleted_at is null
+		join sites p on p.id = d.site_id
+		where d.site_id = $1 and p.org_id = $2 and p.deleted_at is null
 		order by d.created_at desc
-	`, projectID, orgID)
+	`, siteID, orgID)
 	if err != nil {
 		log.Printf("list deploys: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load deploys"})
@@ -73,7 +73,7 @@ func (app *application) listDeploysHandler(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"deploys": deploys})
 }
 
-func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, projectID string) {
+func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -85,7 +85,7 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	orgID, _, err := app.requireProjectAccess(r.Context(), user, projectID)
+	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
 	if err != nil {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
@@ -114,19 +114,19 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 	err = app.db.QueryRow(r.Context(), `
 		select exists(
 			select 1 from deploys d
-			join projects p on p.id = d.project_id
+			join sites p on p.id = d.site_id
 			where p.id = $1 and p.org_id = $2 and d.id = $3 and p.deleted_at is null
 		)
-	`, projectID, orgID, payload.DeployID).Scan(&valid)
+	`, siteID, orgID, payload.DeployID).Scan(&valid)
 	if err != nil || !valid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project or deploy not found"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "site or deploy not found"})
 		return
 	}
 
 	now := time.Now().UTC()
 	_, err = app.db.Exec(r.Context(), `
-		update projects set current_deploy_id = $2, updated_at = $3 where id = $1
-	`, projectID, payload.DeployID, now)
+		update sites set current_deploy_id = $2, updated_at = $3 where id = $1
+	`, siteID, payload.DeployID, now)
 	if err != nil {
 		log.Printf("rollback: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not rollback"})
