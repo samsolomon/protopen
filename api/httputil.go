@@ -200,6 +200,26 @@ func limitJSONBody(next http.Handler) http.Handler {
 	})
 }
 
+// verifyOrigin rejects cross-origin POST/PATCH/PUT/DELETE requests where the
+// browser-supplied Origin header doesn't match appOrigin. Skips when:
+//   - appOrigin is empty (local dev, no canonical origin to check against);
+//   - the Origin header is empty (non-browser clients like the CLI, which
+//     authenticate via Bearer tokens — cookie auth is already protected by
+//     the session cookie's SameSite=Lax mode).
+func verifyOrigin(appOrigin string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete:
+			origin := r.Header.Get("Origin")
+			if appOrigin != "" && origin != "" && origin != appOrigin {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func appSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")

@@ -131,8 +131,8 @@ func main() {
 	contentListenAddr := getenv("CONTENT_LISTEN_ADDR", ":8081")
 	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://127.0.0.1:8081"), "/")
 	frontendOrigin := strings.TrimRight(getenv("FRONTEND_ORIGIN", "http://localhost:5173"), "/")
-	appOrigin := getenv("APP_ORIGIN", "")
-	contentOrigin := getenv("CONTENT_ORIGIN", "")
+	appOrigin := strings.TrimRight(getenv("APP_ORIGIN", ""), "/")
+	contentOrigin := strings.TrimRight(getenv("CONTENT_ORIGIN", ""), "/")
 
 	db, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -243,7 +243,7 @@ func main() {
 		addr := ":" + listenAddr
 		contentHost := strings.TrimPrefix(contentOrigin, "https://")
 		contentHost = strings.TrimPrefix(contentHost, "http://")
-		appHandler := appSecurityHeaders(withCORS(frontendOrigin, limitJSONBody(appMux)))
+		appHandler := appSecurityHeaders(withCORS(frontendOrigin, verifyOrigin(appOrigin, limitJSONBody(appMux))))
 		contentHandler := contentSecurityHeaders(contentMux)
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +276,7 @@ func main() {
 	// Local dev mode: two separate servers
 	appServer := &http.Server{
 		Addr:              appListenAddr,
-		Handler:           appSecurityHeaders(withCORS(frontendOrigin, limitJSONBody(appMux))),
+		Handler:           appSecurityHeaders(withCORS(frontendOrigin, verifyOrigin(appOrigin, limitJSONBody(appMux)))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
