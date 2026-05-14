@@ -13,3 +13,7 @@ cli/protopen
 .env.*.local
 api/.protopen/
 dist/
+
+# Local CLI state (untracked across the tree)
+.protopen/
+**/.protopen/

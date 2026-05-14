@@ -68,6 +68,7 @@ Commands:
   login                        Authenticate and save your API token
   logout                       Remove saved token
   config                       View and update CLI configuration
+  version                      Print the CLI version
 
 Configuration:
   Config file: ~/.protopen/config.json

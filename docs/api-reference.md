@@ -1,13 +1,13 @@
 # Protopen API Reference
 
-Base URL: `https://app.protopen.dev`
+Base URL: `https://app.example.com` &mdash; substitute your own protopen instance hostname (the value of `APP_ORIGIN` in your `.env`).
 
 All endpoints return JSON. Errors use `{"error": "message"}`.
 
 ## URL Format
 
-- Authenticated projects: `https://sites.protopen.dev/~{orgSlug}/{projectSlug}`
-- Versioned deploys: `https://sites.protopen.dev/~{orgSlug}/{projectSlug}/_v/{deployId}`
+- Authenticated projects: `https://sites.example.com/~{orgSlug}/{projectSlug}`
+- Versioned deploys: `https://sites.example.com/~{orgSlug}/{projectSlug}/_v/{deployId}`
 
 ## Authentication
 
@@ -156,7 +156,7 @@ Auth required.
       "slug": "my-site",
       "updatedAt": "2 hours ago",
       "deployCount": 5,
-      "liveUrl": "https://sites.protopen.dev/~demo/my-site",
+      "liveUrl": "https://sites.example.com/~demo/my-site",
       "isPublic": true,
       "gitBranch": "main",
       "gitCommitHash": "abc123...",
@@ -269,7 +269,7 @@ Auth required. Multipart form data.
     "slug": "my-site",
     "updatedAt": "Just now",
     "deployCount": 1,
-    "liveUrl": "https://sites.protopen.dev/~demo/my-site",
+    "liveUrl": "https://sites.example.com/~demo/my-site",
     "isPublic": false
   }
 }
@@ -277,7 +277,7 @@ Auth required. Multipart form data.
 
 **Example:**
 ```bash
-curl -X POST https://app.protopen.dev/api/uploads \
+curl -X POST https://app.example.com/api/uploads \
   -H "Authorization: Bearer ptk_..." \
   -F "name=my-site" \
   -F "mode=zip" \

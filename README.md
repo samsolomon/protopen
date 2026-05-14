@@ -12,12 +12,14 @@ Coding agents (Claude Code, Cursor, custom scripts) generate static sites and pr
 
 ```bash
 cd cli && make build                        # build the binary
-./protopen login                            # paste an API token from Settings > API Tokens
+./protopen login                            # browser-based device-code flow (default)
+./protopen login --token ptk_...            # or paste a token from Settings > API Tokens
 ./protopen deploy ./my-site                 # → live URL on stdout
 ./protopen deploy ./dist --json             # → structured JSON
 ./protopen list                             # your sites
 ./protopen rollback <site-name> <deploy-id> # revert
 ./protopen visibility <name> public|private
+./protopen version                          # print CLI version
 ./protopen help                             # full command list
 ```
 

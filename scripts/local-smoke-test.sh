@@ -92,7 +92,7 @@ EOF
 
 echo "Redeploying the same site name to verify stable URL updates"
 second_upload_response="$(curl -sS -b "${cookie_file}" \
-  -F "name=${project_name}" \
+  -F "name=${site_name}" \
   -F 'mode=files' \
   -F 'paths=["prototype/index.html","prototype/styles.css"]' \
   -F "files=@${site_dir}/index.html;filename=index.html;type=text/html" \

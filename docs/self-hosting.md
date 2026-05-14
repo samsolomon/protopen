@@ -72,16 +72,22 @@ These platforms detect the Dockerfile and build automatically. Point at a manage
 
 ### Bare VM
 
-Build locally and copy the binary:
+Build locally and copy the binary. The API embeds the web dashboard, so the frontend must be built **before** compiling the API:
 
 ```bash
-(cd api && CGO_ENABLED=0 go build -o protopen-server .)
+npm install
+npm run build:web                                         # produces web/dist
+(cd api && CGO_ENABLED=0 go build -o protopen-server .)   # embeds web/dist
 scp protopen-server vm:/usr/local/bin/
 ```
 
 Run it under systemd or `tmux` with `.env` exported. Same env vars apply.
 
-## 7. Admin access
+## 7. First user
+
+There's no CLI bootstrap for creating the first account. Once the API is up, hit your dashboard URL (`APP_ORIGIN`) and use the sign-up form. The first user has no special privileges — they become an admin only when their email is listed in `ADMIN_EMAILS` (next section).
+
+## 8. Admin access
 
 Set `ADMIN_EMAILS` to a comma-separated list of email addresses that should see the **Admin** panel in the dashboard (user list, site list, force delete). The admin gate is checked on every authenticated request, so changes take effect on next sign-in.
 

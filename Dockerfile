@@ -18,11 +18,13 @@ RUN CGO_ENABLED=0 go build -o /protopen .
 
 # Stage 3: Runtime
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 RUN adduser -D protopen
 RUN mkdir -p /home/protopen/.data/ingest && chown -R protopen:protopen /home/protopen
 COPY --from=backend /protopen /protopen
 USER protopen
 WORKDIR /home/protopen
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:8080/healthz || exit 1
 CMD ["/protopen"]
