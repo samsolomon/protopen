@@ -520,72 +520,6 @@ func TestCreateSeedDeployFilesUsesProjectRelativeLinks(t *testing.T) {
 	}
 }
 
-func TestParseAnonymousPath(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		input     string
-		slug      string
-		assetPath string
-		ok        bool
-	}{
-		{"/bright-apex-abc1/index.html", "bright-apex-abc1", "index.html", true},
-		{"/bright-apex-abc1/", "bright-apex-abc1", "", true},
-		{"/bright-apex-abc1", "bright-apex-abc1", "", true},
-		{"/cool-demo-xy9z/assets/style.css", "cool-demo-xy9z", "assets/style.css", true},
-		{"/singleword/", "", "", false},
-		{"/~sam/project", "", "", false},
-		{"/_internal/foo", "", "", false},
-		{"/api/sites", "", "", false},
-		{"/healthz", "", "", false},
-		{"/", "", "", false},
-		{"", "", "", false},
-	}
-	for _, tc := range cases {
-		slug, assetPath, ok := parseAnonymousPath(tc.input)
-		if ok != tc.ok || slug != tc.slug || assetPath != tc.assetPath {
-			t.Errorf("parseAnonymousPath(%q) = (%q, %q, %v), want (%q, %q, %v)",
-				tc.input, slug, assetPath, ok, tc.slug, tc.assetPath, tc.ok)
-		}
-	}
-}
-
-func TestValidateAnonFileTypes(t *testing.T) {
-	t.Parallel()
-
-	allowed := []fileMeta{
-		{Name: "index.html", Path: "index.html"},
-		{Name: "style.css", Path: "style.css"},
-		{Name: "app.js", Path: "app.js"},
-		{Name: "logo.png", Path: "logo.png"},
-		{Name: "module.wasm", Path: "module.wasm"},
-	}
-	if err := validateAnonFileTypes(allowed); err != nil {
-		t.Fatalf("expected allowed types to pass, got %v", err)
-	}
-
-	// Extensionless files are allowed
-	if err := validateAnonFileTypes([]fileMeta{{Name: "LICENSE", Path: "LICENSE"}}); err != nil {
-		t.Fatalf("expected extensionless file to pass, got %v", err)
-	}
-
-	// Blocked extensions
-	for _, ext := range []string{".exe", ".php", ".sh", ".py", ".rb"} {
-		err := validateAnonFileTypes([]fileMeta{{Name: "bad" + ext, Path: "bad" + ext}})
-		if err == nil {
-			t.Errorf("expected %s to be blocked", ext)
-		} else if !strings.Contains(err.Error(), ext) {
-			t.Errorf("expected error to mention %s, got: %v", ext, err)
-		}
-	}
-
-	// Extension resolved from Path when Name has none
-	err := validateAnonFileTypes([]fileMeta{{Name: "script", Path: "dir/script.sh"}})
-	if err == nil {
-		t.Fatal("expected blocked extension from Path to be rejected")
-	}
-}
-
 func TestRelativeTime(t *testing.T) {
 	t.Parallel()
 
@@ -713,28 +647,3 @@ func TestUserInOrg(t *testing.T) {
 	}
 }
 
-func TestGenerateAnonSlug(t *testing.T) {
-	t.Parallel()
-
-	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
-		slug := generateAnonSlug()
-
-		if !strings.Contains(slug, "-") {
-			t.Fatalf("slug %q missing required hyphen", slug)
-		}
-
-		parts := strings.Split(slug, "-")
-		if len(parts) != 3 {
-			t.Fatalf("expected 3 parts (adj-noun-suffix), got %d in %q", len(parts), slug)
-		}
-		if len(parts[2]) != 4 {
-			t.Fatalf("expected 4-char suffix, got %q in %q", parts[2], slug)
-		}
-
-		if seen[slug] {
-			t.Fatalf("duplicate slug generated: %q", slug)
-		}
-		seen[slug] = true
-	}
-}

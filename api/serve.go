@@ -29,12 +29,6 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Try anonymous path first (no ~ prefix)
-	if anonSlug, assetPath, ok := parseAnonymousPath(r.URL.Path); ok {
-		app.serveAnonymousDeploy(w, r, anonSlug, assetPath)
-		return
-	}
-
 	orgSlug, slug, deployID, assetPath, ok := parseSitePath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
@@ -304,50 +298,3 @@ func serveFile(w http.ResponseWriter, r *http.Request, filePath string) error {
 	return nil
 }
 
-func parseAnonymousPath(rawPath string) (slug string, assetPath string, ok bool) {
-	trimmed := strings.Trim(rawPath, "/")
-	if trimmed == "" {
-		return "", "", false
-	}
-
-	parts := strings.SplitN(trimmed, "/", 2)
-	slug = parts[0]
-
-	if strings.HasPrefix(slug, "~") || strings.HasPrefix(slug, "_") || slug == "api" || slug == "healthz" || slug == "sign-in" || slug == "sign-up" || slug == "claim" || slug == "verify" || slug == "reset-password" || slug == "auth" {
-		return "", "", false
-	}
-
-	// Anonymous slugs must contain at least one hyphen (word-word-xxxx format)
-	if !strings.Contains(slug, "-") {
-		return "", "", false
-	}
-
-	if len(parts) > 1 {
-		assetPath = parts[1]
-	}
-	return slug, assetPath, true
-}
-
-func (app *application) serveAnonymousDeploy(w http.ResponseWriter, r *http.Request, slug string, assetPath string) {
-	var storagePrefix string
-	err := app.db.QueryRow(r.Context(), `
-		select d.storage_prefix
-		from anonymous_deploys ad
-		join deploys d on d.id = ad.deploy_id
-		where ad.slug = $1
-		  and ad.expires_at > now()
-		  and ad.claimed_at is null
-	`, slug).Scan(&storagePrefix)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-
-	if app.store != nil {
-		app.serveFromR2(w, r, storagePrefix, assetPath)
-	} else {
-		app.serveFromFilesystem(w, r, storagePrefix, assetPath)
-	}
-}

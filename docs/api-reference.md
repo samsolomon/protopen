@@ -7,7 +7,6 @@ All endpoints return JSON. Errors use `{"error": "message"}`.
 ## URL Format
 
 - Authenticated projects: `https://sites.velori.dev/~{orgSlug}/{projectSlug}`
-- Anonymous publishes: `https://sites.velori.dev/{slug}`
 - Versioned deploys: `https://sites.velori.dev/~{orgSlug}/{projectSlug}/_v/{deployId}`
 
 ## Authentication
@@ -287,60 +286,6 @@ curl -X POST https://app.velori.dev/api/uploads \
 
 ---
 
-## Anonymous Publishing
-
-### `POST /api/v1/publish`
-
-No auth required. Rate limited: 5 per hour per IP. Multipart form data (same fields as `/api/uploads` minus git fields).
-
-**Response (200):**
-```json
-{
-  "siteUrl": "https://sites.velori.dev/bright-canvas-a7k2",
-  "slug": "bright-canvas-a7k2",
-  "claimToken": "64-char-hex-string",
-  "claimUrl": "https://app.velori.dev/claim/bright-canvas-a7k2",
-  "expiresAt": "2026-04-10T12:00:00Z"
-}
-```
-
-Anonymous sites expire in 24 hours. File types are restricted to web assets (HTML, CSS, JS, images, fonts, media, WASM, text, maps, 3D models).
-
-**Example:**
-```bash
-curl -X POST https://app.velori.dev/api/v1/publish \
-  -F "name=my-prototype" \
-  -F "files=@index.html"
-```
-
-### `POST /api/v1/claim`
-
-Auth required. Claim an anonymous deploy into your account.
-
-**Request:**
-```json
-{
-  "slug": "bright-canvas-a7k2",
-  "claimToken": "64-char-hex-string",
-  "name": "My Prototype",
-  "org": "optional-org-slug"
-}
-```
-
-**Response (200):**
-```json
-{
-  "projectId": "proj_...",
-  "liveUrl": "https://sites.velori.dev/~sam/my-prototype",
-  "name": "My Prototype",
-  "slug": "my-prototype"
-}
-```
-
-**Error codes:** 403 (invalid token), 410 (already claimed or expired), 404 (not found)
-
----
-
 ## API Tokens
 
 ### `GET /api/tokens`
@@ -533,8 +478,6 @@ Auth required. Must be admin. Cannot remove last admin.
 | Max files (zip) | 5,000 |
 | Required entry file | `index.html` |
 | Symlinks | Not allowed |
-| Anonymous publish rate limit | 5 per hour per IP |
-| Anonymous publish expiry | 24 hours |
 | Session cookie expiry | 30 days |
 | Password minimum | 8 characters |
 | Email verification token expiry | 24 hours |

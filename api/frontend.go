@@ -42,10 +42,6 @@ func serveFrontend(mux *http.ServeMux, frontendOrigin string, contentHandler ...
 					serveContent(w, r)
 					return
 				}
-				if _, _, ok := parseAnonymousPath(r.URL.Path); ok {
-					serveContent(w, r)
-					return
-				}
 				target := frontendOrigin + r.URL.RequestURI()
 				http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 			})
@@ -61,10 +57,6 @@ func serveFrontend(mux *http.ServeMux, frontendOrigin string, contentHandler ...
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/~") {
-			serveContent(w, r)
-			return
-		}
-		if _, _, ok := parseAnonymousPath(r.URL.Path); ok {
 			serveContent(w, r)
 			return
 		}

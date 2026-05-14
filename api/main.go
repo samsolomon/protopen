@@ -37,9 +37,8 @@ type application struct {
 
 	mailer *emailClient
 
-	publishLimiter *rateLimiter
-	authLimiter    *rateLimiter
-	adminEmails    []string
+	authLimiter *rateLimiter
+	adminEmails []string
 }
 
 type sessionUser struct {
@@ -192,7 +191,6 @@ func main() {
 		mailer:         mailer,
 		adminEmails:    adminEmails,
 	}
-	app.publishLimiter = newRateLimiter(5, 1*time.Hour)
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
 
 	if getenv("SEED_DEMO", "") != "" {
@@ -201,7 +199,6 @@ func main() {
 		}
 	}
 
-	app.publishLimiter.startCleanup(ctx)
 	app.authLimiter.startCleanup(ctx)
 	app.startCleanupLoop(ctx)
 
@@ -229,8 +226,6 @@ func main() {
 	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
-	appMux.HandleFunc("/api/v1/publish", app.rateLimit(app.publishLimiter, app.publishHandler))
-	appMux.HandleFunc("/api/v1/claim", app.claimHandler)
 	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))
 	appMux.HandleFunc("/skill/SKILL.md", serveSkillFile(skillMD, "text/markdown; charset=utf-8"))
 	appMux.HandleFunc("/skill/scripts/publish.sh", serveSkillFile(publishScript, "text/plain; charset=utf-8"))
