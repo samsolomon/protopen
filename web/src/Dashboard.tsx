@@ -4,7 +4,6 @@ import { resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
 import { SiteCardGrid } from './SiteCardGrid'
 import { SitesTable } from './SitesTable'
-import { TokensPanel } from './TokensPanel'
 import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
@@ -58,7 +57,6 @@ type DashboardView = 'dashboard' | 'settings'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
-  if (path === '/settings/tokens') return 'tokens'
   if (path === '/settings/people') return isAdmin ? 'people' : 'account'
   if (path === '/settings/sites') return isAdmin ? 'sites' : 'account'
   if (path === '/settings/instance') return isAdmin ? 'instance' : 'account'
@@ -226,7 +224,6 @@ export function Dashboard({
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="tokens">API Tokens</TabsTrigger>
               {user.isAdmin && <TabsTrigger value="people">People</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="sites">All sites</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
@@ -247,11 +244,6 @@ export function Dashboard({
             </TabsContent>
             <TabsContent value="appearance" className="max-w-2xl">
               <AppearancePanel />
-            </TabsContent>
-            <TabsContent value="tokens" className="max-w-2xl">
-              <TokensPanel
-                onSessionExpired={onSessionExpired}
-              />
             </TabsContent>
             {user.isAdmin && (
               <>
