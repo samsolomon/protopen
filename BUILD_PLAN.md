@@ -181,6 +181,15 @@ Failed or abandoned uploads leave directories in `.data/ingest/` forever.
 - [ ] Document that service workers are not supported in v1
 - [ ] Document allowed and blocked file types for v1
 
+### 7. Visibility defaults
+
+Visibility is per-site today with no instance-wide or per-user default. Self-hosters who want every prototype gated behind a login have to flip each site individually.
+
+- [ ] Add instance-wide default visibility via env var (e.g. `DEFAULT_VISIBILITY=private`)
+- [ ] Apply default on project creation when the CLI/upload does not specify visibility
+- [ ] Optional: per-user default in dashboard settings, overriding the instance default
+- [ ] Document the precedence (per-upload flag > per-user default > instance default > public)
+
 ## Deferred to Pre-Launch Hardening
 
 These items are not needed for local testing but must be done before broader access.

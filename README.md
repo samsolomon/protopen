@@ -1,6 +1,6 @@
 # Protopen
 
-A self-hostable deploy target for static sites. One command, folder in, live URL out. Built for CLI workflows and coding agents.
+A self-hostable playpen for static prototypes. Deploy a folder, get a live URL, and keep it public or gated behind a login. Built for CLI workflows and coding agents.
 
 **License:** [AGPL-3.0](LICENSE) &middot; **Self-hosting:** [docs/self-hosting.md](docs/self-hosting.md) &middot; **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
