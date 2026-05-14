@@ -488,7 +488,3 @@ Auth required. Must be admin. Cannot remove last admin.
 ### `GET /healthz`
 
 No auth. Returns `{"status": "ok"}`.
-
-### `GET /install.sh`
-
-No auth. Returns the Velori install script (plain text). Installs the CLI binary and agent skill.

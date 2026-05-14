@@ -1,25 +1,23 @@
 # Velori
 
-Velori is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI, and anonymous publishes can be claimed into a permanent account later.
+Velori is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI.
 
 This repo has three main apps:
 
-- `web/` - React dashboard for auth, uploads, projects, notifications, settings, and CLI docs
-- `api/` - Go API for auth, uploads, anonymous publish/claim, comments, notifications, and content serving
+- `web/` - React dashboard for auth, uploads, sites, and settings
+- `api/` - Go API for auth, uploads, sites/deploys, and content serving
 - `cli/` - Command-line tool for deploying from the terminal
 
 ## Docs
 
 - Implementation milestones and checklists live in `BUILD_PLAN.md`.
-- Anonymous publish and claim examples live in `SKILL.md`.
 
 ## Current capabilities
 
 - upload a folder or zip from the dashboard
-- redeploy the same project name and keep a stable live URL
+- redeploy the same site name and keep a stable live URL
 - deploy from the CLI with saved config or environment variables
-- publish a temporary anonymous site, then claim it into an account
-- add comments with `@mentions` and receive notifications in the dashboard
+- rollback to any previous deploy and toggle site visibility (public/private)
 
 ## MCP
 
@@ -121,23 +119,6 @@ Useful commands:
 
 Run `./velori help` for the full command list.
 
-## Anonymous publish API
-
-Publish a folder without creating an account first:
-
-```bash
-curl -X POST http://localhost:8080/api/v1/publish \
-  -F "name=my-prototype" \
-  -F "files=@index.html"
-```
-
-The response includes a live `siteUrl`, a `claimToken`, and a `claimUrl`.
-
-- anonymous sites expire after 24 hours unless claimed
-- anonymous publish is rate limited to 5 requests per hour per IP
-
-See `SKILL.md` for full examples, including zip upload and claim requests.
-
 ## Tests
 
 Run API tests:
@@ -154,11 +135,9 @@ With Postgres and the API running locally:
 ```bash
 ./scripts/local-smoke-test.sh
 ./scripts/zip-smoke-test.sh
-./scripts/anon-smoke-test.sh
 ```
 
 These cover:
 
 - signed-in upload and stable URL redeploy
 - zip upload serving
-- anonymous publish, claim, badge injection, and publish rate limiting

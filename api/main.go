@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -226,9 +224,6 @@ func main() {
 	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
-	appMux.HandleFunc("/install.sh", serveSkillFile(installScript, "text/plain; charset=utf-8"))
-	appMux.HandleFunc("/skill/SKILL.md", serveSkillFile(skillMD, "text/markdown; charset=utf-8"))
-	appMux.HandleFunc("/skill/scripts/publish.sh", serveSkillFile(publishScript, "text/plain; charset=utf-8"))
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveSiteHandler)))
 
 	contentMux := http.NewServeMux()
@@ -303,21 +298,4 @@ func main() {
 
 func (app *application) healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-//go:embed install.sh
-var installScript string
-
-//go:embed skill/SKILL.md
-var skillMD string
-
-//go:embed skill/scripts/publish.sh
-var publishScript string
-
-func serveSkillFile(content string, contentType string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "no-cache")
-		fmt.Fprint(w, content)
-	}
 }

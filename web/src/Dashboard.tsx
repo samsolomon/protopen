@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Site, SessionUser } from './types'
 import { resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
@@ -29,62 +29,27 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Plus, Upload, Mail, Terminal, Copy, Check, LayoutGrid, List } from 'lucide-react'
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="size-7 shrink-0"
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true)
-          if (timerRef.current) clearTimeout(timerRef.current)
-          timerRef.current = setTimeout(() => setCopied(false), 2000)
-        })
-      }}
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </Button>
-  )
-}
-
-const installCommand = 'curl -fsSL https://app.velori.dev/install.sh | bash'
+import { Plus, Upload, Mail, LayoutGrid, List } from 'lucide-react'
 
 function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   return (
-    <Card className="bg-muted border-0 shadow-none">
-      <CardContent className="py-10">
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Terminal />
-            </EmptyMedia>
-            <EmptyTitle>No sites yet</EmptyTitle>
-            <EmptyDescription>
-              Install the Velori skill, then tell your agent to deploy.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2">
-              <code className="font-mono text-xs text-muted-foreground">{installCommand}</code>
-              <CopyButton text={installCommand} />
-            </div>
-          </EmptyContent>
-          <button
-            type="button"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            onClick={onUploadOpen}
-          >
-            or drag and drop
-          </button>
-        </Empty>
-      </CardContent>
-    </Card>
+    <Empty className="bg-muted py-10">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Upload />
+        </EmptyMedia>
+        <EmptyTitle>No sites yet</EmptyTitle>
+        <EmptyDescription>
+          Upload a folder or zip to deploy your first site.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button onClick={onUploadOpen}>
+          <Plus />
+          Create site
+        </Button>
+      </EmptyContent>
+    </Empty>
   )
 }
 
