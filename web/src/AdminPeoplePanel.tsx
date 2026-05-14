@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, X } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 type AdminPeoplePanelProps = {
@@ -103,15 +103,15 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
     }
   }
 
-  const handleToggleRole = async (userId: string, primary: AdminUserOrg) => {
-    const nextRole = primary.role === 'admin' ? 'member' : 'admin'
+  const handleChangeRole = async (userId: string, org: AdminUserOrg, nextRole: 'admin' | 'member') => {
+    if (org.role === nextRole) return
     try {
-      await updateMemberRole(primary.orgId, primary.memberId, nextRole)
+      await updateMemberRole(org.orgId, org.memberId, nextRole)
       setUsers((prev) =>
         prev.map((row) =>
           row.id !== userId
             ? row
-            : { ...row, orgs: row.orgs.map((o) => (o.memberId === primary.memberId ? { ...o, role: nextRole } : o)) }
+            : { ...row, orgs: row.orgs.map((o) => (o.memberId === org.memberId ? { ...o, role: nextRole } : o)) }
         )
       )
     } catch (err) {
@@ -195,7 +195,33 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
                             variant={org.role === 'admin' ? 'secondary' : 'outline'}
                             className="gap-1 pr-1"
                           >
-                            <span>{org.orgSlug} · {org.role}</span>
+                            <span>{org.orgSlug} ·</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex cursor-pointer items-center gap-0.5 rounded hover:underline focus:outline-none"
+                                  aria-label={`Change role in ${org.orgSlug}`}
+                                >
+                                  {org.role}
+                                  <ChevronDown className="h-3 w-3 opacity-60" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuItem
+                                  onClick={() => void handleChangeRole(u.id, org, 'admin')}
+                                  disabled={org.role === 'admin'}
+                                >
+                                  Admin
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void handleChangeRole(u.id, org, 'member')}
+                                  disabled={org.role === 'member'}
+                                >
+                                  Member
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button
                               variant="ghost"
                               size="icon-xs"
@@ -212,20 +238,12 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
                   <TableCell className="text-muted-foreground">{u.createdAt}</TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-xs" aria-label="Person actions" />}
-                      >
-                        <MoreHorizontal />
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-xs" aria-label="Person actions">
+                          <MoreHorizontal />
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {primary ? (
-                          <DropdownMenuItem onClick={() => void handleToggleRole(u.id, primary)}>
-                            {primary.role === 'admin'
-                              ? `Demote in ${primary.orgSlug}`
-                              : `Promote in ${primary.orgSlug}`}
-                          </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
                           onClick={() => setDeleteTarget(u)}
