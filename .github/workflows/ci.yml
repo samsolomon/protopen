@@ -17,6 +17,11 @@ jobs:
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
+      - name: Stub embedded frontend
+        # api/frontend.go has //go:embed all:dist; the real dist is built by
+        # the `web` job. CI doesn't need the real frontend bytes to validate
+        # Go code — a stub placeholder is enough for the embed to resolve.
+        run: mkdir -p api/dist && touch api/dist/.gitkeep
       - name: Build
         run: (cd api && go build ./...)
       - name: Test
