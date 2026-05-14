@@ -106,7 +106,18 @@ Run it under systemd or `tmux` with `.env` exported. Same env vars apply.
 
 There's no CLI bootstrap for creating the first account. Once the API is up, hit your dashboard URL (`APP_ORIGIN`) and use the sign-up form. The first user has no special privileges — they become an admin only when their email is listed in `ADMIN_EMAILS` (next section).
 
-## 8. Admin access
+## 8. Behind a proxy (rate limiting)
+
+Protopen rate-limits auth endpoints per client IP. By default the IP comes from the connection's remote address — correct for a bare VM where the API process sees clients directly. Behind a proxy (Cloudflare, an L7 load balancer, an nginx in front), set `TRUSTED_PROXY_HEADER` to the header your proxy forwards the client IP in:
+
+```
+TRUSTED_PROXY_HEADER=CF-Connecting-IP   # Cloudflare
+TRUSTED_PROXY_HEADER=X-Forwarded-For    # generic reverse proxy
+```
+
+Only set this if your proxy strips client-supplied values for the same header — otherwise an attacker can spoof their IP to bypass rate limits. If `TRUSTED_PROXY_HEADER` is empty, those headers are ignored.
+
+## 9. Admin access
 
 Set `ADMIN_EMAILS` to a comma-separated list of email addresses that should see the **Admin** panel in the dashboard (user list, site list, force delete). The admin gate is checked on every authenticated request, so changes take effect on next sign-in.
 

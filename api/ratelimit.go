@@ -86,17 +86,34 @@ func (rl *rateLimiter) startCleanup(ctx context.Context) {
 	}()
 }
 
+// clientIP resolves the rate-limit key for a request. If trustedHeader is set
+// (canonical form, e.g. "X-Forwarded-For" or "Cf-Connecting-Ip"), the value of
+// that header is used — operators must only set this behind a proxy that
+// strips client-supplied values for the same header. Otherwise the connection
+// remote-addr is used. Falls back to remote-addr when the trusted header is
+// missing or empty.
+func clientIP(r *http.Request, trustedHeader string) string {
+	if trustedHeader != "" {
+		if v := strings.TrimSpace(r.Header.Get(trustedHeader)); v != "" {
+			// XFF can be a comma-separated chain; take the leftmost (original client).
+			if comma := strings.IndexByte(v, ','); comma != -1 {
+				v = strings.TrimSpace(v[:comma])
+			}
+			if v != "" {
+				return v
+			}
+		}
+	}
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		ip = ip[:idx]
+	}
+	return ip
+}
+
 func (app *application) rateLimit(rl *rateLimiter, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if idx := strings.LastIndex(ip, ":"); idx != -1 {
-			ip = ip[:idx]
-		}
-		if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
-			ip = strings.TrimSpace(cfIP)
-		} else if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		}
+		ip := clientIP(r, app.trustedProxyHeader)
 
 		allowed, retryAfter := rl.allow(ip)
 		if !allowed {

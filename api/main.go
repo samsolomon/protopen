@@ -37,9 +37,10 @@ type application struct {
 
 	mailer *emailClient
 
-	authLimiter      *rateLimiter
-	deviceTokens     *deviceTokenStore
-	adminEmails      []string
+	authLimiter        *rateLimiter
+	deviceTokens       *deviceTokenStore
+	adminEmails        []string
+	trustedProxyHeader string
 }
 
 type sessionUser struct {
@@ -180,17 +181,20 @@ func main() {
 		}
 	}
 
+	trustedProxyHeader := http.CanonicalHeaderKey(getenv("TRUSTED_PROXY_HEADER", ""))
+
 	app := &application{
-		db:             db,
-		store:          store,
-		ingestRoot:     ingestRoot,
-		contentBaseURL: contentBaseURL,
-		frontendOrigin: frontendOrigin,
-		appOrigin:      appOrigin,
-		contentOrigin:  contentOrigin,
-		cookieDomain:   cookieDomain,
-		mailer:         mailer,
-		adminEmails:    adminEmails,
+		db:                 db,
+		store:              store,
+		ingestRoot:         ingestRoot,
+		contentBaseURL:     contentBaseURL,
+		frontendOrigin:     frontendOrigin,
+		appOrigin:          appOrigin,
+		contentOrigin:      contentOrigin,
+		cookieDomain:       cookieDomain,
+		mailer:             mailer,
+		adminEmails:        adminEmails,
+		trustedProxyHeader: trustedProxyHeader,
 	}
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
 	app.deviceTokens = newDeviceTokenStore()

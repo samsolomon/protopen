@@ -3,6 +3,7 @@
 package main
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -64,6 +65,61 @@ func TestRateLimiterResetsAfterWindow(t *testing.T) {
 	allowed, _ = rl.allow("1.2.3.4")
 	if !allowed {
 		t.Fatal("request should be allowed after window expires")
+	}
+}
+
+func TestClientIPSource(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		trustedHeader string
+		headers       map[string]string
+		remoteAddr    string
+		want          string
+	}{
+		{
+			name:       "no trusted header falls back to remote addr",
+			headers:    map[string]string{"X-Forwarded-For": "9.9.9.9"},
+			remoteAddr: "1.2.3.4:5555",
+			want:       "1.2.3.4",
+		},
+		{
+			name:          "XFF trusted, leftmost wins",
+			trustedHeader: "X-Forwarded-For",
+			headers:       map[string]string{"X-Forwarded-For": "9.9.9.9, 10.0.0.1"},
+			remoteAddr:    "1.2.3.4:5555",
+			want:          "9.9.9.9",
+		},
+		{
+			name:          "Cf-Connecting-Ip trusted",
+			trustedHeader: "Cf-Connecting-Ip",
+			headers:       map[string]string{"Cf-Connecting-Ip": "9.9.9.9"},
+			remoteAddr:    "1.2.3.4:5555",
+			want:          "9.9.9.9",
+		},
+		{
+			name:          "trusted header empty falls back to remote addr",
+			trustedHeader: "X-Forwarded-For",
+			headers:       map[string]string{},
+			remoteAddr:    "1.2.3.4:5555",
+			want:          "1.2.3.4",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tc.remoteAddr
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			got := clientIP(req, tc.trustedHeader)
+			if got != tc.want {
+				t.Fatalf("clientIP = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
