@@ -1,143 +1,66 @@
 # Protopen
 
-Protopen is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI.
+A self-hostable static site and prototype hosting platform. Deploy a folder or zip from a dashboard or CLI and get a live URL.
 
-This repo has three main apps:
+**License:** [AGPL-3.0](LICENSE) &middot; **Self-hosting:** [docs/self-hosting.md](docs/self-hosting.md) &middot; **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
-- `web/` - React dashboard for auth, uploads, sites, and settings
-- `api/` - Go API for auth, uploads, sites/deploys, and content serving
-- `cli/` - Command-line tool for deploying from the terminal
+## What's in this repo
 
-## Docs
+- `api/` — Go API: auth, uploads, sites/deploys, content serving
+- `web/` — React dashboard
+- `cli/` — Go CLI for deploying from the terminal
 
-- Implementation milestones and checklists live in `BUILD_PLAN.md`.
-
-## Current capabilities
-
-- upload a folder or zip from the dashboard
-- redeploy the same site name and keep a stable live URL
-- deploy from the CLI with saved config or environment variables
-- rollback to any previous deploy and toggle site visibility (public/private)
-
-## MCP
-
-This repo includes a root `.mcp.json` with the `shadcn` MCP server configured.
-
-The web app is already configured for shadcn and Tailwind via `web/components.json` and `web/src/index.css`, so registry installs should work after restarting your MCP client.
-
-## Quick start
-
-### Database
+## Quickstart (local dev)
 
 ```bash
+git clone https://github.com/samsolomon/protopen.git
+cd protopen
+cp .env.example .env
 docker compose up -d postgres
-```
-
-The default local database URL is `postgres://protopen:protopen@localhost:5432/protopen?sslmode=disable`.
-
-### Web
-
-Install dependencies from the repo root, then start the Vite app:
-
-```bash
 npm install
+(cd api && go run .) &
 npm run dev:web
 ```
 
-The dashboard runs at `http://localhost:5173` and expects the API at `http://localhost:8080`.
+The dashboard runs at <http://localhost:5173>, talks to the API at <http://localhost:8080>, and serves deployed sites from <http://127.0.0.1:8081>.
 
-### API
+A demo account is seeded automatically when `SEED_DEMO` is set (see `.env.example`):
 
-```bash
-cd api
-go run .
-```
+- email: `sam@protopen.dev`
+- password: `protopen-demo`
 
-Local defaults:
+## Capabilities
 
-- app/API server: `http://localhost:8080`
-- content server: `http://127.0.0.1:8081`
-- storage: local filesystem under `.data/ingest`
-
-The API runs migrations automatically on startup and seeds a demo user plus sample projects for local development.
-
-Use the seeded demo account:
-
-- `sam@protopen.dev`
-- `protopen-demo`
-
-### Environment
-
-Overrides are documented in `.env.example`.
-
-- Leave `PORT` empty for local split mode (`:8080` app/API and `:8081` content).
-- Set `PORT` for single-server production mode.
-- Leave `R2_*` empty to use local filesystem storage.
-- Set `R2_*` and `R2_BUCKET_NAME` to use Cloudflare R2 object storage.
+- Upload a folder or zip from the dashboard or CLI
+- Stable site URLs across redeploys, with versioned deploy paths
+- Roll back to any previous deploy
+- Toggle site visibility (public / private — private sites require sign-in)
+- Auth: password-based with optional email verification (Resend)
+- Storage: local filesystem for dev, Cloudflare R2 for production
 
 ## CLI
 
-Build the CLI:
+After building (`cd cli && make build`):
 
 ```bash
-cd cli
-make build
+./protopen login                                   # paste an API token from Settings > API Tokens
+./protopen deploy ./my-site                        # deploy a folder
+./protopen deploy ./site.zip --name "Prototype"    # deploy a zip with a custom name
+./protopen list                                    # list your sites
+./protopen rollback <site-name> <deploy-id>        # roll back
+./protopen help                                    # full command list
 ```
 
-Authenticate with an API token from the dashboard under Settings > API Tokens:
-
-```bash
-./protopen login
-```
-
-Deploy a folder or zip:
-
-```bash
-./protopen deploy ./my-site
-./protopen deploy ./dist --name "My Prototype" --label "v2"
-./protopen deploy ./site.zip
-```
-
-Config is stored at `~/.protopen/config.json`.
-
-Resolution order is:
-
-- flags
-- environment variables: `PROTOPEN_TOKEN`, `PROTOPEN_URL`, `PROTOPEN_ORG`
-- config file
-- defaults
-
-Useful commands:
-
-- `./protopen list`
-- `./protopen deploys <project-name>`
-- `./protopen rollback <project-name> <deploy-id>`
-- `./protopen visibility <project-name> <public|private>`
-- `./protopen token`
-- `./protopen logout`
-- `./protopen config show`
-
-Run `./protopen help` for the full command list.
+Config lives at `~/.protopen/config.json`. Resolution order: `--flag` > `PROTOPEN_TOKEN` / `PROTOPEN_URL` / `PROTOPEN_ORG` env > config file > defaults.
 
 ## Tests
 
-Run API tests:
+See [CONTRIBUTING.md#running-tests](CONTRIBUTING.md#running-tests).
 
-```bash
-cd api
-go test ./...
-```
+## Production / self-hosting
 
-## Smoke tests
+See [docs/self-hosting.md](docs/self-hosting.md) for the full guide — Cloudflare R2 setup, wildcard DNS, Resend email, deploy targets (Fly, Railway, bare VM, Docker).
 
-With Postgres and the API running locally:
+## License
 
-```bash
-./scripts/local-smoke-test.sh
-./scripts/zip-smoke-test.sh
-```
-
-These cover:
-
-- signed-in upload and stable URL redeploy
-- zip upload serving
+[AGPL-3.0-only](LICENSE). Network-use disclosure: if you run a modified copy of protopen as a hosted service, you must offer the modified source to your users.
