@@ -27,26 +27,23 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 	}()
 }
 
-func (app *application) cleanupExpiredTokens(ctx context.Context) {
-	result, err := app.db.Exec(ctx, `delete from email_tokens where expires_at < now()`)
+func (app *application) runCleanupQuery(ctx context.Context, label, sql string) {
+	tag, err := app.db.Exec(ctx, sql)
 	if err != nil {
-		log.Printf("cleanup: expired tokens: %v", err)
+		log.Printf("cleanup %s: %v", label, err)
 		return
 	}
-	if n := result.RowsAffected(); n > 0 {
-		log.Printf("cleanup: removed %d expired email tokens", n)
+	if n := tag.RowsAffected(); n > 0 {
+		log.Printf("cleanup: removed %d %s", n, label)
 	}
 }
 
+func (app *application) cleanupExpiredTokens(ctx context.Context) {
+	app.runCleanupQuery(ctx, "expired email tokens", `delete from email_tokens where expires_at < now()`)
+}
+
 func (app *application) cleanupExpiredDeviceCodes(ctx context.Context) {
-	tag, err := app.db.Exec(ctx, `delete from device_codes where expires_at < now()`)
-	if err != nil {
-		log.Printf("cleanup device codes: %v", err)
-		return
-	}
-	if tag.RowsAffected() > 0 {
-		log.Printf("cleaned up %d expired device codes", tag.RowsAffected())
-	}
+	app.runCleanupQuery(ctx, "expired device codes", `delete from device_codes where expires_at < now()`)
 }
 
 func (app *application) cleanupSoftDeletedSites(ctx context.Context) {
@@ -122,12 +119,5 @@ func (app *application) cleanupSoftDeletedSites(ctx context.Context) {
 }
 
 func (app *application) cleanupOldAuditLog(ctx context.Context) {
-	tag, err := app.db.Exec(ctx, `delete from audit_log where created_at < now() - interval '1 year'`)
-	if err != nil {
-		log.Printf("cleanup audit log: %v", err)
-		return
-	}
-	if n := tag.RowsAffected(); n > 0 {
-		log.Printf("cleanup: removed %d old audit_log rows", n)
-	}
+	app.runCleanupQuery(ctx, "old audit_log rows", `delete from audit_log where created_at < now() - interval '1 year'`)
 }

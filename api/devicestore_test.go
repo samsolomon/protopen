@@ -3,6 +3,7 @@
 package main
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestDeviceTokenStoreConcurrent(t *testing.T) {
 
 	const n = 200
 	for i := 0; i < n; i++ {
-		s.put(itoa(i), "ptk_"+itoa(i), future)
+		s.put(strconv.Itoa(i), "ptk_"+strconv.Itoa(i), future)
 	}
 
 	// Race: many goroutines try to claim each code; exactly one wins per code.
@@ -76,7 +77,7 @@ func TestDeviceTokenStoreConcurrent(t *testing.T) {
 				if t := s.claim(code, time.Now()); t != "" {
 					results <- code
 				}
-			}(itoa(i))
+			}(strconv.Itoa(i))
 		}
 	}
 	wg.Wait()
@@ -94,28 +95,4 @@ func TestDeviceTokenStoreConcurrent(t *testing.T) {
 	if len(seen) != n {
 		t.Fatalf("expected %d codes claimed exactly once, got %d", n, len(seen))
 	}
-}
-
-// itoa avoids pulling strconv into the test file for a single use.
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := false
-	if i < 0 {
-		neg = true
-		i = -i
-	}
-	var digits [20]byte
-	pos := len(digits)
-	for i > 0 {
-		pos--
-		digits[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		digits[pos] = '-'
-	}
-	return string(digits[pos:])
 }

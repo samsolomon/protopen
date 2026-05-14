@@ -8,6 +8,13 @@ import (
 	"log"
 )
 
+const (
+	auditActionDeleteUser = "delete_user"
+	auditActionDeleteSite = "delete_site"
+	auditTargetUser       = "user"
+	auditTargetSite       = "site"
+)
+
 // logAdminAction writes a row to audit_log. Best-effort: an insert failure is
 // logged but never returned. A transient DB blip on the audit row must not
 // block the action the operator just took (e.g. force-deleting a user).

@@ -133,7 +133,7 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	app.logAdminAction(r.Context(), actor, "delete_user", "user", userID, nil)
+	app.logAdminAction(r.Context(), actor, auditActionDeleteUser, auditTargetUser, userID, nil)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -229,7 +229,7 @@ func (app *application) adminSiteByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	app.logAdminAction(r.Context(), actor, "delete_site", "site", siteID, nil)
+	app.logAdminAction(r.Context(), actor, auditActionDeleteSite, auditTargetSite, siteID, nil)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

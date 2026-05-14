@@ -20,8 +20,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// passwordHashCost is the bcrypt work factor for new password hashes. Existing
-// hashes at a lower cost verify fine — bcrypt embeds the cost in the hash.
 const passwordHashCost = 12
 
 func hashPassword(password string) (string, error) {
