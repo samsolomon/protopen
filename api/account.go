@@ -72,17 +72,34 @@ func (app *application) updateProfileHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	name := strings.TrimSpace(payload.Name)
-	email := strings.ToLower(strings.TrimSpace(payload.Email))
-	if name == "" || email == "" {
+	if name == "" || payload.Email == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and email are required"})
 		return
 	}
+	email, err := validateEmail(payload.Email)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := rejectControlChars(name); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// If the email changed, drop the verified-at timestamp so the new address
+	// has to be reverified. Prevents using a verified-old-address signup to
+	// take over an invite-bound email.
+	emailChanged := email != user.Email
 
 	var updated sessionUser
-	err = app.db.QueryRow(r.Context(), `
-		update users set name = $1, email = $2 where id = $3
-		returning id, email, name, username, email_verified_at
-	`, name, email, user.ID).Scan(&updated.ID, &updated.Email, &updated.Name, &updated.Username, &updated.EmailVerifiedAt)
+	query := `update users set name = $1, email = $2 where id = $3
+		returning id, email, name, username, email_verified_at`
+	if emailChanged {
+		query = `update users set name = $1, email = $2, email_verified_at = null where id = $3
+			returning id, email, name, username, email_verified_at`
+	}
+	err = app.db.QueryRow(r.Context(), query, name, email, user.ID).
+		Scan(&updated.ID, &updated.Email, &updated.Name, &updated.Username, &updated.EmailVerifiedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -92,6 +109,9 @@ func (app *application) updateProfileHandler(w http.ResponseWriter, r *http.Requ
 		log.Printf("update profile: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update profile"})
 		return
+	}
+	if emailChanged {
+		app.sendVerificationEmail(r.Context(), updated.ID, updated.Email, updated.Name)
 	}
 
 	orgs, err := loadUserOrgs(r.Context(), app.db, updated.ID)

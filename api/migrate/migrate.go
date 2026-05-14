@@ -59,16 +59,12 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 			return err
 		}
 
-		statements := strings.Split(string(body), ";")
-		for _, statement := range statements {
-			statement = strings.TrimSpace(statement)
-			if statement == "" {
-				continue
-			}
-			if _, err := tx.Exec(ctx, statement); err != nil {
-				tx.Rollback(ctx)
-				return fmt.Errorf("apply migration %s: %w", version, err)
-			}
+		// pgx handles multi-statement bodies when there are no parameters, so we
+		// execute the entire file as one batch. Splitting on ';' would break on
+		// dollar-quoted bodies, function definitions, or string literals.
+		if _, err := tx.Exec(ctx, string(body)); err != nil {
+			tx.Rollback(ctx)
+			return fmt.Errorf("apply migration %s: %w", version, err)
 		}
 
 		if _, err := tx.Exec(ctx, `insert into schema_migrations (version) values ($1)`, version); err != nil {

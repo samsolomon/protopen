@@ -219,7 +219,6 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	email := strings.ToLower(strings.TrimSpace(payload.Email))
 	memberRole := payload.Role
 	if memberRole == "" {
 		memberRole = roleMember
@@ -228,8 +227,13 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be admin or member"})
 		return
 	}
-	if email == "" {
+	if payload.Email == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+		return
+	}
+	email, err := validateEmail(payload.Email)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 

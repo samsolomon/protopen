@@ -302,6 +302,11 @@ func extractZipToDir(zipPath string, destinationRoot string) error {
 		}
 
 		destinationPath := filepath.Join(destinationRoot, filepath.FromSlash(normalizedPath))
+		// Defense-in-depth: confirm the joined path is contained in destinationRoot
+		// even after symlinks/edge-case normalization.
+		if rel, err := filepath.Rel(destinationRoot, destinationPath); err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+			return fmt.Errorf("zip entry %q escapes destination", file.Name)
+		}
 		if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 			return err
 		}

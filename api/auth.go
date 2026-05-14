@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// dummyPasswordHash is bcrypt-of-random-bytes generated once at process
+// start, used in authenticateUser to make the failure path take the same
+// time as a real bcrypt compare regardless of whether the email exists.
+var dummyPasswordHash = func() []byte {
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		panic(err)
+	}
+	hash, err := bcrypt.GenerateFromPassword(random, bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}()
 
 func (app *application) sessionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -185,7 +201,11 @@ func (app *application) authenticateUser(ctx context.Context, email string, pass
 		where email = $1
 	`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.Name, &user.Username, &passwordHash, &user.EmailVerifiedAt)
 	if err != nil {
-		return sessionUser{}, err
+		// Run a dummy bcrypt compare so the response time doesn't reveal
+		// whether the email is registered. The hash below is a bcrypt of
+		// random bytes generated once at process start.
+		bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
+		return sessionUser{}, fmt.Errorf("invalid credentials")
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)) != nil {
@@ -202,11 +222,17 @@ func (app *application) authenticateUser(ctx context.Context, email string, pass
 }
 
 func (app *application) registerUser(ctx context.Context, payload authRequest) (sessionUser, error) {
-	email := strings.ToLower(strings.TrimSpace(payload.Email))
 	password := strings.TrimSpace(payload.Password)
 	name := strings.TrimSpace(payload.Name)
-	if email == "" || password == "" || name == "" {
+	if payload.Email == "" || password == "" || name == "" {
 		return sessionUser{}, fmt.Errorf("name, email, and password are required")
+	}
+	email, err := validateEmail(payload.Email)
+	if err != nil {
+		return sessionUser{}, err
+	}
+	if err := rejectControlChars(name); err != nil {
+		return sessionUser{}, err
 	}
 	if len(password) < 8 {
 		return sessionUser{}, fmt.Errorf("password must be at least 8 characters")
@@ -323,9 +349,9 @@ func (app *application) newSessionCookie(value string, maxAge int) *http.Cookie 
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
-	}
-	if app.appOrigin != "" && strings.HasPrefix(app.appOrigin, "https://") {
-		cookie.Secure = true
+		// Secure defaults on. The only case we drop it is the explicit
+		// local-dev split-server mode where appOrigin is empty / http.
+		Secure: !(app.appOrigin == "" || strings.HasPrefix(app.appOrigin, "http://")),
 	}
 	if app.cookieDomain != "" {
 		cookie.Domain = app.cookieDomain

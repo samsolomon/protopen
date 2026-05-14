@@ -194,6 +194,12 @@ func main() {
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
 
 	if getenv("SEED_DEMO", "") != "" {
+		// Refuse to seed in any non-local environment. The demo password is
+		// public knowledge (see README), so seeding into a real deployment
+		// would create a known-credential backdoor.
+		if appOrigin != "" && !strings.HasPrefix(appOrigin, "http://localhost") && !strings.HasPrefix(appOrigin, "http://127.") {
+			log.Fatalf("SEED_DEMO refused: APP_ORIGIN=%q is not localhost. The seeded credentials are publicly known.", appOrigin)
+		}
 		if err := app.seedDemoData(ctx); err != nil {
 			log.Fatalf("seed demo data: %v", err)
 		}
@@ -225,7 +231,7 @@ func main() {
 	appMux.HandleFunc("/api/admin/sites", app.adminSitesHandler)
 	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
-	appMux.HandleFunc("/api/auth/device/", app.deviceCodePollHandler)
+	appMux.HandleFunc("/api/auth/device/", app.rateLimit(app.authLimiter, app.deviceCodePollHandler))
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveSiteHandler)))
 
 	contentMux := http.NewServeMux()
@@ -235,7 +241,7 @@ func main() {
 		addr := ":" + listenAddr
 		contentHost := strings.TrimPrefix(contentOrigin, "https://")
 		contentHost = strings.TrimPrefix(contentHost, "http://")
-		appHandler := appSecurityHeaders(withCORS(frontendOrigin, appMux))
+		appHandler := appSecurityHeaders(withCORS(frontendOrigin, limitJSONBody(appMux)))
 		contentHandler := contentSecurityHeaders(contentMux)
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +274,7 @@ func main() {
 	// Local dev mode: two separate servers
 	appServer := &http.Server{
 		Addr:              appListenAddr,
-		Handler:           appSecurityHeaders(withCORS(frontendOrigin, appMux)),
+		Handler:           appSecurityHeaders(withCORS(frontendOrigin, limitJSONBody(appMux))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -34,6 +34,17 @@ Protopen serves site content from URLs like `https://sites.example.com/~{org}/{s
 
 If you want both behind one domain (single-server production mode), set `PORT` and protopen will serve both on the same port. Otherwise use split mode: API on `APP_LISTEN_ADDR`, content on `CONTENT_LISTEN_ADDR`.
 
+### Tenant isolation (important)
+
+**Do not put the app and content hosts under a shared registrable domain that you scope the session cookie to.** Sites served from `sites.example.com` are arbitrary user-uploaded HTML+JS. If you set `COOKIE_DOMAIN=.example.com`, that session cookie travels to `sites.example.com` and JS in any served site can issue credentialed `fetch` requests against the same origin to scrape other private sites.
+
+Two safe topologies:
+
+1. **Separate registrable domains** (preferred). e.g. `app.example.com` for the API/dashboard, and `protopen-sites.dev` for content. Leave `COOKIE_DOMAIN` empty so the cookie is host-scoped to the app domain only.
+2. **Same parent domain but scope `COOKIE_DOMAIN` tightly.** Set `COOKIE_DOMAIN=app.example.com` (not `.example.com`) so the cookie is never sent to content subdomains. The drawback: signed-in users viewing their own private sites won't have their session — visit through the dashboard's iframe-style preview rather than the bare URL.
+
+The unsafe topology is `app.example.com` + `sites.example.com` with `COOKIE_DOMAIN=.example.com`.
+
 ## 4. Resend (transactional email)
 
 Email is **optional**. With `RESEND_API_KEY` empty, protopen still works — auth is password-based, not magic-link. The only difference is that email-verification sends are skipped (verification is non-blocking) and password-reset emails won't go out.

@@ -15,7 +15,7 @@ func (app *application) deviceCodeHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	code := generateToken(4) // 8 hex chars
+	code := generateToken(16) // 32 hex chars (128 bits)
 	id := generateID("dvc")
 	now := time.Now().UTC()
 	expiresAt := now.Add(10 * time.Minute)
@@ -73,10 +73,19 @@ func (app *application) pollDeviceCode(w http.ResponseWriter, r *http.Request, c
 	}
 
 	if status == "complete" && token != nil {
-		if _, err := app.db.Exec(r.Context(), `update device_codes set status = 'consumed', token = null where code = $1`, code); err != nil {
-			log.Printf("consume device code: %v", err)
+		// Atomic read-and-clear: only release the token if this poller
+		// is the first to claim it. Returns no rows on a race.
+		var claimed string
+		err := app.db.QueryRow(r.Context(), `
+			update device_codes set status = 'consumed', token = null
+			where code = $1 and status = 'complete' and token is not null
+			returning token
+		`, code).Scan(&claimed)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
+			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": *token})
+		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": claimed})
 		return
 	}
 

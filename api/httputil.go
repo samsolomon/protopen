@@ -11,12 +11,36 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// validateEmail parses with net/mail.ParseAddress and returns the canonical
+// lowercased address. Rejects empty input, malformed addresses, and any
+// control character (CRLF in particular) in the parsed local-part/name.
+func validateEmail(raw string) (string, error) {
+	addr, err := mail.ParseAddress(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("invalid email address")
+	}
+	if strings.ContainsAny(addr.Address, "\r\n") || strings.ContainsAny(addr.Name, "\r\n") {
+		return "", fmt.Errorf("invalid email address")
+	}
+	return strings.ToLower(addr.Address), nil
+}
+
+// rejectControlChars returns an error if value contains CR/LF. Use for any
+// user-supplied string that flows into email subjects/bodies/headers.
+func rejectControlChars(value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("input contains invalid characters")
+	}
+	return nil
+}
 
 const (
 	roleAdmin  = "admin"
@@ -131,6 +155,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func withCORS(frontendOrigin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
 		origin := r.Header.Get("Origin")
 		if origin == frontendOrigin {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
@@ -148,11 +173,26 @@ func withCORS(frontendOrigin string, next http.Handler) http.Handler {
 	})
 }
 
+const maxJSONBodyBytes = 1 << 20 // 1 MiB — applied to /api/* except multipart uploads
+
+func limitJSONBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodDelete && r.Method != http.MethodOptions {
+			ct := r.Header.Get("Content-Type")
+			if !strings.HasPrefix(ct, "multipart/form-data") {
+				r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func appSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
 }
