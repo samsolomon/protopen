@@ -59,7 +59,7 @@ export function DeviceAuthPage({ onSessionExpired }: DeviceAuthPageProps) {
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Velori</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Protopen</h1>
         </div>
 
         <Card>
@@ -75,7 +75,7 @@ export function DeviceAuthPage({ onSessionExpired }: DeviceAuthPageProps) {
               <CardHeader>
                 <CardTitle>Authorize device</CardTitle>
                 <CardDescription>
-                  A device is requesting access to your Velori account.
+                  A device is requesting access to your Protopen account.
                 </CardDescription>
               </CardHeader>
               <CardContent>

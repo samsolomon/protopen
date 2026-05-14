@@ -66,7 +66,7 @@ export function TokensPanel({ onSessionExpired }: TokensPanelProps) {
   return (
     <section>
       <h3 className="mb-1 text-sm font-medium">API tokens</h3>
-      <p className="mb-3 text-sm text-muted-foreground">Create tokens to deploy with the Velori CLI or curl.</p>
+      <p className="mb-3 text-sm text-muted-foreground">Create tokens to deploy with the Protopen CLI or curl.</p>
 
       {revealedToken ? (
         <div className="mb-4 flex flex-col gap-2 rounded-lg border bg-muted/50 p-3">

@@ -66,9 +66,9 @@ func (ec *emailClient) sendVerifyEmail(to string, name string, verifyURL string)
 	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
 		From:    ec.from,
 		To:      []string{to},
-		Subject: "Verify your Velori account",
+		Subject: "Verify your Protopen account",
 		Html:    html,
-		Text:    fmt.Sprintf("Hi %s,\n\nVerify your email to get started with Velori:\n%s\n\nThis link expires in 24 hours.", name, verifyURL),
+		Text:    fmt.Sprintf("Hi %s,\n\nVerify your email to get started with Protopen:\n%s\n\nThis link expires in 24 hours.", name, verifyURL),
 	})
 	return err
 }
@@ -87,9 +87,9 @@ func (ec *emailClient) sendOrgInvite(to string, orgName string, inviterName stri
 	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
 		From:    ec.from,
 		To:      []string{to},
-		Subject: fmt.Sprintf("%s invited you to %s on Velori", inviterName, orgName),
+		Subject: fmt.Sprintf("%s invited you to %s on Protopen", inviterName, orgName),
 		Html:    html,
-		Text:    fmt.Sprintf("%s invited you to %s on Velori.\n\nSign up to join:\n%s", inviterName, orgName, signupURL),
+		Text:    fmt.Sprintf("%s invited you to %s on Protopen.\n\nSign up to join:\n%s", inviterName, orgName, signupURL),
 	})
 	return err
 }
@@ -129,9 +129,9 @@ func (ec *emailClient) sendPasswordReset(to string, resetURL string) error {
 	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
 		From:    ec.from,
 		To:      []string{to},
-		Subject: "Reset your Velori password",
+		Subject: "Reset your Protopen password",
 		Html:    html,
-		Text:    fmt.Sprintf("You requested a password reset for your Velori account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL),
+		Text:    fmt.Sprintf("You requested a password reset for your Protopen account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL),
 	})
 	return err
 }

@@ -169,7 +169,7 @@ func (c *client) listSites(org string) ([]siteInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
@@ -199,7 +199,7 @@ func (c *client) getSession() (userInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return userInfo{}, fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+		return userInfo{}, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
 	}
 
 	var result struct {
@@ -242,7 +242,7 @@ func (c *client) listDeploys(siteID string) ([]deployInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
@@ -274,7 +274,7 @@ func (c *client) rollback(siteID string, deployID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+		return fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
 	}
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct{ Error string `json:"error"` }
@@ -304,7 +304,7 @@ func (c *client) updateVisibility(siteID string, isPublic bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized — check your VELORI_TOKEN")
+		return fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
 	}
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct{ Error string `json:"error"` }

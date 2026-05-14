@@ -1,4 +1,4 @@
-BINARY = velori
+BINARY = protopen
 
 .PHONY: build test clean
 

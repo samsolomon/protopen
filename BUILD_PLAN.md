@@ -1,10 +1,10 @@
-# Velori Build Plan
+# Protopen Build Plan
 
 This document turns the v1 product plan into an implementation checklist that can drive the build toward something testable.
 
 ## v1 Goal
 
-Build a testable Velori MVP that lets a signed-in user upload a folder or zip of prebuilt static assets, receive a stable public URL, and redeploy the same project by name.
+Build a testable Protopen MVP that lets a signed-in user upload a folder or zip of prebuilt static assets, receive a stable public URL, and redeploy the same project by name.
 
 ## Definition of Testable
 
@@ -121,7 +121,7 @@ Production origin model and stronger isolation are deferred to pre-launch harden
 
 ## Current Status
 
-Velori is at a real local testable checkpoint. The end-to-end demo script works:
+Protopen is at a real local testable checkpoint. The end-to-end demo script works:
 
 - sign in with the demo account
 - upload a static folder

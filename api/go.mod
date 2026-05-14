@@ -1,4 +1,4 @@
-module github.com/samsolomon/velori/api
+module github.com/samsolomon/protopen/api
 
 go 1.25.0
 

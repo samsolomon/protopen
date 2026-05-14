@@ -107,7 +107,7 @@ export function UploadPanel({ error, setError, onProjectsChanged, onSessionExpir
             <p className="text-sm">
               <span className="font-medium">CLI</span>
               <span className="text-muted-foreground"> — run </span>
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">velori deploy my-site</code>
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">protopen deploy my-site</code>
             </p>
             <Badge variant="secondary" className="text-[10px]">Easiest</Badge>
           </div>

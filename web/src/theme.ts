@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'velori-theme'
+const STORAGE_KEY = 'protopen-theme'
 
 export type Theme = 'light' | 'dark' | 'system'
 

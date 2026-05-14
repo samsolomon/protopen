@@ -119,7 +119,7 @@ func (app *application) createTokenHandler(w http.ResponseWriter, r *http.Reques
 		name = "default"
 	}
 
-	rawToken := "vtk_" + generateToken(32)
+	rawToken := "ptk_" + generateToken(32)
 	tokenID := generateID("tok")
 
 	_, err = app.db.Exec(r.Context(), `

@@ -400,7 +400,7 @@ func detectSiteRoot(root string) (string, error) {
 		return "", err
 	}
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("no index.html found - Velori hosts built static sites only")
+		return "", fmt.Errorf("no index.html found - Protopen hosts built static sites only")
 	}
 
 	sort.Slice(candidates, func(i int, j int) bool {
@@ -482,13 +482,13 @@ func validateUpload(payload uploadRequest) error {
 		}
 
 		if !hasIndexHTML {
-			return fmt.Errorf("no index.html found in extracted zip - Velori hosts built static sites only")
+			return fmt.Errorf("no index.html found in extracted zip - Protopen hosts built static sites only")
 		}
 		return nil
 	}
 
 	if !hasIndexHTML {
-		return fmt.Errorf("no index.html found - Velori hosts built static sites only")
+		return fmt.Errorf("no index.html found - Protopen hosts built static sites only")
 	}
 
 	return nil

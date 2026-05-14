@@ -54,10 +54,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, `Usage: velori <command> [options]
+	fmt.Fprintln(os.Stderr, `Usage: protopen <command> [options]
 
 Commands:
-  deploy <path>                Deploy a folder or zip to Velori
+  deploy <path>                Deploy a folder or zip to Protopen
   list                         List your sites
   deploys <name>               Show deploy history for a site
   rollback <name> <deploy-id>  Roll back to a previous deploy
@@ -68,8 +68,8 @@ Commands:
   config                       View and update CLI configuration
 
 Configuration:
-  Config file: ~/.velori/config.json
-  Priority:    --flag > VELORI_TOKEN/VELORI_URL > config file > default`)
+  Config file: ~/.protopen/config.json
+  Priority:    --flag > PROTOPEN_TOKEN/PROTOPEN_URL > config file > default`)
 }
 
 func cmdDeploy(args []string) {
@@ -78,13 +78,13 @@ func cmdDeploy(args []string) {
 	label := fs.String("label", "", "Deploy label (e.g. 'v2 with new header')")
 	private := fs.Bool("private", false, "Make the site private after deploy")
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	jsonOutput := fs.Bool("json", false, "Output JSON response")
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: velori deploy <path> [--name NAME] [--private] [--token TOKEN] [--url URL] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: protopen deploy <path> [--name NAME] [--private] [--token TOKEN] [--url URL] [--json]")
 		os.Exit(1)
 	}
 
@@ -146,8 +146,8 @@ func cmdDeploy(args []string) {
 func cmdList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	client := newClient(requireToken(*token), resolveURL(*url))
@@ -174,12 +174,12 @@ func cmdList(args []string) {
 func cmdDeploys(args []string) {
 	fs := flag.NewFlagSet("deploys", flag.ExitOnError)
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: velori deploys <site-name>")
+		fmt.Fprintln(os.Stderr, "usage: protopen deploys <site-name>")
 		os.Exit(1)
 	}
 
@@ -231,12 +231,12 @@ func cmdDeploys(args []string) {
 func cmdRollback(args []string) {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: velori rollback <site-name> <deploy-id>")
+		fmt.Fprintln(os.Stderr, "usage: protopen rollback <site-name> <deploy-id>")
 		os.Exit(1)
 	}
 
@@ -258,8 +258,8 @@ func cmdRollback(args []string) {
 
 func cmdToken(args []string) {
 	fs := flag.NewFlagSet("token", flag.ExitOnError)
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	t := requireToken(*token)
@@ -280,7 +280,7 @@ func resolveToken(flag string) string {
 	if flag != "" {
 		return flag
 	}
-	if env := os.Getenv("VELORI_TOKEN"); env != "" {
+	if env := os.Getenv("PROTOPEN_TOKEN"); env != "" {
 		return env
 	}
 	return loadConfig().Token
@@ -290,20 +290,20 @@ func resolveURL(flag string) string {
 	if flag != "" {
 		return flag
 	}
-	if env := os.Getenv("VELORI_URL"); env != "" {
+	if env := os.Getenv("PROTOPEN_URL"); env != "" {
 		return env
 	}
 	if cfg := loadConfig().URL; cfg != "" {
 		return cfg
 	}
-	return "https://app.velori.dev"
+	return "http://localhost:8080"
 }
 
 func resolveOrg(flag string) string {
 	if flag != "" {
 		return flag
 	}
-	if env := os.Getenv("VELORI_ORG"); env != "" {
+	if env := os.Getenv("PROTOPEN_ORG"); env != "" {
 		return env
 	}
 	return loadConfig().Org
@@ -322,12 +322,12 @@ func requireToken(flag string) string {
 		fmt.Fprintln(os.Stderr, `Error: no API token configured.
 
 Set up authentication:
-  velori login
+  protopen login
 
 Or provide a token directly:
-  velori deploy --token vtk_your_token_here
+  protopen deploy --token ptk_your_token_here
 
-Create tokens in the Velori dashboard under Settings > API Tokens.`)
+Create tokens in the Protopen dashboard under Settings > API Tokens.`)
 		os.Exit(1)
 	}
 	return t
@@ -336,12 +336,12 @@ Create tokens in the Velori dashboard under Settings > API Tokens.`)
 func cmdVisibility(args []string) {
 	fs := flag.NewFlagSet("visibility", flag.ExitOnError)
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
-	token := fs.String("token", "", "API token (overrides VELORI_TOKEN)")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: velori visibility <site-name> <public|private>")
+		fmt.Fprintln(os.Stderr, "usage: protopen visibility <site-name> <public|private>")
 		os.Exit(1)
 	}
 
@@ -377,7 +377,7 @@ func cmdVisibility(args []string) {
 func cmdLogin(args []string) {
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	token := fs.String("token", "", "API token")
-	url := fs.String("url", "", "API base URL (overrides VELORI_URL)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	fs.Parse(args)
 
 	t := *token
@@ -407,7 +407,7 @@ func cmdLogin(args []string) {
 	fmt.Printf("\nAuthenticated as %s (%s)\n", user.Name, user.Email)
 	fmt.Printf("Token saved to %s\n", configPath())
 	fmt.Println("\nYou're ready to deploy:")
-	fmt.Println("  velori deploy ./my-site")
+	fmt.Println("  protopen deploy ./my-site")
 }
 
 func loginWithDeviceCode(baseURL string) string {
@@ -505,7 +505,7 @@ func cmdLogout(args []string) {
 
 func cmdConfig(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, `Usage: velori config <subcommand>
+		fmt.Fprintln(os.Stderr, `Usage: protopen config <subcommand>
 
 Subcommands:
   show               Show current configuration
@@ -528,7 +528,7 @@ Subcommands:
 
 	case "set":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: velori config set <key> <value>")
+			fmt.Fprintln(os.Stderr, "usage: protopen config set <key> <value>")
 			os.Exit(1)
 		}
 		cfg := loadConfig()

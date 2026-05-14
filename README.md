@@ -1,6 +1,6 @@
-# Velori
+# Protopen
 
-Velori is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI.
+Protopen is a static site and prototype hosting platform. Signed-in users can deploy from the dashboard or CLI.
 
 This repo has three main apps:
 
@@ -33,7 +33,7 @@ The web app is already configured for shadcn and Tailwind via `web/components.js
 docker compose up -d postgres
 ```
 
-The default local database URL is `postgres://velori:velori@localhost:5432/velori?sslmode=disable`.
+The default local database URL is `postgres://protopen:protopen@localhost:5432/protopen?sslmode=disable`.
 
 ### Web
 
@@ -63,8 +63,8 @@ The API runs migrations automatically on startup and seeds a demo user plus samp
 
 Use the seeded demo account:
 
-- `sam@velori.dev`
-- `velori-demo`
+- `sam@protopen.dev`
+- `protopen-demo`
 
 ### Environment
 
@@ -87,37 +87,37 @@ make build
 Authenticate with an API token from the dashboard under Settings > API Tokens:
 
 ```bash
-./velori login
+./protopen login
 ```
 
 Deploy a folder or zip:
 
 ```bash
-./velori deploy ./my-site
-./velori deploy ./dist --name "My Prototype" --label "v2"
-./velori deploy ./site.zip
+./protopen deploy ./my-site
+./protopen deploy ./dist --name "My Prototype" --label "v2"
+./protopen deploy ./site.zip
 ```
 
-Config is stored at `~/.velori/config.json`.
+Config is stored at `~/.protopen/config.json`.
 
 Resolution order is:
 
 - flags
-- environment variables: `VELORI_TOKEN`, `VELORI_URL`, `VELORI_ORG`
+- environment variables: `PROTOPEN_TOKEN`, `PROTOPEN_URL`, `PROTOPEN_ORG`
 - config file
 - defaults
 
 Useful commands:
 
-- `./velori list`
-- `./velori deploys <project-name>`
-- `./velori rollback <project-name> <deploy-id>`
-- `./velori visibility <project-name> <public|private>`
-- `./velori token`
-- `./velori logout`
-- `./velori config show`
+- `./protopen list`
+- `./protopen deploys <project-name>`
+- `./protopen rollback <project-name> <deploy-id>`
+- `./protopen visibility <project-name> <public|private>`
+- `./protopen token`
+- `./protopen logout`
+- `./protopen config show`
 
-Run `./velori help` for the full command list.
+Run `./protopen help` for the full command list.
 
 ## Tests
 

@@ -98,7 +98,7 @@ export function Dashboard({
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
   const [verificationSent, setVerificationSent] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
-    localStorage.getItem('velori-project-view') === 'list' ? 'list' : 'grid'
+    localStorage.getItem('protopen-site-view') === 'list' ? 'list' : 'grid'
   )
 
   const navigateTo = (path: string) => {
@@ -148,7 +148,7 @@ export function Dashboard({
       <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-[40px] backdrop-saturate-150">
         <div className="mx-auto grid h-14 max-w-[1440px] grid-cols-3 items-center px-4">
           <div className="flex items-center">
-            <a href="/" className="text-xl font-semibold tracking-tight hover:opacity-70 transition-opacity" onClick={(e) => { e.preventDefault(); switchView('dashboard') }}>Velori</a>
+            <a href="/" className="text-xl font-semibold tracking-tight hover:opacity-70 transition-opacity" onClick={(e) => { e.preventDefault(); switchView('dashboard') }}>Protopen</a>
           </div>
           <div />
           <div className="flex items-center justify-end gap-2">
@@ -276,7 +276,7 @@ export function Dashboard({
                           type="button"
                           onClick={() => {
                             setViewMode(mode)
-                            localStorage.setItem('velori-project-view', mode)
+                            localStorage.setItem('protopen-site-view', mode)
                           }}
                           className={`flex cursor-pointer items-center rounded-md border p-1.5 transition-colors ${
                             viewMode === mode

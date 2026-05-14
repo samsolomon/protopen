@@ -107,7 +107,7 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Create an API token
-	rawToken := "vtk_" + generateToken(32)
+	rawToken := "ptk_" + generateToken(32)
 	tokenID := generateID("tok")
 	now := time.Now().UTC()
 

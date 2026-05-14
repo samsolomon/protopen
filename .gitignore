@@ -3,13 +3,13 @@ dist/
 .DS_Store
 web/node_modules/
 web/dist/
-api/velori-api
+api/protopen-api
 api/api
 api/.data/
 cli/cli
-cli/velori
+cli/protopen
 .env
 .env.local
 .env.*.local
-api/.velori/
+api/.protopen/
 dist/

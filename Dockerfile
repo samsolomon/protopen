@@ -14,15 +14,15 @@ COPY api/go.mod api/go.sum ./
 RUN go mod download
 COPY api/ ./
 COPY --from=frontend /app/web/dist ./dist/
-RUN CGO_ENABLED=0 go build -o /velori .
+RUN CGO_ENABLED=0 go build -o /protopen .
 
 # Stage 3: Runtime
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
-RUN adduser -D velori
-RUN mkdir -p /home/velori/.data/ingest && chown -R velori:velori /home/velori
-COPY --from=backend /velori /velori
-USER velori
-WORKDIR /home/velori
+RUN adduser -D protopen
+RUN mkdir -p /home/protopen/.data/ingest && chown -R protopen:protopen /home/protopen
+COPY --from=backend /protopen /protopen
+USER protopen
+WORKDIR /home/protopen
 EXPOSE 8080
-CMD ["/velori"]
+CMD ["/protopen"]

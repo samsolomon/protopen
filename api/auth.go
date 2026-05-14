@@ -147,7 +147,7 @@ func (app *application) isAdmin(email string) bool {
 
 func (app *application) authenticateBearer(r *http.Request) (sessionUser, error) {
 	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, "Bearer vtk_") {
+	if !strings.HasPrefix(header, "Bearer ptk_") {
 		return sessionUser{}, fmt.Errorf("no bearer token")
 	}
 

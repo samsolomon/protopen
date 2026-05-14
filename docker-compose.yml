@@ -1,15 +1,15 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: velori-postgres
+    container_name: protopen-postgres
     environment:
-      POSTGRES_DB: velori
-      POSTGRES_USER: velori
-      POSTGRES_PASSWORD: velori
+      POSTGRES_DB: protopen
+      POSTGRES_USER: protopen
+      POSTGRES_PASSWORD: protopen
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - velori_postgres_data:/var/lib/postgresql/data
+      - protopen_postgres_data:/var/lib/postgresql/data
 
 volumes:
-  velori_postgres_data:
+  protopen_postgres_data:

@@ -33,7 +33,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
 
-	want := config{Token: "vtk_test123", URL: "https://example.com"}
+	want := config{Token: "ptk_test123", URL: "https://example.com"}
 	if err := saveConfig(want); err != nil {
 		t.Fatalf("saveConfig: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSaveConfigCreatesDirectory(t *testing.T) {
 	configHome = dir
 	defer func() { configHome = "" }()
 
-	if err := saveConfig(config{Token: "vtk_abc"}); err != nil {
+	if err := saveConfig(config{Token: "ptk_abc"}); err != nil {
 		t.Fatalf("saveConfig: %v", err)
 	}
 
@@ -66,14 +66,14 @@ func TestSaveConfigPreservesOtherFields(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
 
-	saveConfig(config{Token: "vtk_original", URL: "https://example.com"})
+	saveConfig(config{Token: "ptk_original", URL: "https://example.com"})
 
 	cfg := loadConfig()
-	cfg.Token = "vtk_updated"
+	cfg.Token = "ptk_updated"
 	saveConfig(cfg)
 
 	got := loadConfig()
-	if got.Token != "vtk_updated" {
+	if got.Token != "ptk_updated" {
 		t.Fatalf("token not updated: got %q", got.Token)
 	}
 	if got.URL != "https://example.com" {
@@ -84,33 +84,33 @@ func TestSaveConfigPreservesOtherFields(t *testing.T) {
 func TestResolveTokenWithConfigFallback(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_TOKEN", "")
+	t.Setenv("PROTOPEN_TOKEN", "")
 
-	saveConfig(config{Token: "vtk_from_config"})
+	saveConfig(config{Token: "ptk_from_config"})
 
 	got := resolveToken("")
-	if got != "vtk_from_config" {
-		t.Fatalf("expected vtk_from_config, got %q", got)
+	if got != "ptk_from_config" {
+		t.Fatalf("expected ptk_from_config, got %q", got)
 	}
 }
 
 func TestResolveTokenEnvBeatsConfig(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_TOKEN", "vtk_from_env")
+	t.Setenv("PROTOPEN_TOKEN", "ptk_from_env")
 
-	saveConfig(config{Token: "vtk_from_config"})
+	saveConfig(config{Token: "ptk_from_config"})
 
 	got := resolveToken("")
-	if got != "vtk_from_env" {
-		t.Fatalf("expected vtk_from_env, got %q", got)
+	if got != "ptk_from_env" {
+		t.Fatalf("expected ptk_from_env, got %q", got)
 	}
 }
 
 func TestResolveURLWithConfigFallback(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_URL", "")
+	t.Setenv("PROTOPEN_URL", "")
 
 	saveConfig(config{URL: "https://config.example.com"})
 
@@ -123,7 +123,7 @@ func TestResolveURLWithConfigFallback(t *testing.T) {
 func TestResolveURLEnvBeatsConfig(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_URL", "https://env.example.com")
+	t.Setenv("PROTOPEN_URL", "https://env.example.com")
 
 	saveConfig(config{URL: "https://config.example.com"})
 

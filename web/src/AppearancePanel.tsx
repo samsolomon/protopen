@@ -30,7 +30,7 @@ export function AppearancePanel() {
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <p className="text-sm">Theme</p>
-            <p className="text-sm text-muted-foreground">Choose how Velori looks for you.</p>
+            <p className="text-sm text-muted-foreground">Choose how Protopen looks for you.</p>
           </div>
           <div className="flex gap-1">
             {options.map(({ value, label, icon: Icon }) => (

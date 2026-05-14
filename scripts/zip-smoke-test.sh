@@ -4,8 +4,8 @@ set -euo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://localhost:8080}"
 CONTENT_BASE_URL="${CONTENT_BASE_URL:-http://127.0.0.1:8081}"
-EMAIL="${VELORI_EMAIL:-sam@velori.dev}"
-PASSWORD="${VELORI_PASSWORD:-velori-demo}"
+EMAIL="${PROTOPEN_EMAIL:-sam@protopen.dev}"
+PASSWORD="${PROTOPEN_PASSWORD:-protopen-demo}"
 
 tmp_dir="$(mktemp -d)"
 cookie_file="${tmp_dir}/cookies.txt"
@@ -26,12 +26,12 @@ cat > "${site_dir}/index.html" <<'EOF'
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Velori Zip Smoke Test</title>
+    <title>Protopen Zip Smoke Test</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main>
-      <h1>Velori Zip Smoke Test</h1>
+      <h1>Protopen Zip Smoke Test</h1>
       <p>If you can read this, the zip upload is working.</p>
     </main>
   </body>
@@ -69,7 +69,7 @@ PY
 echo "Fetching hosted page: ${live_url}"
 html="$(curl -sS "${live_url}")"
 
-if [[ "${html}" != *"Velori Zip Smoke Test"* ]]; then
+if [[ "${html}" != *"Protopen Zip Smoke Test"* ]]; then
   echo "Zip smoke test failed: hosted content did not match expected output" >&2
   echo "Response: ${html}" >&2
   exit 1

@@ -23,7 +23,7 @@ func configDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".velori")
+	return filepath.Join(home, ".protopen")
 }
 
 func configPath() string {

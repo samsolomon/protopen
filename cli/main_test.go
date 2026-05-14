@@ -5,7 +5,7 @@ import "testing"
 func TestResolveTokenPrefersFlag(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_TOKEN", "env-token")
+	t.Setenv("PROTOPEN_TOKEN", "env-token")
 
 	got := resolveToken("flag-token")
 	if got != "flag-token" {
@@ -16,7 +16,7 @@ func TestResolveTokenPrefersFlag(t *testing.T) {
 func TestResolveTokenFallsToEnv(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_TOKEN", "env-token")
+	t.Setenv("PROTOPEN_TOKEN", "env-token")
 
 	got := resolveToken("")
 	if got != "env-token" {
@@ -27,7 +27,7 @@ func TestResolveTokenFallsToEnv(t *testing.T) {
 func TestResolveTokenReturnsEmpty(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_TOKEN", "")
+	t.Setenv("PROTOPEN_TOKEN", "")
 
 	got := resolveToken("")
 	if got != "" {
@@ -38,18 +38,18 @@ func TestResolveTokenReturnsEmpty(t *testing.T) {
 func TestResolveURLDefaults(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_URL", "")
+	t.Setenv("PROTOPEN_URL", "")
 
 	got := resolveURL("")
-	if got != "https://app.velori.dev" {
-		t.Fatalf("expected https://app.velori.dev, got %q", got)
+	if got != "http://localhost:8080" {
+		t.Fatalf("expected http://localhost:8080, got %q", got)
 	}
 }
 
 func TestResolveURLPrefersFlag(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_URL", "https://env.example.com")
+	t.Setenv("PROTOPEN_URL", "https://env.example.com")
 
 	got := resolveURL("https://flag.example.com")
 	if got != "https://flag.example.com" {
@@ -60,7 +60,7 @@ func TestResolveURLPrefersFlag(t *testing.T) {
 func TestResolveURLFallsToEnv(t *testing.T) {
 	configHome = t.TempDir()
 	defer func() { configHome = "" }()
-	t.Setenv("VELORI_URL", "https://env.example.com")
+	t.Setenv("PROTOPEN_URL", "https://env.example.com")
 
 	got := resolveURL("")
 	if got != "https://env.example.com" {

@@ -1,20 +1,20 @@
-# Velori API Reference
+# Protopen API Reference
 
-Base URL: `https://app.velori.dev`
+Base URL: `https://app.protopen.dev`
 
 All endpoints return JSON. Errors use `{"error": "message"}`.
 
 ## URL Format
 
-- Authenticated projects: `https://sites.velori.dev/~{orgSlug}/{projectSlug}`
-- Versioned deploys: `https://sites.velori.dev/~{orgSlug}/{projectSlug}/_v/{deployId}`
+- Authenticated projects: `https://sites.protopen.dev/~{orgSlug}/{projectSlug}`
+- Versioned deploys: `https://sites.protopen.dev/~{orgSlug}/{projectSlug}/_v/{deployId}`
 
 ## Authentication
 
 Two methods, checked in order:
 
-1. **Bearer token**: `Authorization: Bearer vtk_...` (API tokens, `vtk_` prefix)
-2. **Session cookie**: `velori_session` (set by sign-in, 30-day expiry, HttpOnly)
+1. **Bearer token**: `Authorization: Bearer ptk_...` (API tokens, `ptk_` prefix)
+2. **Session cookie**: `protopen_session` (set by sign-in, 30-day expiry, HttpOnly)
 
 ---
 
@@ -26,7 +26,7 @@ No auth required.
 
 **Request:**
 ```json
-{"email": "sam@velori.dev", "password": "..."}
+{"email": "sam@protopen.dev", "password": "..."}
 ```
 
 **Response (200):**
@@ -34,7 +34,7 @@ No auth required.
 {
   "user": {
     "id": "usr_...",
-    "email": "sam@velori.dev",
+    "email": "sam@protopen.dev",
     "name": "Sam Solomon",
     "username": "sam",
     "emailVerifiedAt": "2026-04-14T12:00:00Z",
@@ -45,7 +45,7 @@ No auth required.
 }
 ```
 
-Sets `velori_session` cookie. `emailVerifiedAt` is null if the user hasn't verified their email.
+Sets `protopen_session` cookie. `emailVerifiedAt` is null if the user hasn't verified their email.
 
 ### `POST /api/sign-up`
 
@@ -108,7 +108,7 @@ No auth required. Rate limited. Always returns 200 to prevent email enumeration.
 
 **Request:**
 ```json
-{"email": "sam@velori.dev"}
+{"email": "sam@protopen.dev"}
 ```
 
 If the email exists, a password reset link is sent (1-hour expiry).
@@ -156,7 +156,7 @@ Auth required.
       "slug": "my-site",
       "updatedAt": "2 hours ago",
       "deployCount": 5,
-      "liveUrl": "https://sites.velori.dev/~sam/my-site",
+      "liveUrl": "https://sites.protopen.dev/~sam/my-site",
       "isPublic": true,
       "gitBranch": "main",
       "gitCommitHash": "abc123...",
@@ -211,7 +211,7 @@ Auth required. List deploys for a project.
       "gitBranch": "main",
       "gitCommitMessage": "Fix header layout",
       "gitDirty": false,
-      "gitAuthor": "sam@velori.dev",
+      "gitAuthor": "sam@protopen.dev",
       "gitRemoteURL": "https://github.com/user/repo"
     }
   ]
@@ -269,7 +269,7 @@ Auth required. Multipart form data.
     "slug": "my-site",
     "updatedAt": "Just now",
     "deployCount": 1,
-    "liveUrl": "https://sites.velori.dev/~sam/my-site",
+    "liveUrl": "https://sites.protopen.dev/~sam/my-site",
     "isPublic": false
   }
 }
@@ -277,8 +277,8 @@ Auth required. Multipart form data.
 
 **Example:**
 ```bash
-curl -X POST https://app.velori.dev/api/uploads \
-  -H "Authorization: Bearer vtk_..." \
+curl -X POST https://app.protopen.dev/api/uploads \
+  -H "Authorization: Bearer ptk_..." \
   -F "name=my-site" \
   -F "mode=zip" \
   -F "files=@dist.zip"
@@ -317,7 +317,7 @@ Name is optional (defaults to "default").
 {
   "id": "tok_...",
   "name": "My Token",
-  "token": "vtk_..."
+  "token": "ptk_..."
 }
 ```
 
@@ -423,7 +423,7 @@ Auth required. Must be a member.
 ```json
 {
   "members": [
-    {"id": "mem_...", "userId": "usr_...", "name": "Sam Solomon", "email": "sam@velori.dev", "username": "sam", "role": "admin"}
+    {"id": "mem_...", "userId": "usr_...", "name": "Sam Solomon", "email": "sam@protopen.dev", "username": "sam", "role": "admin"}
   ]
 }
 ```

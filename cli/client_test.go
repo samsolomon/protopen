@@ -36,7 +36,7 @@ func TestDeployDirectorySuccess(t *testing.T) {
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>test</h1>"), 0o644)
 
-	c := newClient("vtk_testtoken", server.URL)
+	c := newClient("ptk_testtoken", server.URL)
 	result, err := c.deployDirectory(dir, "test-site", "", "", nil)
 	if err != nil {
 		t.Fatalf("deployDirectory: %v", err)
@@ -54,7 +54,7 @@ func TestDeployDirectorySuccess(t *testing.T) {
 	if !hasFile {
 		t.Fatal("expected files field in multipart form")
 	}
-	if receivedAuth != "Bearer vtk_testtoken" {
+	if receivedAuth != "Bearer ptk_testtoken" {
 		t.Fatalf("expected Bearer token, got %q", receivedAuth)
 	}
 }
@@ -68,7 +68,7 @@ func TestDeployReturnsErrorOnUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	_, err := c.upload("test", "zip", "test.zip", []byte("fake"), "", "", nil)
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -84,7 +84,7 @@ func TestDeployReturnsErrorMessage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	_, err := c.upload("test", "zip", "test.zip", []byte("fake"), "", "", nil)
 	if err == nil {
 		t.Fatal("expected error for 400")
@@ -106,7 +106,7 @@ func TestListSitesSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	sites, err := c.listSites("")
 	if err != nil {
 		t.Fatalf("listSites: %v", err)
@@ -131,7 +131,7 @@ func TestListSitesUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	_, err := c.listSites("")
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -144,13 +144,13 @@ func TestListSitesUnauthorized(t *testing.T) {
 func TestSetAuthHeaderWithToken(t *testing.T) {
 	t.Parallel()
 
-	c := newClient("vtk_mytoken", "http://localhost")
+	c := newClient("ptk_mytoken", "http://localhost")
 	req, _ := http.NewRequest("GET", "http://localhost/api/test", nil)
 	c.setAuth(req)
 
 	got := req.Header.Get("Authorization")
-	if got != "Bearer vtk_mytoken" {
-		t.Fatalf("expected 'Bearer vtk_mytoken', got %q", got)
+	if got != "Bearer ptk_mytoken" {
+		t.Fatalf("expected 'Bearer ptk_mytoken', got %q", got)
 	}
 }
 
@@ -177,7 +177,7 @@ func TestGetSessionSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	user, err := c.getSession()
 	if err != nil {
 		t.Fatalf("getSession: %v", err)
@@ -195,7 +195,7 @@ func TestGetSessionUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	_, err := c.getSession()
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -218,7 +218,7 @@ func TestFindSiteByName(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	s, err := c.findSite("My Site", "")
 	if err != nil {
 		t.Fatalf("findSite: %v", err)
@@ -240,7 +240,7 @@ func TestFindSiteBySlug(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	s, err := c.findSite("my-site", "")
 	if err != nil {
 		t.Fatalf("findSite: %v", err)
@@ -258,7 +258,7 @@ func TestFindSiteNotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	_, err := c.findSite("nonexistent", "")
 	if err == nil {
 		t.Fatal("expected not found error")
@@ -284,7 +284,7 @@ func TestListDeploysSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	deploys, err := c.listDeploys("proj_abc")
 	if err != nil {
 		t.Fatalf("listDeploys: %v", err)
@@ -305,7 +305,7 @@ func TestListDeploysUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	_, err := c.listDeploys("proj_abc")
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -326,7 +326,7 @@ func TestRollbackSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	err := c.rollback("proj_abc", "dep_old")
 	if err != nil {
 		t.Fatalf("rollback: %v", err)
@@ -344,7 +344,7 @@ func TestRollbackUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	err := c.rollback("proj_abc", "dep_old")
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -360,7 +360,7 @@ func TestRollbackServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	err := c.rollback("proj_abc", "dep_missing")
 	if err == nil {
 		t.Fatal("expected error for 400")
@@ -381,7 +381,7 @@ func TestUpdateVisibilitySuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_test", server.URL)
+	c := newClient("ptk_test", server.URL)
 	err := c.updateVisibility("proj_abc", true)
 	if err != nil {
 		t.Fatalf("updateVisibility: %v", err)
@@ -399,7 +399,7 @@ func TestUpdateVisibilityUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := newClient("vtk_bad", server.URL)
+	c := newClient("ptk_bad", server.URL)
 	err := c.updateVisibility("proj_abc", true)
 	if err == nil {
 		t.Fatal("expected error for 401")

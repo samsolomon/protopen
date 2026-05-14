@@ -128,7 +128,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Velori</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Protopen</h1>
           <p className="mt-1 text-sm text-muted-foreground">Frictionless, instant deployments with AI agents.</p>
         </div>
 

@@ -34,9 +34,9 @@ func (app *application) seedDemoData(ctx context.Context) error {
 	teammates := []struct {
 		email, name, username, role string
 	}{
-		{"jane@velori.dev", "Jane Chen", "jane", roleAdmin},
-		{"alex@velori.dev", "Alex Rivera", "alex", roleMember},
-		{"morgan@velori.dev", "Morgan Lee", "morgan", roleMember},
+		{"jane@protopen.dev", "Jane Chen", "jane", roleAdmin},
+		{"alex@protopen.dev", "Alex Rivera", "alex", roleMember},
+		{"morgan@protopen.dev", "Morgan Lee", "morgan", roleMember},
 	}
 	for _, t := range teammates {
 		tmID, _, tmErr := ensureUser(ctx, tx, t.email, t.name, t.username, demoPassword)
@@ -195,7 +195,7 @@ func insertSeedSite(ctx context.Context, tx pgx.Tx, orgID string, orgSlug string
 		return err
 	}
 
-	seedRemoteURL := "https://github.com/velori-team/" + slug
+	seedRemoteURL := "https://github.com/protopen-team/" + slug
 
 	var latestDeployID string
 	for index := 0; index < deployCount; index++ {

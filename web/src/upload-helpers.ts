@@ -45,7 +45,7 @@ export function validateSelection(summary: UploadSummary, files: UploadFile[]): 
   }
 
   if (summary.mode === 'files' && !summary.includesIndexHtml) {
-    return 'No index.html found. Velori hosts built static sites only.'
+    return 'No index.html found. Protopen hosts built static sites only.'
   }
 
   return null

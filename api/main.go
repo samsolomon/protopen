@@ -12,15 +12,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/samsolomon/velori/api/migrate"
+	"github.com/samsolomon/protopen/api/migrate"
 )
 
 const (
-	demoUserEmail = "sam@velori.dev"
+	demoUserEmail = "sam@protopen.dev"
 	demoUserName  = "Sam Solomon"
 	demoUsername   = "sam"
-	demoPassword  = "velori-demo"
-	sessionCookie = "velori_session"
+	demoPassword  = "protopen-demo"
+	sessionCookie = "protopen_session"
 )
 
 type application struct {
@@ -121,7 +121,7 @@ type liveDeploy struct {
 
 func main() {
 	ctx := context.Background()
-	databaseURL := getenv("DATABASE_URL", "postgres://velori:velori@localhost:5432/velori?sslmode=disable")
+	databaseURL := getenv("DATABASE_URL", "postgres://protopen:protopen@localhost:5432/protopen?sslmode=disable")
 	ingestRoot := getenv("INGEST_ROOT", filepath.Join(".data", "ingest"))
 	listenAddr := getenv("PORT", "")
 	appListenAddr := getenv("APP_LISTEN_ADDR", ":8080")
@@ -162,7 +162,7 @@ func main() {
 
 	var mailer *emailClient
 	if apiKey := getenv("RESEND_API_KEY", ""); apiKey != "" {
-		mailer = newEmailClient(apiKey, getenv("RESEND_FROM_ADDRESS", "Velori <noreply@velori.dev>"))
+		mailer = newEmailClient(apiKey, getenv("RESEND_FROM_ADDRESS", ""))
 		log.Printf("email sending enabled via Resend")
 	} else {
 		log.Printf("email sending disabled (no RESEND_API_KEY)")
@@ -251,7 +251,7 @@ func main() {
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
-		log.Printf("velori listening on %s (app: %s, content: %s)", addr, appOrigin, contentOrigin)
+		log.Printf("protopen listening on %s (app: %s, content: %s)", addr, appOrigin, contentOrigin)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
@@ -278,14 +278,14 @@ func main() {
 
 	errCh := make(chan error, 2)
 	go func() {
-		log.Printf("velori app api listening on http://localhost%s", appListenAddr)
+		log.Printf("protopen app api listening on http://localhost%s", appListenAddr)
 		if err := appServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
 
 	go func() {
-		log.Printf("velori content serving on http://localhost%s", contentListenAddr)
+		log.Printf("protopen content serving on http://localhost%s", contentListenAddr)
 		if err := contentServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

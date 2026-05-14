@@ -153,8 +153,8 @@ func TestParseSitePath(t *testing.T) {
 func TestHashTokenIsDeterministic(t *testing.T) {
 	t.Parallel()
 
-	first := hashToken("velori-session-token")
-	second := hashToken("velori-session-token")
+	first := hashToken("protopen-session-token")
+	second := hashToken("protopen-session-token")
 	if first != second {
 		t.Fatal("expected token hashes to be deterministic")
 	}

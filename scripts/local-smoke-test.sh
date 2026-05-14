@@ -4,8 +4,8 @@ set -euo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://localhost:8080}"
 CONTENT_BASE_URL="${CONTENT_BASE_URL:-http://127.0.0.1:8081}"
-EMAIL="${VELORI_EMAIL:-sam@velori.dev}"
-PASSWORD="${VELORI_PASSWORD:-velori-demo}"
+EMAIL="${PROTOPEN_EMAIL:-sam@protopen.dev}"
+PASSWORD="${PROTOPEN_PASSWORD:-protopen-demo}"
 
 tmp_dir="$(mktemp -d)"
 cookie_file="${tmp_dir}/cookies.txt"
@@ -25,12 +25,12 @@ cat > "${site_dir}/index.html" <<'EOF'
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Velori Smoke Test</title>
+    <title>Protopen Smoke Test</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main>
-      <h1>Velori Smoke Test</h1>
+      <h1>Protopen Smoke Test</h1>
       <p>If you can read this, the hosted prototype is live.</p>
     </main>
   </body>
@@ -67,7 +67,7 @@ PY
 echo "Fetching hosted page: ${live_url}"
 html="$(curl -sS "${live_url}")"
 
-if [[ "${html}" != *"Velori Smoke Test"* ]]; then
+if [[ "${html}" != *"Protopen Smoke Test"* ]]; then
   echo "Smoke test failed: hosted content did not match expected output" >&2
   exit 1
 fi
@@ -78,12 +78,12 @@ cat > "${site_dir}/index.html" <<'EOF'
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Velori Smoke Test Updated</title>
+    <title>Protopen Smoke Test Updated</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main>
-      <h1>Velori Smoke Test Updated</h1>
+      <h1>Protopen Smoke Test Updated</h1>
       <p>The stable URL now shows the redeployed content.</p>
     </main>
   </body>
@@ -115,7 +115,7 @@ fi
 
 updated_html="$(curl -sS "${live_url}")"
 
-if [[ "${updated_html}" != *"Velori Smoke Test Updated"* ]]; then
+if [[ "${updated_html}" != *"Protopen Smoke Test Updated"* ]]; then
   echo "Smoke test failed: stable URL did not serve updated content after redeploy" >&2
   exit 1
 fi
