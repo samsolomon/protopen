@@ -86,7 +86,8 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, ok := app.requireAdmin(w, r); !ok {
+	actor, ok := app.requireAdmin(w, r)
+	if !ok {
 		return
 	}
 
@@ -131,6 +132,8 @@ func (app *application) adminUserByIDHandler(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not delete user"})
 		return
 	}
+
+	app.logAdminAction(r.Context(), actor, "delete_user", "user", userID, nil)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -200,7 +203,8 @@ func (app *application) adminSiteByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, ok := app.requireAdmin(w, r); !ok {
+	actor, ok := app.requireAdmin(w, r)
+	if !ok {
 		return
 	}
 
@@ -224,6 +228,8 @@ func (app *application) adminSiteByIDHandler(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 		return
 	}
+
+	app.logAdminAction(r.Context(), actor, "delete_site", "site", siteID, nil)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

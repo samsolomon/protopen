@@ -17,6 +17,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 				app.cleanupExpiredTokens(ctx)
 				app.cleanupExpiredDeviceCodes(ctx)
 				app.cleanupSoftDeletedSites(ctx)
+				app.cleanupOldAuditLog(ctx)
 				app.deviceTokens.expire(time.Now())
 			case <-ctx.Done():
 				ticker.Stop()
@@ -118,4 +119,15 @@ func (app *application) cleanupSoftDeletedSites(ctx context.Context) {
 	}
 
 	log.Printf("cleaned up %d soft-deleted sites", len(siteIDs))
+}
+
+func (app *application) cleanupOldAuditLog(ctx context.Context) {
+	tag, err := app.db.Exec(ctx, `delete from audit_log where created_at < now() - interval '1 year'`)
+	if err != nil {
+		log.Printf("cleanup audit log: %v", err)
+		return
+	}
+	if n := tag.RowsAffected(); n > 0 {
+		log.Printf("cleanup: removed %d old audit_log rows", n)
+	}
 }
