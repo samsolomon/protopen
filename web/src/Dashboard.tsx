@@ -9,7 +9,9 @@ import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
-import { AdminPanel } from './AdminPanel'
+import { AdminPeoplePanel } from './AdminPeoplePanel'
+import { AdminSitesPanel } from './AdminSitesPanel'
+import { AdminSettings } from './AdminSettings'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -52,7 +54,16 @@ function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   )
 }
 
-type DashboardView = 'dashboard' | 'settings' | 'admin'
+type DashboardView = 'dashboard' | 'settings'
+
+function settingsTabFromPath(path: string, isAdmin: boolean): string {
+  if (path === '/settings/appearance') return 'appearance'
+  if (path === '/settings/tokens') return 'tokens'
+  if (path === '/settings/people') return isAdmin ? 'people' : 'account'
+  if (path === '/settings/sites') return isAdmin ? 'sites' : 'account'
+  if (path === '/settings/instance') return isAdmin ? 'instance' : 'account'
+  return 'account'
+}
 
 type DashboardProps = {
   user: SessionUser
@@ -86,12 +97,9 @@ export function Dashboard({
   const [view, setView] = useState<DashboardView>(() => {
     return window.location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
   })
-  const [settingsTab, setSettingsTab] = useState(() => {
-    const path = window.location.pathname
-    if (path === '/settings/appearance') return 'appearance'
-    if (path === '/settings/tokens') return 'tokens'
-    return 'account'
-  })
+  const [settingsTab, setSettingsTab] = useState(() =>
+    settingsTabFromPath(window.location.pathname, !!user.isAdmin)
+  )
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
   const [verificationSent, setVerificationSent] = useState(false)
@@ -124,17 +132,14 @@ export function Dashboard({
       const path = window.location.pathname
       if (path.startsWith('/settings')) {
         setView('settings')
-        if (path === '/settings/appearance') setSettingsTab('appearance')
-        else if (path === '/settings/team') setSettingsTab('team')
-        else if (path === '/settings/tokens') setSettingsTab('tokens')
-        else setSettingsTab('account')
+        setSettingsTab(settingsTabFromPath(path, !!user.isAdmin))
       } else {
         setView('dashboard')
       }
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
-  }, [])
+  }, [user.isAdmin])
 
   const handleUploadOpenChange = (open: boolean) => {
     setUploadOpen(open)
@@ -158,11 +163,6 @@ export function Dashboard({
               <DropdownMenuItem onClick={() => switchView('settings')}>
                 Settings
               </DropdownMenuItem>
-              {user.isAdmin && (
-                <DropdownMenuItem onClick={() => switchView('admin')}>
-                  Admin
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onSignOut()}>
                 Sign out
@@ -221,14 +221,15 @@ export function Dashboard({
           </div>
         ) : null}
 
-        {view === 'admin' && user.isAdmin ? (
-          <AdminPanel user={user} onSessionExpired={onSessionExpired} />
-        ) : view === 'settings' ? (
+        {view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
               <TabsTrigger value="tokens">API Tokens</TabsTrigger>
+              {user.isAdmin && <TabsTrigger value="people">People</TabsTrigger>}
+              {user.isAdmin && <TabsTrigger value="sites">All sites</TabsTrigger>}
+              {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
             </TabsList>
             <TabsContent value="account" className="max-w-2xl">
               <div className="flex flex-col gap-8">
@@ -252,6 +253,19 @@ export function Dashboard({
                 onSessionExpired={onSessionExpired}
               />
             </TabsContent>
+            {user.isAdmin && (
+              <>
+                <TabsContent value="people" className="min-w-0 flex-1">
+                  <AdminPeoplePanel user={user} onSessionExpired={onSessionExpired} />
+                </TabsContent>
+                <TabsContent value="sites" className="min-w-0 flex-1">
+                  <AdminSitesPanel onSessionExpired={onSessionExpired} />
+                </TabsContent>
+                <TabsContent value="instance" className="max-w-2xl">
+                  <AdminSettings onSessionExpired={onSessionExpired} />
+                </TabsContent>
+              </>
+            )}
           </Tabs>
         ) : (
           <div className="flex flex-col gap-8">
