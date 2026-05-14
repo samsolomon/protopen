@@ -232,6 +232,28 @@ Auth required. Roll back to a previous deploy.
 {"ok": true, "currentDeployId": "dep_..."}
 ```
 
+### `GET /api/sites/{siteID}/thumbnail`
+
+Returns a WebP screenshot of the site's current deploy. Captures are generated
+asynchronously after each deploy promotion when the server has thumbnails
+enabled (`THUMBNAILS_ENABLED=1` and a Chromium binary available); requests for
+deploys that have not yet been captured return 404.
+
+**Auth:**
+- Public sites: no session required.
+- Private sites: session required, and the user must belong to the site's organization.
+
+**Caching:** the response carries `ETag: "<deployID>"` and
+`Cache-Control: private, max-age=300, must-revalidate`. Conditional requests
+(`If-None-Match`) return 304.
+
+**Status codes:**
+- `200 image/webp` — thumbnail body
+- `304` — `If-None-Match` matches the current deploy
+- `401` — private site and no session
+- `403` — private site and the user is not in the org
+- `404` — site/deploy missing, or no thumbnail captured yet
+
 ---
 
 ## Uploads (Authenticated Deploy)

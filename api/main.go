@@ -41,6 +41,8 @@ type application struct {
 	deviceTokens       *deviceTokenStore
 	adminEmails        []string
 	trustedProxyHeader string
+
+	thumbnailer *thumbnailer
 }
 
 type sessionUser struct {
@@ -211,8 +213,24 @@ func main() {
 		}
 	}
 
+	if getenv("THUMBNAILS_ENABLED", "") != "" {
+		chromiumPath := resolveChromiumPath()
+		if chromiumPath == "" {
+			log.Printf("THUMBNAILS_ENABLED set but no Chromium binary found; thumbnails disabled")
+		} else {
+			token := getenv("THUMBNAIL_INTERNAL_TOKEN", "")
+			if token == "" {
+				token = generateToken(32)
+				log.Printf("THUMBNAIL_INTERNAL_TOKEN not set; generated ephemeral token for this process")
+			}
+			app.thumbnailer = newThumbnailer(ctx, token, chromiumPath)
+			log.Printf("thumbnails enabled (chromium: %s)", chromiumPath)
+		}
+	}
+
 	app.authLimiter.startCleanup(ctx)
 	app.startCleanupLoop(ctx)
+	app.startThumbnailBackstopLoop(ctx)
 
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/healthz", app.healthzHandler)

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -190,7 +189,7 @@ func (app *application) adminSitesHandler(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		s.UpdatedAt = relativeTime(updatedAt)
-		s.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, s.OrgSlug, s.Slug)
+		s.LiveURL = app.buildLiveURL(s.OrgSlug, s.Slug)
 		sites = append(sites, s)
 	}
 

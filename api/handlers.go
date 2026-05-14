@@ -54,6 +54,8 @@ func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) 
 			app.listDeploysHandler(w, r, siteID)
 		case "rollback":
 			app.rollbackHandler(w, r, siteID)
+		case "thumbnail":
+			app.siteThumbnailHandler(w, r, siteID)
 		default:
 			http.NotFound(w, r)
 		}

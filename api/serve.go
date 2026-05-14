@@ -55,7 +55,9 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// For private sites, deny access if not authenticated or not in org.
-	if !deployment.isPublic {
+	// The thumbnail renderer bypasses this check via an internal token so
+	// it can capture private prototypes from the content origin.
+	if !deployment.isPublic && !app.checkThumbnailToken(r) {
 		user, _ := app.requireSessionUser(r)
 		if user.ID == "" || !userInOrg(user, orgSlug) {
 			w.Header().Set("Cache-Control", "private, no-cache")

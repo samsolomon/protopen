@@ -18,7 +18,11 @@ RUN CGO_ENABLED=0 go build -o /protopen .
 
 # Stage 3: Runtime
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates wget
+# chromium + fonts are only used when THUMBNAILS_ENABLED is set. They add ~250MB
+# to the image; the binary still works without them and skips thumbnail capture
+# when no Chromium is found at startup.
+RUN apk add --no-cache ca-certificates wget chromium nss freetype harfbuzz ttf-freefont
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 RUN adduser -D protopen
 RUN mkdir -p /home/protopen/.data/ingest && chown -R protopen:protopen /home/protopen
 COPY --from=backend /protopen /protopen

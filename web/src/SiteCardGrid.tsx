@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Site } from './types'
+import { API_BASE_URL } from './constants'
 import { DeployHistory } from './DeployHistory'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,6 +47,33 @@ function getInitials(name: string): string {
   return w.slice(0, 2).toUpperCase()
 }
 
+function SiteThumbnail({ site }: { site: Site }) {
+  const [failed, setFailed] = useState(false)
+  const color = getColor(site.id)
+  if (failed) {
+    return (
+      <div
+        className="flex aspect-[16/10] w-full items-center justify-center rounded-t-xl"
+        style={{ background: color.bg }}
+      >
+        <span className="text-2xl font-semibold select-none" style={{ color: color.text }}>
+          {getInitials(site.name)}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src={`${API_BASE_URL}/api/sites/${site.id}/thumbnail`}
+      crossOrigin="use-credentials"
+      onError={() => setFailed(true)}
+      alt=""
+      loading="lazy"
+      className="aspect-[16/10] w-full rounded-t-xl object-cover"
+    />
+  )
+}
+
 type SiteCardGridProps = {
   sites: Site[]
   deletingSiteID: string | null
@@ -73,8 +101,6 @@ export function SiteCardGrid({
         style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
       >
         {sites.map((site) => {
-          const color = getColor(site.id)
-          const initials = getInitials(site.name)
           const isDeleting = deletingSiteID === site.id
 
           return (
@@ -83,17 +109,7 @@ export function SiteCardGrid({
               className="cursor-pointer pt-0"
               onClick={() => window.open(site.liveUrl, '_blank')}
             >
-              <div
-                className="flex aspect-[16/10] items-center justify-center rounded-t-xl"
-                style={{ background: color.bg }}
-              >
-                <span
-                  className="text-2xl font-semibold select-none"
-                  style={{ color: color.text }}
-                >
-                  {initials}
-                </span>
-              </div>
+              <SiteThumbnail site={site} />
               <CardHeader>
                 <CardTitle className="truncate">{site.name}</CardTitle>
                 <CardAction>

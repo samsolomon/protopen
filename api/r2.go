@@ -4,8 +4,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -118,6 +120,9 @@ func (s *objectStore) deleteObjects(ctx context.Context, keys []string) error {
 func isNotFound(err error) bool {
 	if err == nil {
 		return false
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return true
 	}
 	return strings.Contains(err.Error(), "NotFound") ||
 		strings.Contains(err.Error(), "NoSuchKey") ||

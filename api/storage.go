@@ -130,7 +130,7 @@ func (app *application) listSites(ctx context.Context, orgID string) ([]site, er
 
 		entry.DeployCount = int(deployCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
-		entry.LiveURL = fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, entry.Slug)
+		entry.LiveURL = app.buildLiveURL(orgSlug, entry.Slug)
 		sites = append(sites, entry)
 	}
 
@@ -242,15 +242,25 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 	var isPublic bool
 	app.db.QueryRow(ctx, `select is_public from sites where id = $1`, entry.ID).Scan(&isPublic)
 
+	liveURL := app.buildLiveURL(orgSlug, entry.Slug)
+
+	if app.thumbnailer != nil {
+		go app.captureDeployThumbnail(context.Background(), deployID, liveURL, storagePrefix)
+	}
+
 	return site{
 		ID:          entry.ID,
 		Name:        entry.Name,
 		Slug:        entry.Slug,
 		UpdatedAt:   relativeTime(now),
 		DeployCount: countForMatch(matches),
-		LiveURL:     fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, entry.Slug),
+		LiveURL:     liveURL,
 		IsPublic:    isPublic,
 	}, nil
+}
+
+func (app *application) buildLiveURL(orgSlug, siteSlug string) string {
+	return fmt.Sprintf("%s/~%s/%s", app.contentBaseURL, orgSlug, siteSlug)
 }
 
 func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]siteRecord, error) {
