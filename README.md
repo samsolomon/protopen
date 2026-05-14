@@ -58,7 +58,7 @@ Dashboard at <http://localhost:5173>, API at <http://localhost:8080>, deployed s
 
 Demo account seeded automatically when `SEED_DEMO` is set (see `.env.example`):
 
-- email: `sam@protopen.dev`
+- email: `demo@protopen.dev`
 - password: `protopen-demo`
 
 ## What's in this repo

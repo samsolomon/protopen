@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	demoUserEmail = "sam@protopen.dev"
-	demoUserName  = "Sam Solomon"
-	demoUsername   = "sam"
+	demoUserEmail = "demo@protopen.dev"
+	demoUserName  = "Demo User"
+	demoUsername  = "demo"
 	demoPassword  = "protopen-demo"
 	sessionCookie = "protopen_session"
 )

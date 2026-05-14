@@ -4,7 +4,7 @@ set -euo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://localhost:8080}"
 CONTENT_BASE_URL="${CONTENT_BASE_URL:-http://127.0.0.1:8081}"
-EMAIL="${PROTOPEN_EMAIL:-sam@protopen.dev}"
+EMAIL="${PROTOPEN_EMAIL:-demo@protopen.dev}"
 PASSWORD="${PROTOPEN_PASSWORD:-protopen-demo}"
 
 tmp_dir="$(mktemp -d)"
