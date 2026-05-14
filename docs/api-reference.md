@@ -26,7 +26,7 @@ No auth required.
 
 **Request:**
 ```json
-{"email": "sam@protopen.dev", "password": "..."}
+{"email": "demo@protopen.dev", "password": "..."}
 ```
 
 **Response (200):**
@@ -34,12 +34,12 @@ No auth required.
 {
   "user": {
     "id": "usr_...",
-    "email": "sam@protopen.dev",
-    "name": "Sam Solomon",
-    "username": "sam",
+    "email": "demo@protopen.dev",
+    "name": "Demo User",
+    "username": "demo",
     "emailVerifiedAt": "2026-04-14T12:00:00Z",
     "orgs": [
-      {"id": "org_...", "slug": "sam", "name": "Sam Solomon", "isPersonal": true, "role": "admin"}
+      {"id": "org_...", "slug": "demo", "name": "Demo User", "isPersonal": true, "role": "admin"}
     ]
   }
 }
@@ -108,7 +108,7 @@ No auth required. Rate limited. Always returns 200 to prevent email enumeration.
 
 **Request:**
 ```json
-{"email": "sam@protopen.dev"}
+{"email": "demo@protopen.dev"}
 ```
 
 If the email exists, a password reset link is sent (1-hour expiry).
@@ -156,7 +156,7 @@ Auth required.
       "slug": "my-site",
       "updatedAt": "2 hours ago",
       "deployCount": 5,
-      "liveUrl": "https://sites.protopen.dev/~sam/my-site",
+      "liveUrl": "https://sites.protopen.dev/~demo/my-site",
       "isPublic": true,
       "gitBranch": "main",
       "gitCommitHash": "abc123...",
@@ -211,7 +211,7 @@ Auth required. List deploys for a project.
       "gitBranch": "main",
       "gitCommitMessage": "Fix header layout",
       "gitDirty": false,
-      "gitAuthor": "sam@protopen.dev",
+      "gitAuthor": "demo@protopen.dev",
       "gitRemoteURL": "https://github.com/user/repo"
     }
   ]
@@ -269,7 +269,7 @@ Auth required. Multipart form data.
     "slug": "my-site",
     "updatedAt": "Just now",
     "deployCount": 1,
-    "liveUrl": "https://sites.protopen.dev/~sam/my-site",
+    "liveUrl": "https://sites.protopen.dev/~demo/my-site",
     "isPublic": false
   }
 }
@@ -394,7 +394,7 @@ Auth required.
 ```json
 {
   "orgs": [
-    {"id": "org_...", "slug": "sam", "name": "Sam Solomon", "isPersonal": true, "role": "admin"}
+    {"id": "org_...", "slug": "demo", "name": "Demo User", "isPersonal": true, "role": "admin"}
   ]
 }
 ```
@@ -423,7 +423,7 @@ Auth required. Must be a member.
 ```json
 {
   "members": [
-    {"id": "mem_...", "userId": "usr_...", "name": "Sam Solomon", "email": "sam@protopen.dev", "username": "sam", "role": "admin"}
+    {"id": "mem_...", "userId": "usr_...", "name": "Demo User", "email": "demo@protopen.dev", "username": "demo", "role": "admin"}
   ]
 }
 ```
