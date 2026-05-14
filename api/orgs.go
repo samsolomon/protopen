@@ -191,22 +191,8 @@ func (app *application) listOrgMembersHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Request, orgID string) {
-	user, err := app.requireSessionUser(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	if !requireSession(user, w) {
-		return
-	}
-
-	role, ok := orgRole(user, orgID)
+	user, ok := app.requireOrgAdminOrInstanceAdmin(w, r, orgID, "add members")
 	if !ok {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
-		return
-	}
-	if role != roleAdmin {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only admins can add members"})
 		return
 	}
 
@@ -290,22 +276,8 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) removeOrgMemberHandler(w http.ResponseWriter, r *http.Request, orgID string, memberID string) {
-	user, err := app.requireSessionUser(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	if !requireSession(user, w) {
-		return
-	}
-
-	role, ok := orgRole(user, orgID)
+	_, ok := app.requireOrgAdminOrInstanceAdmin(w, r, orgID, "remove members")
 	if !ok {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
-		return
-	}
-	if role != roleAdmin {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only admins can remove members"})
 		return
 	}
 
@@ -349,22 +321,8 @@ func (app *application) removeOrgMemberHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (app *application) updateOrgMemberHandler(w http.ResponseWriter, r *http.Request, orgID string, memberID string) {
-	user, err := app.requireSessionUser(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	if !requireSession(user, w) {
-		return
-	}
-
-	role, ok := orgRole(user, orgID)
+	user, ok := app.requireOrgAdminOrInstanceAdmin(w, r, orgID, "change roles")
 	if !ok {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
-		return
-	}
-	if role != roleAdmin {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only admins can change roles"})
 		return
 	}
 

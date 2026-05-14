@@ -491,6 +491,78 @@ Auth required. Must be admin. Cannot remove last admin.
 
 ---
 
+## Admin
+
+Admin endpoints require the caller's email to appear in `ADMIN_EMAILS`. Non-admins receive 403.
+
+Instance admins also bypass the per-org admin check on the write endpoints under `/api/orgs/{orgID}/members` — they can add, change, or remove members of any organization without being an org admin of it. The last-admin protection still applies.
+
+### `GET /api/admin/users`
+
+Lists every account on the instance with its organization memberships.
+
+**Response (200):**
+```json
+{
+  "users": [
+    {
+      "id": "usr_...",
+      "email": "jane@protopen.dev",
+      "name": "Jane Chen",
+      "username": "jane",
+      "emailVerifiedAt": "2026-05-14T18:08:20Z",
+      "createdAt": "2 hours ago",
+      "orgs": [
+        {
+          "orgId": "org_...",
+          "orgSlug": "demo",
+          "orgName": "Demo User",
+          "memberId": "mem_...",
+          "role": "admin",
+          "isPersonal": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+### `GET /api/admin/settings`
+
+Returns instance-wide settings. Currently exposes the deploy-thumbnail capture toggle.
+
+**Response (200):**
+```json
+{
+  "thumbnails": {
+    "available": true,
+    "enabled": true,
+    "reason": ""
+  }
+}
+```
+
+- `available` — whether this server has the capability (env `THUMBNAILS_ENABLED` set and a Chromium binary resolved).
+- `enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
+- `reason` — populated only when `available` is `false`, explaining why.
+
+### `PATCH /api/admin/settings`
+
+Update one or more settings.
+
+**Request:**
+```json
+{"thumbnailsEnabled": true}
+```
+
+**Response (200):** same shape as `GET /api/admin/settings`.
+
+- Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
+- Returns **403** if the caller is not admin.
+- Toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+
+---
+
 ## Constraints
 
 | Constraint | Value |

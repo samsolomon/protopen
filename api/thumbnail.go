@@ -48,6 +48,16 @@ type thumbnailer struct {
 	failures    sync.Map // deployID -> int (process-lifetime retry count)
 }
 
+// thumbnailEnv captures the boot-time view of whether this server CAN render
+// thumbnails. Admins flip whether captures actually run via the instance
+// settings (instance_settings.thumbnails_enabled); env only gates capability.
+type thumbnailEnv struct {
+	available    bool
+	chromiumPath string
+	token        string
+	reason       string // populated only when available is false
+}
+
 func newThumbnailer(parent context.Context, token, chromiumPath string) *thumbnailer {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.NoSandbox,
@@ -155,10 +165,10 @@ func (app *application) openDeployArtifact(ctx context.Context, path string) (io
 }
 
 func (app *application) captureDeployThumbnail(ctx context.Context, deployID, deployURL, storagePrefix string) {
-	if app.thumbnailer == nil || deployID == "" || deployURL == "" || storagePrefix == "" {
+	t := app.thumbnailer.Load()
+	if t == nil || deployID == "" || deployURL == "" || storagePrefix == "" {
 		return
 	}
-	t := app.thumbnailer
 
 	if _, loaded := t.inflight.LoadOrStore(deployID, struct{}{}); loaded {
 		return
@@ -197,24 +207,26 @@ func (app *application) captureDeployThumbnail(ctx context.Context, deployID, de
 }
 
 func (app *application) checkThumbnailToken(r *http.Request) bool {
-	if app.thumbnailer == nil {
+	t := app.thumbnailer.Load()
+	if t == nil {
 		return false
 	}
 	got := r.Header.Get(thumbnailHeaderName)
 	if got == "" {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(got), []byte(app.thumbnailer.token)) == 1
+	return subtle.ConstantTimeCompare([]byte(got), []byte(t.token)) == 1
 }
 
 func (app *application) startThumbnailBackstopLoop(ctx context.Context) {
-	if app.thumbnailer == nil {
+	// The loop stays running for the app lifetime whenever the feature is
+	// available, so admins can flip thumbnails on without restarting. The
+	// loop body no-ops when thumbnailer.Load() returns nil.
+	if !app.thumbnailEnv.available {
 		return
 	}
 	ticker := time.NewTicker(thumbnailBackstopInterval)
 	go func() {
-		// Run once immediately so a server restart doesn't make the dashboard
-		// wait a full tick for any thumbnails the previous process missed.
 		app.runThumbnailBackstop(ctx)
 		for {
 			select {
@@ -233,6 +245,9 @@ type pendingThumbnail struct {
 }
 
 func (app *application) runThumbnailBackstop(ctx context.Context) {
+	if app.thumbnailer.Load() == nil {
+		return
+	}
 	rows, err := app.db.Query(ctx, `
 		select d.id, d.storage_prefix, o.slug, s.slug
 		from deploys d
@@ -364,6 +379,49 @@ func ifNoneMatchHas(header, etag string) bool {
 		}
 	}
 	return false
+}
+
+// resolveThumbnailEnv captures the boot-time view of whether this server can
+// render thumbnails. The DB row (instance_settings.thumbnails_enabled) decides
+// whether captures actually run; this only reports capability.
+func resolveThumbnailEnv() thumbnailEnv {
+	if os.Getenv("THUMBNAILS_ENABLED") == "" {
+		return thumbnailEnv{reason: "THUMBNAILS_ENABLED is not set on the server"}
+	}
+	chromiumPath := resolveChromiumPath()
+	if chromiumPath == "" {
+		return thumbnailEnv{reason: "no Chromium binary found on this server"}
+	}
+	token := os.Getenv("THUMBNAIL_INTERNAL_TOKEN")
+	if token == "" {
+		token = generateToken(32)
+		log.Printf("THUMBNAIL_INTERNAL_TOKEN not set; generated ephemeral token for this process")
+	}
+	return thumbnailEnv{available: true, chromiumPath: chromiumPath, token: token}
+}
+
+// initThumbnailState seeds the instance_settings.thumbnails_enabled row on
+// first boot (default true when env-available, false otherwise) and enables
+// thumbnails immediately if the DB says so.
+func (app *application) initThumbnailState(ctx context.Context) error {
+	value, present, err := app.getInstanceSetting(ctx, settingThumbnailsEnabled)
+	if err != nil {
+		return err
+	}
+	if !present {
+		seed := "false"
+		if app.thumbnailEnv.available {
+			seed = "true"
+		}
+		if err := app.setInstanceSetting(ctx, settingThumbnailsEnabled, seed, "boot"); err != nil {
+			return err
+		}
+		value = seed
+	}
+	if value == "true" && app.thumbnailEnv.available {
+		app.enableThumbnails()
+	}
+	return nil
 }
 
 func resolveChromiumPath() string {

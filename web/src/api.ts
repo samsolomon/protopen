@@ -418,6 +418,15 @@ export async function createOrg(name: string, slug: string): Promise<OrgInfo> {
 
 // ---- Admin ----
 
+export type AdminUserOrg = {
+  orgId: string
+  orgSlug: string
+  orgName: string
+  memberId: string
+  role: string
+  isPersonal: boolean
+}
+
 export type AdminUser = {
   id: string
   email: string
@@ -425,7 +434,7 @@ export type AdminUser = {
   username: string
   emailVerifiedAt?: string | null
   createdAt: string
-  orgId?: string | null
+  orgs: AdminUserOrg[]
 }
 
 export async function fetchAdminUsers(): Promise<AdminUser[]> {
@@ -467,19 +476,56 @@ export type AdminProject = {
 }
 
 export async function fetchAdminProjects(): Promise<AdminProject[]> {
-  const response = await fetch(`${API_BASE_URL}/api/admin/projects`, {
+  const response = await fetch(`${API_BASE_URL}/api/admin/sites`, {
     credentials: 'include',
   })
 
   if (response.status === 401) throw new SessionExpiredError()
   if (response.status === 403) throw new Error('Forbidden')
 
-  const data = (await response.json()) as { projects?: AdminProject[] }
-  return data.projects ?? []
+  const data = (await response.json()) as { sites?: AdminProject[] }
+  return data.sites ?? []
+}
+
+export type AdminSettings = {
+  thumbnails: {
+    available: boolean
+    enabled: boolean
+    reason?: string
+  }
+}
+
+export async function fetchAdminSettings(): Promise<AdminSettings> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (response.status === 403) throw new Error('Forbidden')
+  if (!response.ok) throw new Error('Could not load settings')
+
+  return (await response.json()) as AdminSettings
+}
+
+export async function updateAdminSettings(patch: { thumbnailsEnabled?: boolean }): Promise<AdminSettings> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not update settings')
+  }
+
+  return (await response.json()) as AdminSettings
 }
 
 export async function adminDeleteProject(projectId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/admin/projects/${projectId}`, {
+  const response = await fetch(`${API_BASE_URL}/api/admin/sites/${projectId}`, {
     method: 'DELETE',
     credentials: 'include',
   })

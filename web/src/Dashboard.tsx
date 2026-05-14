@@ -9,7 +9,6 @@ import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
-import { OrgMembersPanel } from './OrgMembersPanel'
 import { AdminPanel } from './AdminPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -90,7 +89,6 @@ export function Dashboard({
   const [settingsTab, setSettingsTab] = useState(() => {
     const path = window.location.pathname
     if (path === '/settings/appearance') return 'appearance'
-    if (path === '/settings/team') return 'team'
     if (path === '/settings/tokens') return 'tokens'
     return 'account'
   })
@@ -224,13 +222,12 @@ export function Dashboard({
         ) : null}
 
         {view === 'admin' && user.isAdmin ? (
-          <AdminPanel onSessionExpired={onSessionExpired} />
+          <AdminPanel user={user} onSessionExpired={onSessionExpired} />
         ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="team">Team</TabsTrigger>
               <TabsTrigger value="tokens">API Tokens</TabsTrigger>
             </TabsList>
             <TabsContent value="account" className="max-w-2xl">
@@ -249,12 +246,6 @@ export function Dashboard({
             </TabsContent>
             <TabsContent value="appearance" className="max-w-2xl">
               <AppearancePanel />
-            </TabsContent>
-            <TabsContent value="team" className="max-w-2xl">
-              <OrgMembersPanel
-                user={user}
-                onSessionExpired={onSessionExpired}
-              />
             </TabsContent>
             <TabsContent value="tokens" className="max-w-2xl">
               <TokensPanel

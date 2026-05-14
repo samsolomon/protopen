@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,7 +44,9 @@ type application struct {
 	adminEmails        []string
 	trustedProxyHeader string
 
-	thumbnailer *thumbnailer
+	thumbnailer  atomic.Pointer[thumbnailer]
+	thumbnailMu  sync.Mutex
+	thumbnailEnv thumbnailEnv
 }
 
 type sessionUser struct {
@@ -213,19 +217,15 @@ func main() {
 		}
 	}
 
-	if getenv("THUMBNAILS_ENABLED", "") != "" {
-		chromiumPath := resolveChromiumPath()
-		if chromiumPath == "" {
-			log.Printf("THUMBNAILS_ENABLED set but no Chromium binary found; thumbnails disabled")
-		} else {
-			token := getenv("THUMBNAIL_INTERNAL_TOKEN", "")
-			if token == "" {
-				token = generateToken(32)
-				log.Printf("THUMBNAIL_INTERNAL_TOKEN not set; generated ephemeral token for this process")
-			}
-			app.thumbnailer = newThumbnailer(ctx, token, chromiumPath)
-			log.Printf("thumbnails enabled (chromium: %s)", chromiumPath)
-		}
+	app.thumbnailEnv = resolveThumbnailEnv()
+	if app.thumbnailEnv.available {
+		log.Printf("thumbnail capture available (chromium: %s)", app.thumbnailEnv.chromiumPath)
+	} else if app.thumbnailEnv.reason != "" {
+		log.Printf("thumbnail capture unavailable: %s", app.thumbnailEnv.reason)
+	}
+
+	if err := app.initThumbnailState(ctx); err != nil {
+		log.Fatalf("init thumbnail state: %v", err)
 	}
 
 	app.authLimiter.startCleanup(ctx)
@@ -254,6 +254,7 @@ func main() {
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
 	appMux.HandleFunc("/api/admin/sites", app.adminSitesHandler)
 	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
+	appMux.HandleFunc("/api/admin/settings", app.instanceSettingsHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.rateLimit(app.authLimiter, app.deviceCodePollHandler))
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveSiteHandler)))

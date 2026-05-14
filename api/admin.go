@@ -3,11 +3,39 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// requireOrgAdminOrInstanceAdmin gates org-membership write endpoints. Instance
+// admins (email in ADMIN_EMAILS) bypass the per-org admin check so they can
+// manage any workspace from the People panel.
+func (app *application) requireOrgAdminOrInstanceAdmin(w http.ResponseWriter, r *http.Request, orgID, action string) (sessionUser, bool) {
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return sessionUser{}, false
+	}
+	if !requireSession(user, w) {
+		return sessionUser{}, false
+	}
+	if user.IsAdmin {
+		return user, true
+	}
+	role, ok := orgRole(user, orgID)
+	if !ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of this organization"})
+		return sessionUser{}, false
+	}
+	if role != roleAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only admins can " + action})
+		return sessionUser{}, false
+	}
+	return user, true
+}
 
 func (app *application) requireAdmin(w http.ResponseWriter, r *http.Request) (sessionUser, bool) {
 	user, err := app.requireSessionUser(r)
@@ -26,13 +54,22 @@ func (app *application) requireAdmin(w http.ResponseWriter, r *http.Request) (se
 }
 
 type adminUser struct {
-	ID              string     `json:"id"`
-	Email           string     `json:"email"`
-	Name            string     `json:"name"`
-	Username        string     `json:"username"`
-	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
-	CreatedAt       string     `json:"createdAt"`
-	OrgID           *string    `json:"orgId,omitempty"`
+	ID              string         `json:"id"`
+	Email           string         `json:"email"`
+	Name            string         `json:"name"`
+	Username        string         `json:"username"`
+	EmailVerifiedAt *time.Time     `json:"emailVerifiedAt,omitempty"`
+	CreatedAt       string         `json:"createdAt"`
+	Orgs            []adminUserOrg `json:"orgs"`
+}
+
+type adminUserOrg struct {
+	OrgID      string `json:"orgId"`
+	OrgSlug    string `json:"orgSlug"`
+	OrgName    string `json:"orgName"`
+	MemberID   string `json:"memberId"`
+	Role       string `json:"role"`
+	IsPersonal bool   `json:"isPersonal"`
 }
 
 func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -47,14 +84,22 @@ func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request
 
 	rows, err := app.db.Query(r.Context(), `
 		SELECT u.id, u.email, u.name, u.username, u.email_verified_at, u.created_at,
-		       o.id
+		       COALESCE(
+		           json_agg(json_build_object(
+		               'orgId', o.id,
+		               'orgSlug', o.slug,
+		               'orgName', o.name,
+		               'memberId', m.id,
+		               'role', m.role,
+		               'isPersonal', o.is_personal
+		           ) ORDER BY o.is_personal DESC, o.created_at ASC)
+		           FILTER (WHERE m.id IS NOT NULL),
+		           '[]'::json
+		       ) AS orgs
 		FROM users u
-		LEFT JOIN LATERAL (
-			SELECT o.id FROM org_members m
-			JOIN organizations o ON o.id = m.org_id AND o.is_personal = true
-			WHERE m.user_id = u.id
-			LIMIT 1
-		) o ON true
+		LEFT JOIN org_members m ON m.user_id = u.id
+		LEFT JOIN organizations o ON o.id = m.org_id
+		GROUP BY u.id, u.email, u.name, u.username, u.email_verified_at, u.created_at
 		ORDER BY u.created_at DESC
 	`)
 	if err != nil {
@@ -68,9 +113,14 @@ func (app *application) adminUsersHandler(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var u adminUser
 		var createdAt time.Time
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Username, &u.EmailVerifiedAt, &createdAt, &u.OrgID); err != nil {
+		var orgsJSON []byte
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Username, &u.EmailVerifiedAt, &createdAt, &orgsJSON); err != nil {
 			log.Printf("admin scan user: %v", err)
 			continue
+		}
+		if err := json.Unmarshal(orgsJSON, &u.Orgs); err != nil {
+			log.Printf("admin unmarshal user orgs: %v", err)
+			u.Orgs = nil
 		}
 		u.CreatedAt = relativeTime(createdAt)
 		users = append(users, u)

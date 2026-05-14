@@ -244,7 +244,7 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 
 	liveURL := app.buildLiveURL(orgSlug, entry.Slug)
 
-	if app.thumbnailer != nil {
+	if app.thumbnailer.Load() != nil {
 		go app.captureDeployThumbnail(context.Background(), deployID, liveURL, storagePrefix)
 	}
 
