@@ -156,14 +156,14 @@ func (app *application) changePasswordHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost)
+	newHash, err := hashPassword(payload.NewPassword)
 	if err != nil {
 		log.Printf("change password hash: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not change password"})
 		return
 	}
 
-	if _, err := app.db.Exec(r.Context(), `update users set password_hash = $1 where id = $2`, string(newHash), user.ID); err != nil {
+	if _, err := app.db.Exec(r.Context(), `update users set password_hash = $1 where id = $2`, newHash, user.ID); err != nil {
 		log.Printf("change password update: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not change password"})
 		return

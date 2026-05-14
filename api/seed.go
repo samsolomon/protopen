@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func (app *application) seedDemoData(ctx context.Context) error {
@@ -117,11 +116,11 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 	err := tx.QueryRow(ctx, `select id, password_hash from users where email = $1`, email).Scan(&id, &passwordHash)
 	if err == nil {
 		if passwordHash == "" && password != "" {
-			hashed, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			hashed, hashErr := hashPassword(password)
 			if hashErr != nil {
 				return "", "", hashErr
 			}
-			if _, execErr := tx.Exec(ctx, `update users set password_hash = $2 where id = $1`, id, string(hashed)); execErr != nil {
+			if _, execErr := tx.Exec(ctx, `update users set password_hash = $2 where id = $1`, id, hashed); execErr != nil {
 				return "", "", execErr
 			}
 		}
@@ -134,11 +133,11 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 	id = generateID("usr")
 	hashedPassword := ""
 	if password != "" {
-		generated, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		generated, hashErr := hashPassword(password)
 		if hashErr != nil {
 			return "", "", hashErr
 		}
-		hashedPassword = string(generated)
+		hashedPassword = generated
 	}
 	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `

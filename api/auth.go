@@ -25,7 +25,7 @@ var dummyPasswordHash = func() []byte {
 	if _, err := rand.Read(random); err != nil {
 		panic(err)
 	}
-	hash, err := bcrypt.GenerateFromPassword(random, bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword(random, passwordHashCost)
 	if err != nil {
 		panic(err)
 	}
@@ -249,7 +249,7 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 		return sessionUser{}, err
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return sessionUser{}, err
 	}
@@ -259,7 +259,7 @@ func (app *application) registerUser(ctx context.Context, payload authRequest) (
 	_, err = tx.Exec(ctx, `
 		insert into users (id, email, auth_ref, username, name, password_hash, created_at)
 		values ($1, $2, $3, $4, $5, $6, $7)
-	`, user.ID, user.Email, "local-password", user.Username, user.Name, string(passwordHash), now)
+	`, user.ID, user.Email, "local-password", user.Username, user.Name, passwordHash, now)
 	if err != nil {
 		if isDuplicateKeyError(err) {
 			return sessionUser{}, fmt.Errorf("an account with that email already exists")

@@ -7,8 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func (app *application) forgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +89,7 @@ func (app *application) resetPasswordHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
+	passwordHash, err := hashPassword(payload.Password)
 	if err != nil {
 		log.Printf("reset password hash: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not reset password"})
@@ -102,7 +100,7 @@ func (app *application) resetPasswordHandler(w http.ResponseWriter, r *http.Requ
 	if _, err := app.db.Exec(r.Context(), `
 		update users set password_hash = $1, email_verified_at = coalesce(email_verified_at, now())
 		where id = $2
-	`, string(passwordHash), userID); err != nil {
+	`, passwordHash, userID); err != nil {
 		log.Printf("reset password update: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not reset password"})
 		return
