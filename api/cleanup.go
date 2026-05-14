@@ -17,6 +17,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 				app.cleanupExpiredTokens(ctx)
 				app.cleanupExpiredDeviceCodes(ctx)
 				app.cleanupSoftDeletedSites(ctx)
+				app.deviceTokens.expire(time.Now())
 			case <-ctx.Done():
 				ticker.Stop()
 				return

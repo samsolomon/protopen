@@ -77,6 +77,14 @@ docker build -t protopen .
 docker run --env-file .env -p 8080:8080 protopen
 ```
 
+> **Single-instance only.** The CLI `protopen login` device-code flow keeps the
+> in-flight token in process memory. Multi-instance deployments (e.g. Fly with
+> `min_machines_running >= 2`) break the flow because the approve and poll
+> requests can land on different machines. For multi-instance setups, front a
+> single API replica or use sticky sessions until the flow gets a shared
+> backing store. Local-filesystem storage (when R2 is unset) has the same
+> single-instance constraint.
+
 ### Fly / Railway / Render
 
 These platforms detect the Dockerfile and build automatically. Point at a managed Postgres, set env vars from `.env.example` (`flyctl secrets set ...`, Railway/Render dashboard, etc.), and deploy.

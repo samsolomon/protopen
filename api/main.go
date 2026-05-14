@@ -37,8 +37,9 @@ type application struct {
 
 	mailer *emailClient
 
-	authLimiter *rateLimiter
-	adminEmails []string
+	authLimiter      *rateLimiter
+	deviceTokens     *deviceTokenStore
+	adminEmails      []string
 }
 
 type sessionUser struct {
@@ -192,6 +193,7 @@ func main() {
 		adminEmails:    adminEmails,
 	}
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
+	app.deviceTokens = newDeviceTokenStore()
 
 	if getenv("SEED_DEMO", "") != "" {
 		// Refuse to seed in any non-local environment. The demo password is

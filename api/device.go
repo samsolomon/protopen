@@ -57,11 +57,10 @@ func (app *application) deviceCodePollHandler(w http.ResponseWriter, r *http.Req
 
 func (app *application) pollDeviceCode(w http.ResponseWriter, r *http.Request, code string) {
 	var status string
-	var token *string
 	err := app.db.QueryRow(r.Context(), `
-		select status, token from device_codes
+		select status from device_codes
 		where code = $1 and expires_at > now()
-	`, code).Scan(&status, &token)
+	`, code).Scan(&status)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
 		return
@@ -72,20 +71,18 @@ func (app *application) pollDeviceCode(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
-	if status == "complete" && token != nil {
-		// Atomic read-and-clear: only release the token if this poller
-		// is the first to claim it. Returns no rows on a race.
-		var claimed string
-		err := app.db.QueryRow(r.Context(), `
-			update device_codes set status = 'consumed', token = null
-			where code = $1 and status = 'complete' and token is not null
-			returning token
-		`, code).Scan(&claimed)
-		if err != nil {
+	if status == "complete" {
+		// claim is atomic and single-use: a concurrent poll gets the empty
+		// string. The DB status flip to 'consumed' is best-effort accounting.
+		token := app.deviceTokens.claim(code, time.Now())
+		if token == "" {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "device code not found or expired"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": claimed})
+		if _, err := app.db.Exec(r.Context(), `update device_codes set status = 'consumed' where code = $1`, code); err != nil {
+			log.Printf("mark device code consumed: %v", err)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "complete", "token": token})
 		return
 	}
 
@@ -131,12 +128,16 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Update device code — WHERE status = 'pending' prevents concurrent approvals
-	tag, err := tx.Exec(r.Context(), `
-		update device_codes set user_id = $1, token = $2, status = 'complete'
-		where id = $3 and status = 'pending'
-	`, user.ID, rawToken, id)
-	if err != nil || tag.RowsAffected() == 0 {
+	// Update device code — WHERE status = 'pending' prevents concurrent approvals.
+	// The raw token stays out of the DB; it lives in app.deviceTokens until
+	// the CLI polls and claims it.
+	var expiresAt time.Time
+	row := tx.QueryRow(r.Context(), `
+		update device_codes set user_id = $1, status = 'complete'
+		where id = $2 and status = 'pending'
+		returning expires_at
+	`, user.ID, id)
+	if err := row.Scan(&expiresAt); err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "device code already approved"})
 		return
 	}
@@ -145,6 +146,8 @@ func (app *application) approveDeviceCode(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
+
+	app.deviceTokens.put(code, rawToken, expiresAt)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
