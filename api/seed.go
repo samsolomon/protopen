@@ -56,6 +56,10 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		}
 	}
 
+	if _, err := tx.Exec(ctx, `update organizations set is_personal = false where id = $1`, orgID); err != nil {
+		return err
+	}
+
 	var siteCount int
 	if err := tx.QueryRow(ctx, `select count(*) from sites where org_id = $1 and deleted_at is null`, orgID).Scan(&siteCount); err != nil {
 		return err
@@ -155,8 +159,8 @@ func ensurePersonalOrg(ctx context.Context, tx pgx.Tx, userID string, username s
 	err := tx.QueryRow(ctx, `
 		select o.id from organizations o
 		join org_members m on m.org_id = o.id
-		where m.user_id = $1 and o.is_personal = true
-	`, userID).Scan(&orgID)
+		where m.user_id = $1 and o.slug = $2
+	`, userID, username).Scan(&orgID)
 	if err == nil {
 		return orgID, nil
 	}

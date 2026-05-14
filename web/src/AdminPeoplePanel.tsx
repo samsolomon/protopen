@@ -5,7 +5,6 @@ import {
   adminDeleteUser,
   addOrgMember,
   updateMemberRole,
-  removeOrgMember,
   SessionExpiredError,
 } from './api'
 import type { SessionUser } from './types'
@@ -30,11 +29,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Badge } from '@/components/ui/badge'
-import { ChevronDown, MoreHorizontal, X } from 'lucide-react'
+import { ChevronDown, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 type AdminPeoplePanelProps = {
@@ -88,18 +85,6 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
       toast.error(err instanceof Error ? err.message : 'Could not add member')
     } finally {
       setInviting(false)
-    }
-  }
-
-  const handleRemoveFromOrg = async (userId: string, org: AdminUserOrg) => {
-    try {
-      await removeOrgMember(org.orgId, org.memberId)
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, orgs: u.orgs.filter((o) => o.memberId !== org.memberId) } : u))
-      )
-    } catch (err) {
-      if (err instanceof SessionExpiredError) { onSessionExpired(); return }
-      toast.error(err instanceof Error ? err.message : 'Could not remove from workspace')
     }
   }
 
@@ -172,68 +157,49 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
             <TableRow>
               <TableHead>Email</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>Workspaces</TableHead>
+              <TableHead>Role</TableHead>
               <TableHead>Joined</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.map((u) => {
-              const primary = primaryOrg(u.orgs)
+              const sharedOrg = u.orgs.find((o) => !o.isPersonal) ?? null
               return (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">{u.email}</TableCell>
                   <TableCell>{u.name}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {u.orgs.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        u.orgs.map((org) => (
-                          <Badge
-                            key={org.memberId}
-                            variant={org.role === 'admin' ? 'secondary' : 'outline'}
-                            className="gap-1 pr-1"
+                    {sharedOrg ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded text-sm hover:underline focus:outline-none"
+                            aria-label="Change role"
                           >
-                            <span>{org.orgSlug} ·</span>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="inline-flex cursor-pointer items-center gap-0.5 rounded hover:underline focus:outline-none"
-                                  aria-label={`Change role in ${org.orgSlug}`}
-                                >
-                                  {org.role}
-                                  <ChevronDown className="h-3 w-3 opacity-60" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start">
-                                <DropdownMenuItem
-                                  onClick={() => void handleChangeRole(u.id, org, 'admin')}
-                                  disabled={org.role === 'admin'}
-                                >
-                                  Admin
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => void handleChangeRole(u.id, org, 'member')}
-                                  disabled={org.role === 'member'}
-                                >
-                                  Member
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => void handleRemoveFromOrg(u.id, org)}
-                              aria-label={`Remove from ${org.orgSlug}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        ))
-                      )}
-                    </div>
+                            {sharedOrg.role === 'admin' ? 'Admin' : 'Member'}
+                            <ChevronDown className="h-3 w-3 opacity-60" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            onClick={() => void handleChangeRole(u.id, sharedOrg, 'admin')}
+                            disabled={sharedOrg.role === 'admin'}
+                          >
+                            Admin
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void handleChangeRole(u.id, sharedOrg, 'member')}
+                            disabled={sharedOrg.role === 'member'}
+                          >
+                            Member
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{u.createdAt}</TableCell>
                   <TableCell>
