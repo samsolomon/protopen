@@ -34,7 +34,7 @@ import {
 import { ChevronDown, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
-type AdminPeoplePanelProps = {
+type AdminUsersPanelProps = {
   user: SessionUser
   onSessionExpired: () => void
 }
@@ -43,7 +43,7 @@ function primaryOrg<T extends { isPersonal: boolean }>(orgs: T[]): T | null {
   return orgs.find((o) => !o.isPersonal) ?? orgs[0] ?? null
 }
 
-export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelProps) {
+export function AdminUsersPanel({ user, onSessionExpired }: AdminUsersPanelProps) {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
@@ -65,7 +65,7 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
       setUsers(data)
     } catch (err) {
       if (err instanceof SessionExpiredError) { onSessionExpired(); return }
-      toast.error(err instanceof Error ? err.message : 'Could not load people')
+      toast.error(err instanceof Error ? err.message : 'Could not load users')
     } finally {
       setLoading(false)
     }
@@ -121,7 +121,7 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
     <div className="flex flex-col gap-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">People</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Users</h2>
           <p className="text-sm text-muted-foreground">{users.length} total</p>
         </div>
         <div className="flex items-center gap-2">
@@ -150,7 +150,7 @@ export function AdminPeoplePanel({ user, onSessionExpired }: AdminPeoplePanelPro
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading people...</p>
+        <p className="text-sm text-muted-foreground">Loading users...</p>
       ) : (
         <Table>
           <TableHeader>

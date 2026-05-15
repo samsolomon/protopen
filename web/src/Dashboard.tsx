@@ -8,7 +8,7 @@ import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
-import { AdminPeoplePanel } from './AdminPeoplePanel'
+import { AdminUsersPanel } from './AdminUsersPanel'
 import { AdminSitesPanel } from './AdminSitesPanel'
 import { AdminSettings } from './AdminSettings'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,7 @@ type DashboardView = 'dashboard' | 'settings'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
-  if (path === '/settings/people') return isAdmin ? 'people' : 'account'
+  if (path === '/settings/users') return isAdmin ? 'users' : 'account'
   if (path === '/settings/sites') return isAdmin ? 'sites' : 'account'
   if (path === '/settings/instance') return isAdmin ? 'instance' : 'account'
   return 'account'
@@ -224,7 +224,7 @@ export function Dashboard({
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              {user.isAdmin && <TabsTrigger value="people">People</TabsTrigger>}
+              {user.isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="sites">All sites</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
             </TabsList>
@@ -247,8 +247,8 @@ export function Dashboard({
             </TabsContent>
             {user.isAdmin && (
               <>
-                <TabsContent value="people" className="min-w-0 flex-1">
-                  <AdminPeoplePanel user={user} onSessionExpired={onSessionExpired} />
+                <TabsContent value="users" className="min-w-0 flex-1">
+                  <AdminUsersPanel user={user} onSessionExpired={onSessionExpired} />
                 </TabsContent>
                 <TabsContent value="sites" className="min-w-0 flex-1">
                   <AdminSitesPanel onSessionExpired={onSessionExpired} />

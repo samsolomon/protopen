@@ -12,7 +12,7 @@ import (
 
 // requireOrgAdminOrInstanceAdmin gates org-membership write endpoints. Instance
 // admins (email in ADMIN_EMAILS) bypass the per-org admin check so they can
-// manage any workspace from the People panel.
+// manage any workspace from the Users panel.
 func (app *application) requireOrgAdminOrInstanceAdmin(w http.ResponseWriter, r *http.Request, orgID, action string) (sessionUser, bool) {
 	user, err := app.requireSessionUser(r)
 	if err != nil {
