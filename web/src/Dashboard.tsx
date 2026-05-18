@@ -53,6 +53,46 @@ function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   )
 }
 
+function EmptyMineState({ onViewAll, onUploadOpen }: { onViewAll: () => void; onUploadOpen: () => void }) {
+  return (
+    <Empty className="bg-muted py-10">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Upload />
+        </EmptyMedia>
+        <EmptyTitle>You haven't created any sites</EmptyTitle>
+        <EmptyDescription>
+          Switch to All sites to see your teammates' work, or upload your first deploy.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" onClick={onViewAll}>View all sites</Button>
+        <Button onClick={onUploadOpen}>
+          <Plus />
+          Create site
+        </Button>
+      </EmptyContent>
+    </Empty>
+  )
+}
+
+type SiteScope = 'mine' | 'all'
+
+function scopeFromSearch(search: string): SiteScope {
+  const params = new URLSearchParams(search)
+  return params.get('view') === 'all' ? 'all' : 'mine'
+}
+
+function writeScopeToURL(scope: SiteScope) {
+  const url = new URL(window.location.href)
+  if (scope === 'all') {
+    url.searchParams.set('view', 'all')
+  } else {
+    url.searchParams.delete('view')
+  }
+  window.history.replaceState(null, '', url.toString())
+}
+
 type DashboardView = 'dashboard' | 'settings'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
@@ -104,6 +144,22 @@ export function Dashboard({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() =>
     localStorage.getItem('protopen-site-view') === 'list' ? 'list' : 'grid'
   )
+  const [scope, setScopeState] = useState<SiteScope>(() => scopeFromSearch(window.location.search))
+
+  const setScope = (next: SiteScope) => {
+    setScopeState(next)
+    writeScopeToURL(next)
+  }
+
+  const hasTeammateSites = sites.some(
+    (site) => site.createdBy && site.createdBy.id !== user.id,
+  )
+  const showScopeTabs = hasTeammateSites
+  const effectiveScope: SiteScope = showScopeTabs ? scope : 'all'
+  const visibleSites =
+    effectiveScope === 'mine'
+      ? sites.filter((site) => site.createdBy?.id === user.id)
+      : sites
 
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path)
@@ -263,36 +319,46 @@ export function Dashboard({
           <div className="flex flex-col gap-8">
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold tracking-tight">Your sites</h2>
-                <div className="flex items-center gap-2">
-                  {sites.length > 0 ? (
-                    <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-                      {([['grid', LayoutGrid], ['list', List]] as const).map(([mode, Icon]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            setViewMode(mode)
-                            localStorage.setItem('protopen-site-view', mode)
-                          }}
-                          className={`flex cursor-pointer items-center rounded-md border p-1.5 transition-colors ${
-                            viewMode === mode
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-transparent text-muted-foreground hover:text-foreground'
-                          }`}
-                          aria-label={mode === 'grid' ? 'Grid view' : 'List view'}
-                        >
-                          <Icon className="size-3.5" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <Button onClick={() => setUploadOpen(true)}>
-                    <Plus />
-                    Create site
-                  </Button>
-                </div>
+                <h2 className="text-lg font-semibold tracking-tight">Sites</h2>
+                <Button onClick={() => setUploadOpen(true)}>
+                  <Plus />
+                  Create site
+                </Button>
               </div>
+              {sites.length > 0 ? (
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  {showScopeTabs ? (
+                    <Tabs value={scope} onValueChange={(value) => setScope(value as SiteScope)}>
+                      <TabsList>
+                        <TabsTrigger value="mine">My sites</TabsTrigger>
+                        <TabsTrigger value="all">All sites</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  ) : (
+                    <div />
+                  )}
+                  <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+                    {([['grid', LayoutGrid], ['list', List]] as const).map(([mode, Icon]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          setViewMode(mode)
+                          localStorage.setItem('protopen-site-view', mode)
+                        }}
+                        className={`flex cursor-pointer items-center rounded-md border p-1.5 transition-colors ${
+                          viewMode === mode
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                        aria-label={mode === 'grid' ? 'Grid view' : 'List view'}
+                      >
+                        <Icon className="size-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {isLoading ? (
                 <Card>
                   <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -301,10 +367,15 @@ export function Dashboard({
                 </Card>
               ) : sites.length === 0 ? (
                 <EmptyState onUploadOpen={() => setUploadOpen(true)} />
+              ) : visibleSites.length === 0 ? (
+                <EmptyMineState
+                  onViewAll={() => setScope('all')}
+                  onUploadOpen={() => setUploadOpen(true)}
+                />
               ) : (
                 viewMode === 'grid' ? (
                   <SiteCardGrid
-                    sites={sites}
+                    sites={visibleSites}
                     deletingSiteID={deletingSiteID}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
@@ -313,7 +384,7 @@ export function Dashboard({
                   />
                 ) : (
                   <SitesTable
-                    sites={sites}
+                    sites={visibleSites}
                     deletingSiteID={deletingSiteID}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
