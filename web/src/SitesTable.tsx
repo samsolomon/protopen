@@ -2,6 +2,8 @@ import { Fragment, useState } from 'react'
 import type { Site } from './types'
 import { DeployHistory } from './DeployHistory'
 import { CopyButton } from './CopyButton'
+import { SiteThumbnail } from './SiteThumbnail'
+import { VisibilityBadge } from './VisibilityBadge'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -61,11 +63,13 @@ export function SitesTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
+            <TableHead className="w-[88px]"><span className="sr-only">Thumbnail</span></TableHead>
             <TableHead>Name</TableHead>
             <TableHead>URL</TableHead>
             <TableHead className="text-center">Deploys</TableHead>
             <TableHead>Latest</TableHead>
             <TableHead>Updated</TableHead>
+            <TableHead>Visibility</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -77,6 +81,9 @@ export function SitesTable({
             return (
               <Fragment key={site.id}>
                 <TableRow>
+                  <TableCell className="py-2">
+                    <SiteThumbnail site={site} size="row" />
+                  </TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1">
                       <Button
@@ -87,7 +94,7 @@ export function SitesTable({
                       >
                         {isExpanded ? <ChevronDown /> : <ChevronRight />}
                       </Button>
-                      <span className="block max-w-[200px] truncate">{site.name}</span>
+                      <span className="block max-w-[200px] truncate" title={site.name}>{site.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -96,6 +103,7 @@ export function SitesTable({
                         href={site.liveUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        title={site.liveUrl}
                         className="inline-flex items-center gap-1 max-w-[260px] truncate text-primary underline-offset-4 hover:underline"
                       >
                         <span className="truncate">{site.liveUrl}</span>
@@ -137,6 +145,9 @@ export function SitesTable({
                   <TableCell className="text-muted-foreground">
                     {site.updatedAt}
                   </TableCell>
+                  <TableCell>
+                    <VisibilityBadge isPublic={site.isPublic} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Tooltip>
@@ -172,7 +183,7 @@ export function SitesTable({
                 </TableRow>
                 {isExpanded && (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={6} className="bg-muted/30 px-4 py-3">
+                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
                       <DeployHistory
                         projectId={site.id}
                         onRollback={onSitesChanged}
