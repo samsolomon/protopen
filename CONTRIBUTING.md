@@ -20,6 +20,14 @@ Type-check the web side without building:
 (cd web && npx tsc --noEmit)
 ```
 
+Database-backed Go tests (mutation gates, list filters, duplicate flow) opt in via `TEST_DATABASE_URL`. Without it they `t.Skip` so a stray `go test ./...` can't truncate dev data. Point the env at a throwaway database:
+
+```bash
+createdb -h localhost -p 5434 -U protopen protopen_test
+TEST_DATABASE_URL="postgres://protopen:protopen@localhost:5434/protopen_test?sslmode=disable" \
+    (cd api && go test ./...)
+```
+
 Smoke tests exercise the running API end-to-end (need Postgres + API up):
 
 ```bash
