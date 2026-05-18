@@ -273,16 +273,38 @@ export function Dashboard({
           <div className="flex items-center">
             <a href="/" className="text-xl font-semibold tracking-tight hover:opacity-70 transition-opacity" onClick={(e) => { e.preventDefault(); switchView('dashboard') }}>Protopen</a>
           </div>
-          <div />
+          <nav className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              onClick={() => switchView('dashboard')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === 'dashboard'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              aria-current={view === 'dashboard' ? 'page' : undefined}
+            >
+              Sites
+            </button>
+            <button
+              type="button"
+              onClick={() => switchView('inbox')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === 'inbox'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              aria-current={view === 'inbox' ? 'page' : undefined}
+            >
+              Inbox
+            </button>
+          </nav>
           <div className="flex items-center justify-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">{user.name}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => switchView('inbox')}>
-                Inbox
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => switchView('settings')}>
                 Settings
               </DropdownMenuItem>
