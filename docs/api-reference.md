@@ -149,6 +149,11 @@ Auth required.
 - `author` (optional) — set to `me` to limit results to sites created by the
   caller. Any other value is ignored.
 
+The reference dashboard fetches the full org list once and filters client-side
+to power its `My sites` / `All sites` scope tabs (persisted in the URL as
+`?view=mine|all`). The `?author=me` server-side filter is provided for clients
+that prefer a narrower fetch.
+
 **Response (200):**
 ```json
 {
@@ -244,6 +249,10 @@ collisions.
 - `201` — duplicate created
 - `403` — caller is not a member of the source's org
 - `404` — source site missing
+
+The reference dashboard, after a successful duplicate, flips its scope tab to
+`My sites` so the user lands on the freshly attributed copy rather than the
+source they cannot mutate.
 
 ### `GET /api/sites/{siteID}/deploys`
 
