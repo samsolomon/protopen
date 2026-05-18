@@ -65,6 +65,8 @@ func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) 
 			app.rollbackHandler(w, r, siteID)
 		case "thumbnail":
 			app.siteThumbnailHandler(w, r, siteID)
+		case "duplicate":
+			app.duplicateSiteHandler(w, r, siteID)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,6 +149,42 @@ func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "isPublic": *payload.IsPublic})
+}
+
+// duplicateSiteHandler clones a site within the same org and attributes the
+// new copy to the calling user. Any org member can duplicate; this is the
+// non-destructive escape hatch when teammates can't directly modify a site
+// they don't own.
+func (app *application) duplicateSiteHandler(w http.ResponseWriter, r *http.Request, sourceSiteID string) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	// Read-only access (org membership) is sufficient to clone.
+	if _, _, err := app.requireSiteAccess(r.Context(), user, sourceSiteID); err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	result, err := app.duplicateSite(r.Context(), sourceSiteID, user.ID)
+	if err != nil {
+		log.Printf("duplicate site: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not duplicate site"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"site": result})
 }
 
 // statusForSiteMutateError maps the three failure modes of requireSiteMutate

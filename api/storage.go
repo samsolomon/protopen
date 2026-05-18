@@ -208,6 +208,90 @@ func stringValue(p *string) string {
 	return *p
 }
 
+// duplicateSite clones a site within its owning org. The caller becomes the
+// new site's creator. Deploy storage is immutable, so we re-point a new
+// deploys row at the source's current storage_prefix instead of copying any
+// files. Caller authorization (org membership) is the handler's job.
+func (app *application) duplicateSite(ctx context.Context, sourceSiteID string, callerUserID string) (site, error) {
+	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return site{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var (
+		sourceOrgID   string
+		sourceName    string
+		sourceSlug    string
+		orgSlug       string
+		currentDeploy *string
+	)
+	err = tx.QueryRow(ctx, `
+		select s.org_id, s.name, s.slug, o.slug, s.current_deploy_id
+		from sites s
+		join organizations o on o.id = s.org_id
+		where s.id = $1 and s.deleted_at is null
+	`, sourceSiteID).Scan(&sourceOrgID, &sourceName, &sourceSlug, &orgSlug, &currentDeploy)
+	if err != nil {
+		return site{}, fmt.Errorf("site not found")
+	}
+
+	newName := "Copy of " + sourceName
+	newSlug, err := uniqueSlug(ctx, tx, sourceOrgID, sourceSlug+"-copy")
+	if err != nil {
+		return site{}, err
+	}
+
+	now := time.Now().UTC()
+	newSiteID := generateID("site")
+	if _, err := tx.Exec(ctx, `
+		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
+		values ($1, $2, $3, $4, $5, $5, $6)
+	`, newSiteID, sourceOrgID, newSlug, newName, now, callerUserID); err != nil {
+		return site{}, err
+	}
+
+	// Re-point a new deploys row at the source's current storage_prefix
+	// (deploys are immutable, so no file copy is required). Git and label
+	// metadata are carried over so the duplicate's deploy history reads
+	// sensibly from day one.
+	var newDeployID string
+	if currentDeploy != nil {
+		newDeployID = generateID("dep")
+		if _, err := tx.Exec(ctx, `
+			insert into deploys (id, site_id, status, size_bytes, file_count, storage_prefix, created_at, label,
+				git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url, thumbnail_path)
+			select $1, $2, status, size_bytes, file_count, storage_prefix, $3, label,
+				git_commit_hash, git_branch, git_commit_message, git_dirty, git_author, git_remote_url, thumbnail_path
+			from deploys where id = $4
+		`, newDeployID, newSiteID, now, *currentDeploy); err != nil {
+			return site{}, err
+		}
+		if _, err := tx.Exec(ctx, `
+			update sites set current_deploy_id = $2 where id = $1
+		`, newSiteID, newDeployID); err != nil {
+			return site{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return site{}, err
+	}
+
+	// Re-read through listSites' shape so the response carries createdBy and
+	// any other derived columns consistently with GET /api/sites.
+	sites, err := app.listSites(ctx, sourceOrgID, listSitesOpts{})
+	if err != nil {
+		return site{}, err
+	}
+	for _, s := range sites {
+		if s.ID == newSiteID {
+			return s, nil
+		}
+	}
+	return site{}, fmt.Errorf("duplicate site not found after insert")
+}
+
 func (app *application) deleteSite(ctx context.Context, orgID string, siteID string) (bool, error) {
 	commandTag, err := app.db.Exec(ctx, `
 		update sites
