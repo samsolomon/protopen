@@ -98,7 +98,7 @@ export function SiteCardGrid({
     <>
       <div
         className="gap-4"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
       >
         {sites.map((site) => {
           const isDeleting = deletingSiteID === site.id
