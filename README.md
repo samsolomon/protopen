@@ -56,12 +56,14 @@ npm install
 npm run dev:web
 ```
 
-Dashboard at <http://localhost:5173>, API at <http://localhost:8080>, deployed sites served from <http://127.0.0.1:8081>.
+Dashboard at <http://localhost:5173>, API at <http://localhost:8080>, deployed sites served from <http://127.0.0.1:8081>. The Postgres container binds to host port `5433` (not the usual 5432) so it coexists with a Homebrew or Postgres.app server already running locally; the API reads `.env` from the repo root automatically, so no `source .env` is needed.
 
-Demo account seeded automatically when `SEED_DEMO` is set (see `.env.example`):
+A demo account, three teammates, and five example sites are seeded on first boot (toggled by `SEED_DEMO` in `.env.example`, defaulted on):
 
 - email: `demo@protopen.dev`
 - password: `protopen-demo`
+
+Sign in, then visit the dashboard to see the seeded sites. Thumbnails are captured by the runtime backstop once `THUMBNAILS_ENABLED=1` (also defaulted on) and a Chromium binary is available — on macOS the standard Google Chrome install is auto-detected, on Linux any `chromium-browser` / `google-chrome` on `PATH` works, otherwise set `CHROMIUM_PATH`.
 
 ## What's in this repo
 

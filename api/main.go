@@ -131,7 +131,15 @@ type liveDeploy struct {
 
 func main() {
 	ctx := context.Background()
-	databaseURL := getenv("DATABASE_URL", "postgres://protopen:protopen@localhost:5432/protopen?sslmode=disable")
+
+	// Load .env from the working directory (or nearest parent) before reading
+	// any env. Values already set in the process environment win, so
+	// shell-exported overrides still take precedence.
+	if err := loadDotenv(); err != nil {
+		log.Fatalf("load .env: %v", err)
+	}
+
+	databaseURL := getenv("DATABASE_URL", "postgres://protopen:protopen@localhost:5433/protopen?sslmode=disable")
 	ingestRoot := getenv("INGEST_ROOT", filepath.Join(".data", "ingest"))
 	listenAddr := getenv("PORT", "")
 	appListenAddr := getenv("APP_LISTEN_ADDR", ":8080")

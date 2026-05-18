@@ -6,8 +6,11 @@ services:
       POSTGRES_DB: protopen
       POSTGRES_USER: protopen
       POSTGRES_PASSWORD: protopen
+    # Host port 5433 (not Postgres' default 5432) so this container coexists
+    # with a Homebrew or Postgres.app server already bound to 5432, which is
+    # common on macOS dev machines. .env.example DATABASE_URL points here.
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - protopen_postgres_data:/var/lib/postgresql/data
 

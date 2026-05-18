@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -402,12 +403,23 @@ func resolveThumbnailEnv() thumbnailEnv {
 
 // initThumbnailState seeds the instance_settings.thumbnails_enabled row on
 // first boot (default true when env-available, false otherwise) and enables
-// thumbnails immediately if the DB says so.
+// thumbnails immediately if the DB says so. If the row was machine-seeded
+// false on a prior boot (when env wasn't set) and an admin has never touched
+// it, reconcile to true now that env is available — without this, setting
+// THUMBNAILS_ENABLED in .env on a second boot wouldn't actually do anything.
 func (app *application) initThumbnailState(ctx context.Context) error {
-	value, present, err := app.getInstanceSetting(ctx, settingThumbnailsEnabled)
-	if err != nil {
+	var (
+		value     string
+		updatedBy string
+	)
+	err := app.db.QueryRow(ctx, `
+		select value, coalesce(updated_by, '') from instance_settings where key = $1
+	`, settingThumbnailsEnabled).Scan(&value, &updatedBy)
+	present := err == nil
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+
 	if !present {
 		seed := "false"
 		if app.thumbnailEnv.available {
@@ -417,11 +429,44 @@ func (app *application) initThumbnailState(ctx context.Context) error {
 			return err
 		}
 		value = seed
+	} else if app.thumbnailEnv.available && value == "false" && updatedBy == "boot" {
+		if err := app.setInstanceSetting(ctx, settingThumbnailsEnabled, "true", "boot"); err != nil {
+			return err
+		}
+		value = "true"
 	}
+
 	if value == "true" && app.thumbnailEnv.available {
 		app.enableThumbnails()
 	}
 	return nil
+}
+
+// chromiumProbe* are overridable in tests so the darwin app-bundle search can
+// be exercised on any host without touching /Applications.
+var (
+	chromiumLookPath = exec.LookPath
+	chromiumStat     = os.Stat
+	chromiumGOOS     = runtime.GOOS
+)
+
+// darwinChromiumCandidates lists the well-known macOS install paths Chrome and
+// Chromium use. PATH-installed binaries (e.g. via brew --cask installs that
+// expose a `google-chrome` shim) are still preferred when present.
+func darwinChromiumCandidates() []string {
+	candidates := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+	}
+	if home := os.Getenv("HOME"); home != "" {
+		candidates = append(candidates,
+			home+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			home+"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		)
+	}
+	return candidates
 }
 
 func resolveChromiumPath() string {
@@ -429,8 +474,15 @@ func resolveChromiumPath() string {
 		return p
 	}
 	for _, candidate := range []string{"chromium-browser", "chromium", "google-chrome", "google-chrome-stable"} {
-		if path, err := exec.LookPath(candidate); err == nil {
+		if path, err := chromiumLookPath(candidate); err == nil {
 			return path
+		}
+	}
+	if chromiumGOOS == "darwin" {
+		for _, candidate := range darwinChromiumCandidates() {
+			if _, err := chromiumStat(candidate); err == nil {
+				return candidate
+			}
 		}
 	}
 	return ""

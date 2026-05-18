@@ -14,6 +14,14 @@ cli/protopen
 api/.protopen/
 dist/
 
+# api/dist is the build output of `npm run build:web` (consumed by
+# //go:embed all:dist in api/frontend.go). The directory must exist at
+# compile time even in local-dev split-server mode where the bundle is
+# never built — track an empty .gitkeep so fresh clones build cleanly.
+!api/dist/
+api/dist/*
+!api/dist/.gitkeep
+
 # Local CLI state (untracked across the tree)
 .protopen/
 **/.protopen/
