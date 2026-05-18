@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
-import { fetchSession, fetchSites, postAuth, deleteSiteById, SessionExpiredError } from './api'
+import { fetchSession, fetchSites, postAuth, deleteSiteById, duplicateSite, SessionExpiredError } from './api'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -117,5 +117,38 @@ describe('deleteSiteById', () => {
     mockFetch.mockResolvedValue(jsonResponse(403, { error: 'Not authorized' }))
 
     await expect(deleteSiteById('site_1')).rejects.toThrow('Not authorized')
+  })
+})
+
+
+describe('duplicateSite', () => {
+  it('returns the duplicated site on 201', async () => {
+    const site = { id: 'site_2', name: 'Copy of Test', slug: 'test-copy' }
+    mockFetch.mockResolvedValue(jsonResponse(201, { site }))
+
+    const result = await duplicateSite('site_1')
+    expect(result).toEqual(site)
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/sites/site_1/duplicate'),
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+  })
+
+  it('throws SessionExpiredError on 401', async () => {
+    mockFetch.mockResolvedValue(jsonResponse(401, {}))
+
+    await expect(duplicateSite('site_1')).rejects.toBeInstanceOf(SessionExpiredError)
+  })
+
+  it('throws with server error message on failure', async () => {
+    mockFetch.mockResolvedValue(jsonResponse(404, { error: 'site not found' }))
+
+    await expect(duplicateSite('site_1')).rejects.toThrow('site not found')
+  })
+
+  it('throws when response is missing site', async () => {
+    mockFetch.mockResolvedValue(jsonResponse(201, {}))
+
+    await expect(duplicateSite('site_1')).rejects.toThrow('Could not duplicate site')
   })
 })

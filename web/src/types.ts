@@ -1,3 +1,9 @@
+export type SiteAuthor = {
+  id: string
+  name: string
+  username: string
+}
+
 export type Site = {
   id: string
   name: string
@@ -9,6 +15,7 @@ export type Site = {
   gitBranch?: string | null
   gitCommitHash?: string | null
   gitRemoteURL?: string | null
+  createdBy?: SiteAuthor | null
 }
 
 export type SessionUser = {

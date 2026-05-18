@@ -136,6 +136,24 @@ export async function fetchDeploys(siteID: string): Promise<Deploy[]> {
   return data.deploys ?? []
 }
 
+export async function duplicateSite(siteID: string): Promise<Site> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}/duplicate`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) {
+    throw new SessionExpiredError()
+  }
+
+  const data = (await response.json()) as { error?: string; site?: Site }
+  if (!response.ok || !data.site) {
+    throw new Error(data.error ?? 'Could not duplicate site')
+  }
+
+  return data.site
+}
+
 export async function rollbackDeploy(siteID: string, deployId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}/rollback`, {
     method: 'POST',
