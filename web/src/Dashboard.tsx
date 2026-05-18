@@ -359,26 +359,23 @@ export function Dashboard({
                       />
                     </div>
                   </div>
-                  <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-                    {([['grid', LayoutGrid], ['list', List]] as const).map(([mode, Icon]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => {
-                          setViewMode(mode)
-                          localStorage.setItem('protopen-site-view', mode)
-                        }}
-                        className={`flex cursor-pointer items-center rounded-md border p-1.5 transition-colors ${
-                          viewMode === mode
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-transparent text-muted-foreground hover:text-foreground'
-                        }`}
-                        aria-label={mode === 'grid' ? 'Grid view' : 'List view'}
-                      >
-                        <Icon className="size-3.5" />
-                      </button>
-                    ))}
-                  </div>
+                  <Tabs
+                    value={viewMode}
+                    onValueChange={(value) => {
+                      const next = value as 'grid' | 'list'
+                      setViewMode(next)
+                      localStorage.setItem('protopen-site-view', next)
+                    }}
+                  >
+                    <TabsList>
+                      <TabsTrigger value="grid" aria-label="Grid view">
+                        <LayoutGrid />
+                      </TabsTrigger>
+                      <TabsTrigger value="list" aria-label="List view">
+                        <List />
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
               ) : null}
               {isLoading ? (
