@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ExternalLink, Copy, History, Globe, Lock, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
+import { ExternalLink, Copy, CopyPlus, History, Globe, Lock, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { commitURL } from '@/lib/utils'
 
@@ -31,8 +31,11 @@ type SiteCardGridProps = {
   sites: Site[]
   deletingSiteID: string | null
   showAuthor?: boolean
+  currentUserId?: string
+  isOrgAdmin?: boolean
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
+  onDuplicate?: (siteID: string) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
 }
@@ -41,8 +44,11 @@ export function SiteCardGrid({
   sites,
   deletingSiteID,
   showAuthor = false,
+  currentUserId,
+  isOrgAdmin = false,
   onDelete,
   onVisibilityToggle,
+  onDuplicate,
   onSitesChanged,
   onSessionExpired,
 }: SiteCardGridProps) {
@@ -57,6 +63,8 @@ export function SiteCardGrid({
       >
         {sites.map((site) => {
           const isDeleting = deletingSiteID === site.id
+          const canMutate =
+            isOrgAdmin || (!!site.createdBy && site.createdBy.id === currentUserId)
 
           return (
             <Card key={site.id} className="relative pt-0">
@@ -113,28 +121,43 @@ export function SiteCardGrid({
                         <History />
                         Deploy history
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onVisibilityToggle(site.id, !site.isPublic)
-                        }}
-                      >
-                        {site.isPublic ? <Lock /> : <Globe />}
-                        {site.isPublic ? 'Make private' : 'Make public'}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={isDeleting}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleteTarget(site)
-                        }}
-                      >
-                        <Trash2 />
-                        Delete
-                      </DropdownMenuItem>
+                      {onDuplicate ? (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDuplicate(site.id)
+                          }}
+                        >
+                          <CopyPlus />
+                          Duplicate
+                        </DropdownMenuItem>
+                      ) : null}
+                      {canMutate ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onVisibilityToggle(site.id, !site.isPublic)
+                            }}
+                          >
+                            {site.isPublic ? <Lock /> : <Globe />}
+                            {site.isPublic ? 'Make private' : 'Make public'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteTarget(site)
+                            }}
+                          >
+                            <Trash2 />
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </CardAction>

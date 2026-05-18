@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import type { Site, SessionUser } from './types'
-import { resendVerification } from './api'
+import { duplicateSite, resendVerification } from './api'
 import { UploadPanel } from './UploadPanel'
 import { SiteCardGrid } from './SiteCardGrid'
 import { SitesTable } from './SitesTable'
@@ -160,6 +161,23 @@ export function Dashboard({
     effectiveScope === 'mine'
       ? sites.filter((site) => site.createdBy?.id === user.id)
       : sites
+
+  const activeOrg = user.orgs.find((org) => org.isPersonal) ?? user.orgs[0]
+  const isOrgAdmin = activeOrg?.role === 'admin'
+
+  const handleDuplicate = async (siteID: string) => {
+    try {
+      const site = await duplicateSite(siteID)
+      toast.success(`Duplicated as "${site.name}"`)
+      onSitesChanged()
+      if (showScopeTabs && scope !== 'mine') {
+        setScope('mine')
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not duplicate site'
+      toast.error(message)
+    }
+  }
 
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path)
@@ -378,8 +396,11 @@ export function Dashboard({
                     sites={visibleSites}
                     deletingSiteID={deletingSiteID}
                     showAuthor={effectiveScope === 'all'}
+                    currentUserId={user.id}
+                    isOrgAdmin={isOrgAdmin}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
+                    onDuplicate={handleDuplicate}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />
@@ -388,8 +409,11 @@ export function Dashboard({
                     sites={visibleSites}
                     deletingSiteID={deletingSiteID}
                     showAuthor={effectiveScope === 'all'}
+                    currentUserId={user.id}
+                    isOrgAdmin={isOrgAdmin}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
+                    onDuplicate={handleDuplicate}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />

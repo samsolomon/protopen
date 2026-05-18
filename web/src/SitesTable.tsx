@@ -24,15 +24,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, CopyPlus, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
 import { commitURL } from '@/lib/utils'
 
 type SitesTableProps = {
   sites: Site[]
   deletingSiteID: string | null
   showAuthor?: boolean
+  currentUserId?: string
+  isOrgAdmin?: boolean
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
+  onDuplicate?: (siteID: string) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
 }
@@ -41,8 +44,11 @@ export function SitesTable({
   sites,
   deletingSiteID,
   showAuthor = false,
+  currentUserId,
+  isOrgAdmin = false,
   onDelete,
   onVisibilityToggle,
+  onDuplicate,
   onSitesChanged,
   onSessionExpired,
 }: SitesTableProps) {
@@ -81,6 +87,8 @@ export function SitesTable({
           {sites.map((site) => {
             const isExpanded = expandedRows.has(site.id)
             const isDeleting = deletingSiteID === site.id
+            const canMutate =
+              isOrgAdmin || (!!site.createdBy && site.createdBy.id === currentUserId)
 
             return (
               <Fragment key={site.id}>
@@ -159,34 +167,53 @@ export function SitesTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => onVisibilityToggle(site.id, !site.isPublic)}
-                            aria-label={site.isPublic ? 'Make private' : 'Make public'}
-                          >
-                            {site.isPublic ? <Globe /> : <Lock />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{site.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isDeleting}
-                            onClick={() => setDeleteTarget(site)}
-                            aria-label="Delete site"
-                          >
-                            <Trash2 />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Delete</TooltipContent>
-                      </Tooltip>
+                      {onDuplicate ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => onDuplicate(site.id)}
+                              aria-label="Duplicate site"
+                            >
+                              <CopyPlus />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Duplicate</TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                      {canMutate ? (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => onVisibilityToggle(site.id, !site.isPublic)}
+                                aria-label={site.isPublic ? 'Make private' : 'Make public'}
+                              >
+                                {site.isPublic ? <Globe /> : <Lock />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{site.isPublic ? 'Make private' : 'Make public'}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="hover:bg-destructive/10 hover:text-destructive"
+                                disabled={isDeleting}
+                                onClick={() => setDeleteTarget(site)}
+                                aria-label="Delete site"
+                              >
+                                <Trash2 />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
+                        </>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>
