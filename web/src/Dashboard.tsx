@@ -29,8 +29,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Plus, Upload, Mail, LayoutGrid, List } from 'lucide-react'
+import { Plus, Upload, Mail, LayoutGrid, List, Search } from 'lucide-react'
 
 function EmptyState({ onUploadOpen }: { onUploadOpen: () => void }) {
   return (
@@ -146,6 +147,7 @@ export function Dashboard({
     localStorage.getItem('protopen-site-view') === 'list' ? 'list' : 'grid'
   )
   const [scope, setScopeState] = useState<SiteScope>(() => scopeFromSearch(window.location.search))
+  const [searchQuery, setSearchQuery] = useState('')
 
   const setScope = (next: SiteScope) => {
     setScopeState(next)
@@ -157,10 +159,18 @@ export function Dashboard({
   )
   const showScopeTabs = hasTeammateSites
   const effectiveScope: SiteScope = showScopeTabs ? scope : 'all'
-  const visibleSites =
+  const scopedSites =
     effectiveScope === 'mine'
       ? sites.filter((site) => site.createdBy?.id === user.id)
       : sites
+  const trimmedQuery = searchQuery.trim().toLowerCase()
+  const visibleSites = trimmedQuery
+    ? scopedSites.filter(
+        (site) =>
+          site.name.toLowerCase().includes(trimmedQuery) ||
+          site.slug.toLowerCase().includes(trimmedQuery),
+      )
+    : scopedSites
 
   const activeOrg = user.orgs.find((org) => org.isPersonal) ?? user.orgs[0]
   const isOrgAdmin = activeOrg?.role === 'admin'
@@ -345,16 +355,27 @@ export function Dashboard({
               </div>
               {sites.length > 0 ? (
                 <div className="mb-4 flex items-center justify-between gap-2">
-                  {showScopeTabs ? (
-                    <Tabs value={scope} onValueChange={(value) => setScope(value as SiteScope)}>
-                      <TabsList>
-                        <TabsTrigger value="mine">My sites</TabsTrigger>
-                        <TabsTrigger value="all">All sites</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                  ) : (
-                    <div />
-                  )}
+                  <div className="flex items-center gap-3">
+                    {showScopeTabs ? (
+                      <Tabs value={scope} onValueChange={(value) => setScope(value as SiteScope)}>
+                        <TabsList>
+                          <TabsTrigger value="mine">My sites</TabsTrigger>
+                          <TabsTrigger value="all">All sites</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    ) : null}
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search sites"
+                        aria-label="Search sites"
+                        className="h-8 w-48 pl-7"
+                      />
+                    </div>
+                  </div>
                   <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
                     {([['grid', LayoutGrid], ['list', List]] as const).map(([mode, Icon]) => (
                       <button
@@ -386,10 +407,18 @@ export function Dashboard({
               ) : sites.length === 0 ? (
                 <EmptyState onUploadOpen={() => setUploadOpen(true)} />
               ) : visibleSites.length === 0 ? (
-                <EmptyMineState
-                  onViewAll={() => setScope('all')}
-                  onUploadOpen={() => setUploadOpen(true)}
-                />
+                trimmedQuery ? (
+                  <Card>
+                    <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                      No sites match "{searchQuery}".
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <EmptyMineState
+                    onViewAll={() => setScope('all')}
+                    onUploadOpen={() => setUploadOpen(true)}
+                  />
+                )
               ) : (
                 viewMode === 'grid' ? (
                   <SiteCardGrid
