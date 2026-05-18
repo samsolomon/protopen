@@ -4,6 +4,7 @@ import { DeployHistory } from './DeployHistory'
 import { SiteThumbnail } from './SiteThumbnail'
 import { CopyButton } from './CopyButton'
 import { VisibilityBadge } from './VisibilityBadge'
+import { AuthorChip } from './AuthorChip'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,6 +30,7 @@ import { commitURL } from '@/lib/utils'
 type SiteCardGridProps = {
   sites: Site[]
   deletingSiteID: string | null
+  showAuthor?: boolean
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onSitesChanged: () => void
@@ -38,6 +40,7 @@ type SiteCardGridProps = {
 export function SiteCardGrid({
   sites,
   deletingSiteID,
+  showAuthor = false,
   onDelete,
   onVisibilityToggle,
   onSitesChanged,
@@ -181,7 +184,12 @@ export function SiteCardGrid({
                     ) : null}
                   </div>
                 ) : null}
-                <p className="text-xs text-muted-foreground">{site.updatedAt}</p>
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">{site.updatedAt}</span>
+                  {showAuthor ? (
+                    <AuthorChip author={site.createdBy} className="relative z-10 min-w-0" />
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           )

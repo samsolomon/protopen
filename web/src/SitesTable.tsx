@@ -4,6 +4,7 @@ import { DeployHistory } from './DeployHistory'
 import { CopyButton } from './CopyButton'
 import { SiteThumbnail } from './SiteThumbnail'
 import { VisibilityBadge } from './VisibilityBadge'
+import { AuthorChip } from './AuthorChip'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -29,6 +30,7 @@ import { commitURL } from '@/lib/utils'
 type SitesTableProps = {
   sites: Site[]
   deletingSiteID: string | null
+  showAuthor?: boolean
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onSitesChanged: () => void
@@ -38,6 +40,7 @@ type SitesTableProps = {
 export function SitesTable({
   sites,
   deletingSiteID,
+  showAuthor = false,
   onDelete,
   onVisibilityToggle,
   onSitesChanged,
@@ -68,6 +71,7 @@ export function SitesTable({
             <TableHead>URL</TableHead>
             <TableHead className="text-center">Deploys</TableHead>
             <TableHead>Latest</TableHead>
+            {showAuthor ? <TableHead>Author</TableHead> : null}
             <TableHead>Updated</TableHead>
             <TableHead>Visibility</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -142,6 +146,11 @@ export function SitesTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  {showAuthor ? (
+                    <TableCell>
+                      <AuthorChip author={site.createdBy} />
+                    </TableCell>
+                  ) : null}
                   <TableCell className="text-muted-foreground">
                     {site.updatedAt}
                   </TableCell>
@@ -183,7 +192,7 @@ export function SitesTable({
                 </TableRow>
                 {isExpanded && (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="bg-muted/30 px-4 py-3">
+                    <TableCell colSpan={showAuthor ? 9 : 8} className="bg-muted/30 px-4 py-3">
                       <DeployHistory
                         projectId={site.id}
                         onRollback={onSitesChanged}

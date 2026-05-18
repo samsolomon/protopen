@@ -377,6 +377,7 @@ export function Dashboard({
                   <SiteCardGrid
                     sites={visibleSites}
                     deletingSiteID={deletingSiteID}
+                    showAuthor={effectiveScope === 'all'}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onSitesChanged={onSitesChanged}
@@ -386,6 +387,7 @@ export function Dashboard({
                   <SitesTable
                     sites={visibleSites}
                     deletingSiteID={deletingSiteID}
+                    showAuthor={effectiveScope === 'all'}
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onSitesChanged={onSitesChanged}
