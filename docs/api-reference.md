@@ -144,7 +144,10 @@ Password must be at least 8 characters. Invalidates all existing sessions. Also 
 
 Auth required.
 
-**Query params:** `org` (optional, org slug — defaults to personal org)
+**Query params:**
+- `org` (optional, org slug — defaults to personal org)
+- `author` (optional) — set to `me` to limit results to sites created by the
+  caller. Any other value is ignored.
 
 **Response (200):**
 ```json
@@ -160,26 +163,40 @@ Auth required.
       "isPublic": true,
       "gitBranch": "main",
       "gitCommitHash": "abc123...",
-      "gitRemoteURL": "https://github.com/user/repo"
+      "gitRemoteURL": "https://github.com/user/repo",
+      "createdBy": {
+        "id": "usr_...",
+        "name": "Demo User",
+        "username": "demo"
+      }
     }
   ]
 }
 ```
 
-Git fields are null when not available.
+Git fields are null when not available. `createdBy` is `null` for legacy
+rows that pre-date ownership tracking; the client should render those as
+an unknown author.
 
 ### `DELETE /api/sites/{siteID}`
 
-Auth required. Soft-deletes the site.
+Auth required. Soft-deletes the site. Caller must be the site's creator or an
+admin of the owning org (see [Site ownership](#site-ownership)).
 
 **Response (200):**
 ```json
 {"ok": true}
 ```
 
+**Status codes:**
+- `200` — site soft-deleted
+- `403` — caller is a member but not the creator or an admin
+- `404` — site missing
+
 ### `PATCH /api/sites/{siteID}`
 
-Auth required. Update site visibility.
+Auth required. Update site visibility. Caller must be the site's creator or an
+admin of the owning org (see [Site ownership](#site-ownership)).
 
 **Request:**
 ```json
@@ -190,6 +207,43 @@ Auth required. Update site visibility.
 ```json
 {"ok": true, "isPublic": true}
 ```
+
+### `POST /api/sites/{siteID}/duplicate`
+
+Auth required. Clones a site within the same org and attributes the new copy
+to the caller. Any org member can duplicate — duplication is the
+non-destructive escape hatch when a teammate wants to riff on a site they
+don't own.
+
+The new site shares its source's deploy storage prefix (deploys are
+immutable, so no file copy is required). The duplicate's slug is derived
+from the source as `<source-slug>-copy`, `<source-slug>-copy-2`, … to avoid
+collisions.
+
+**Response (201):**
+```json
+{
+  "site": {
+    "id": "site_...",
+    "name": "Copy of My Site",
+    "slug": "my-site-copy",
+    "updatedAt": "Just now",
+    "deployCount": 1,
+    "liveUrl": "https://sites.example.com/~demo/my-site-copy",
+    "isPublic": true,
+    "createdBy": {
+      "id": "usr_caller",
+      "name": "Caller Name",
+      "username": "caller"
+    }
+  }
+}
+```
+
+**Status codes:**
+- `201` — duplicate created
+- `403` — caller is not a member of the source's org
+- `404` — source site missing
 
 ### `GET /api/sites/{siteID}/deploys`
 
@@ -220,7 +274,8 @@ Auth required. List deploys for a site.
 
 ### `POST /api/sites/{siteID}/rollback`
 
-Auth required. Roll back to a previous deploy.
+Auth required. Roll back to a previous deploy. Caller must be the site's
+creator or an admin of the owning org (see [Site ownership](#site-ownership)).
 
 **Request:**
 ```json
@@ -261,6 +316,12 @@ deploys that have not yet been captured return 404.
 ### `POST /api/uploads`
 
 Auth required. Multipart form data.
+
+Creating a new site sets `created_by` to the caller. Re-uploading to an
+existing site (matched by name within the org) is gated: only the original
+creator or an org admin can replace its contents. Other org members get
+`403` with a hint to duplicate instead (see
+[Site ownership](#site-ownership)).
 
 **Query params:** `org` (optional, org slug)
 
@@ -560,6 +621,39 @@ Update one or more settings.
 - Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
 - Returns **403** if the caller is not admin.
 - Toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+
+---
+
+## Site ownership
+
+Every site row carries a `created_by` foreign key onto `users`. The semantics
+are intentionally narrow:
+
+- **Mutations gated on creator-or-admin.** `DELETE /api/sites/:id`,
+  `PATCH /api/sites/:id`, `POST /api/sites/:id/rollback`, and re-uploads to
+  an existing site name via `POST /api/uploads` succeed only when the caller
+  is the original creator or holds the `admin` role in the owning org.
+  Other org members get `403`.
+- **Reads are org-scoped, not creator-scoped.** `GET /api/sites` returns the
+  whole org's sites by default; pass `?author=me` to scope down to the
+  caller's own work.
+- **Duplication is open to all members.** `POST /api/sites/:id/duplicate`
+  only requires org membership, so teammates can always clone a site they
+  can't modify directly.
+- **Deleted users orphan their sites.** The FK uses
+  `on delete set null`, so removing a user leaves their sites with
+  `created_by = null`. Orphaned sites continue to live under the org and
+  fall into the admin-only mutation bucket — no cascade-deletes of work
+  that other teammates may still rely on.
+- **API tokens authenticate as the issuing user.** Deploys made with a CI
+  token are attributed to whoever provisioned the token, not the human
+  triggering the build. This matches today's behavior; no special case in
+  the ownership rules.
+- **Legacy rows can be `null`.** Sites that pre-date migration `018` may
+  have `created_by = null` if the owning org has more than one member
+  (the backfill is conservative and only fills in unambiguous single-member
+  personal orgs). Clients should render `createdBy: null` as an unknown
+  author. Such sites are admin-only for mutations by construction.
 
 ---
 
