@@ -39,6 +39,7 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		{"alex@protopen.dev", "Alex Rivera", "alex", roleMember},
 		{"morgan@protopen.dev", "Morgan Lee", "morgan", roleMember},
 	}
+	teammateIDs := make(map[string]string, len(teammates))
 	for _, t := range teammates {
 		tmID, _, tmErr := ensureUser(ctx, tx, t.email, t.name, t.username, demoPassword)
 		if tmErr != nil {
@@ -54,6 +55,7 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		`, generateID("mem"), orgID, tmID, t.role); tmErr != nil {
 			return tmErr
 		}
+		teammateIDs[t.username] = tmID
 	}
 
 	var siteCount int
@@ -61,43 +63,58 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		return err
 	}
 
-	if siteCount == 0 {
-		seedSites := []struct {
-			name, slug string
-			deploys    int
-			commits    []seedCommit
-		}{
-			{"Product Teardown", "product-teardown", 4, []seedCommit{
-				{"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "main", "Initial prototype layout", "Jane Chen", false},
-				{"b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1", "main", "Add feature cards and hero section", "Alex Rivera", false},
-				{"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "feature/docs", "Add docs page", "Jane Chen", false},
-				{"d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "main", "Polish colors and typography", "Morgan Lee", true},
-			}},
-			{"AI Signup Flow", "ai-signup-flow", 3, []seedCommit{
-				{"e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4", "main", "Scaffold signup form", "Alex Rivera", false},
-				{"f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5", "feature/validation", "Add email validation and error states", "Jane Chen", false},
-				{"a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "main", "Merge validation, add success screen", "Alex Rivera", false},
-			}},
-			{"Pricing Page", "pricing-page", 5, []seedCommit{
-				{"1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", "main", "Initial pricing grid layout", "Morgan Lee", false},
-				{"2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c", "feature/toggle", "Add monthly/annual toggle", "Jane Chen", false},
-				{"3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d", "feature/toggle", "Animate toggle transition", "Jane Chen", true},
-				{"4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e", "main", "Add enterprise tier and CTA", "Alex Rivera", false},
-				{"5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f", "main", "Final copy pass", "Morgan Lee", false},
-			}},
-			{"Mobile Nav", "mobile-nav", 2, []seedCommit{
-				{"6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a", "feature/hamburger", "Add hamburger menu prototype", "Alex Rivera", false},
-				{"7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b", "feature/hamburger", "Slide-in animation and backdrop", "Alex Rivera", true},
-			}},
-			{"Dashboard Widgets", "dashboard-widgets", 3, []seedCommit{
-				{"8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c", "main", "Chart widget with sample data", "Morgan Lee", false},
-				{"9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d", "feature/stats", "Add stat cards and KPI row", "Jane Chen", false},
-				{"0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e", "main", "Responsive grid and dark mode tokens", "Morgan Lee", false},
-			}},
-		}
+	// Distribute the seed sites across demo + teammates so the dashboard's
+	// My/All scope tabs and the author chip both have content out of the box.
+	seedSites := []struct {
+		name, slug, createdBy string
+		deploys               int
+		commits               []seedCommit
+	}{
+		{"Product Teardown", "product-teardown", userID, 4, []seedCommit{
+			{"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "main", "Initial prototype layout", "Jane Chen", false},
+			{"b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1", "main", "Add feature cards and hero section", "Alex Rivera", false},
+			{"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "feature/docs", "Add docs page", "Jane Chen", false},
+			{"d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "main", "Polish colors and typography", "Morgan Lee", true},
+		}},
+		{"AI Signup Flow", "ai-signup-flow", teammateIDs["alex"], 3, []seedCommit{
+			{"e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4", "main", "Scaffold signup form", "Alex Rivera", false},
+			{"f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5", "feature/validation", "Add email validation and error states", "Jane Chen", false},
+			{"a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6", "main", "Merge validation, add success screen", "Alex Rivera", false},
+		}},
+		{"Pricing Page", "pricing-page", teammateIDs["jane"], 5, []seedCommit{
+			{"1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", "main", "Initial pricing grid layout", "Morgan Lee", false},
+			{"2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c", "feature/toggle", "Add monthly/annual toggle", "Jane Chen", false},
+			{"3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d", "feature/toggle", "Animate toggle transition", "Jane Chen", true},
+			{"4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e", "main", "Add enterprise tier and CTA", "Alex Rivera", false},
+			{"5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f", "main", "Final copy pass", "Morgan Lee", false},
+		}},
+		{"Mobile Nav", "mobile-nav", userID, 2, []seedCommit{
+			{"6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a", "feature/hamburger", "Add hamburger menu prototype", "Alex Rivera", false},
+			{"7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b", "feature/hamburger", "Slide-in animation and backdrop", "Alex Rivera", true},
+		}},
+		{"Dashboard Widgets", "dashboard-widgets", teammateIDs["morgan"], 3, []seedCommit{
+			{"8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c", "main", "Chart widget with sample data", "Morgan Lee", false},
+			{"9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d", "feature/stats", "Add stat cards and KPI row", "Jane Chen", false},
+			{"0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e", "main", "Responsive grid and dark mode tokens", "Morgan Lee", false},
+		}},
+	}
 
+	if siteCount == 0 {
 		for _, sp := range seedSites {
-			if err := insertSeedSite(ctx, tx, app.ingestRoot, orgID, username, sp.name, sp.slug, sp.deploys, sp.commits); err != nil {
+			if err := insertSeedSite(ctx, tx, app.ingestRoot, orgID, username, sp.name, sp.slug, sp.createdBy, sp.deploys, sp.commits); err != nil {
+				return err
+			}
+		}
+	} else {
+		// Existing dev DBs predate the ownership migration, so seed-known
+		// sites can be sitting in the orphan state (created_by NULL). Heal
+		// those rows in-place; never overwrite a row a real user authored.
+		for _, sp := range seedSites {
+			if _, err := tx.Exec(ctx, `
+				update sites
+				set created_by = $3
+				where org_id = $1 and slug = $2 and created_by is null and deleted_at is null
+			`, orgID, sp.slug, sp.createdBy); err != nil {
 				return err
 			}
 		}
@@ -152,12 +169,21 @@ func ensureUser(ctx context.Context, tx pgx.Tx, email string, name string, usern
 
 func ensurePersonalOrg(ctx context.Context, tx pgx.Tx, userID string, username string, name string) (string, error) {
 	var orgID string
+	var isPersonal bool
 	err := tx.QueryRow(ctx, `
-		select o.id from organizations o
+		select o.id, o.is_personal from organizations o
 		join org_members m on m.org_id = o.id
 		where m.user_id = $1 and o.slug = $2
-	`, userID, username).Scan(&orgID)
+	`, userID, username).Scan(&orgID, &isPersonal)
 	if err == nil {
+		if !isPersonal {
+			// Heal seed-owned orgs whose is_personal was set false by older
+			// seed code, so the API's personal-org lookup finds them again.
+			// Scope is intentional: only orgs the seed itself touches.
+			if _, err := tx.Exec(ctx, `update organizations set is_personal = true where id = $1`, orgID); err != nil {
+				return "", err
+			}
+		}
 		return orgID, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -190,13 +216,13 @@ type seedCommit struct {
 // (createSeedDeployFiles) so each deploy gets a recognisably different look.
 var seedDeployAccents = []string{"#ff8f52", "#0fb381", "#5ba8ff", "#f4b942"}
 
-func insertSeedSite(ctx context.Context, tx pgx.Tx, ingestRoot string, orgID string, orgSlug string, name string, slug string, deployCount int, commits []seedCommit) error {
+func insertSeedSite(ctx context.Context, tx pgx.Tx, ingestRoot string, orgID string, orgSlug string, name string, slug string, createdByUserID string, deployCount int, commits []seedCommit) error {
 	siteID := generateID("site")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
 	if _, err := tx.Exec(ctx, `
-		insert into sites (id, org_id, slug, name, created_at, updated_at)
-		values ($1, $2, $3, $4, $5, $5)
-	`, siteID, orgID, slug, name, now); err != nil {
+		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
+		values ($1, $2, $3, $4, $5, $5, $6)
+	`, siteID, orgID, slug, name, now, createdByUserID); err != nil {
 		return err
 	}
 
