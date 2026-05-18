@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { Site } from './types'
 import { DeployHistory } from './DeployHistory'
+import { CopyButton } from './CopyButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -20,34 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
 import { commitURL } from '@/lib/utils'
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => {
-            void navigator.clipboard.writeText(text)
-            setCopied(true)
-            if (timerRef.current) clearTimeout(timerRef.current)
-            timerRef.current = setTimeout(() => setCopied(false), 2000)
-          }}
-          aria-label="Copy URL"
-        >
-          {copied ? <Check className="text-muted-foreground" /> : <Copy />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{copied ? 'Copied!' : 'Copy URL'}</TooltipContent>
-    </Tooltip>
-  )
-}
 
 type SitesTableProps = {
   sites: Site[]

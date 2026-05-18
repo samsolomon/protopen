@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Site } from './types'
-import { API_BASE_URL } from './constants'
 import { DeployHistory } from './DeployHistory'
+import { SiteThumbnail } from './SiteThumbnail'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,58 +21,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ExternalLink, Copy, History, Globe, Lock, Trash2, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
-
-const HUES = [15, 45, 145, 200, 265, 330, 175, 55]
-
-function hashCode(str: string): number {
-  let h = 0
-  for (let i = 0; i < str.length; i++) {
-    h = ((h << 5) - h + str.charCodeAt(i)) | 0
-  }
-  return Math.abs(h)
-}
-
-function getColor(id: string) {
-  const hue = HUES[hashCode(id) % HUES.length]
-  return {
-    bg: `oklch(0.75 0.12 ${hue})`,
-    text: `oklch(0.98 0.01 ${hue})`,
-  }
-}
-
-function getInitials(name: string): string {
-  const words = name.split(/[\s\-_.\d]+/).filter(Boolean)
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
-  const w = words[0] || name
-  return w.slice(0, 2).toUpperCase()
-}
-
-function SiteThumbnail({ site }: { site: Site }) {
-  const [failed, setFailed] = useState(false)
-  const color = getColor(site.id)
-  if (failed) {
-    return (
-      <div
-        className="flex aspect-[16/10] w-full items-center justify-center rounded-t-xl"
-        style={{ background: color.bg }}
-      >
-        <span className="text-2xl font-semibold select-none" style={{ color: color.text }}>
-          {getInitials(site.name)}
-        </span>
-      </div>
-    )
-  }
-  return (
-    <img
-      src={`${API_BASE_URL}/api/sites/${site.id}/thumbnail`}
-      crossOrigin="use-credentials"
-      onError={() => setFailed(true)}
-      alt=""
-      loading="lazy"
-      className="aspect-[16/10] w-full rounded-t-xl object-cover"
-    />
-  )
-}
 
 type SiteCardGridProps = {
   sites: Site[]
