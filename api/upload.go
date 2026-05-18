@@ -62,7 +62,7 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.upsertSiteFromUpload(r.Context(), orgID, orgSlug, prepared)
+	result, err := app.upsertSiteFromUpload(r.Context(), orgID, orgSlug, user.ID, prepared)
 	if err != nil {
 		cleanupPreparedUpload(prepared)
 		status := http.StatusInternalServerError

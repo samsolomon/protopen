@@ -152,7 +152,7 @@ func (app *application) deleteSite(ctx context.Context, orgID string, siteID str
 	return commandTag.RowsAffected() > 0, nil
 }
 
-func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, orgSlug string, prepared preparedUpload) (site, error) {
+func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, orgSlug string, creatorUserID string, prepared preparedUpload) (site, error) {
 	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return site{}, err
@@ -196,10 +196,17 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 			OrgSlug: orgSlug,
 		}
 
+		// created_by remains stable for the lifetime of the row; the upload's
+		// caller becomes the canonical creator. Slug-match re-uploads above
+		// only touch updated_at, preserving the original author.
+		var creator *string
+		if creatorUserID != "" {
+			creator = &creatorUserID
+		}
 		if _, err := tx.Exec(ctx, `
-			insert into sites (id, org_id, slug, name, created_at, updated_at)
-			values ($1, $2, $3, $4, $5, $5)
-		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now); err != nil {
+			insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
+			values ($1, $2, $3, $4, $5, $5, $6)
+		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now, creator); err != nil {
 			return site{}, err
 		}
 	}
