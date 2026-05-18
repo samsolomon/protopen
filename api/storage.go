@@ -145,6 +145,7 @@ func (app *application) listSites(ctx context.Context, orgID string, opts listSi
 			p.slug,
 			p.updated_at,
 			(select count(*) from deploys where site_id = p.id) as deploy_count,
+			(select count(*) from comments where site_id = p.id and parent_id is null and resolved_at is null) as open_comment_count,
 			o.slug,
 			p.is_public,
 			cd.git_branch,
@@ -170,22 +171,25 @@ func (app *application) listSites(ctx context.Context, orgID string, opts listSi
 	var sites []site
 	for rows.Next() {
 		var (
-			entry          site
-			updatedAt      time.Time
-			orgSlug        string
-			deployCount    int64
-			authorID       *string
-			authorName     *string
-			authorUsername *string
+			entry            site
+			updatedAt        time.Time
+			orgSlug          string
+			deployCount      int64
+			openCommentCount int64
+			authorID         *string
+			authorName       *string
+			authorUsername   *string
 		)
 
-		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &orgSlug, &entry.IsPublic,
+		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &openCommentCount, &orgSlug, &entry.IsPublic,
 			&entry.GitBranch, &entry.GitCommitHash, &entry.GitRemoteURL,
 			&authorID, &authorName, &authorUsername); err != nil {
 			return nil, err
 		}
 
+		entry.OrgSlug = orgSlug
 		entry.DeployCount = int(deployCount)
+		entry.OpenCommentCount = int(openCommentCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
 		entry.LiveURL = app.buildLiveURL(orgSlug, entry.Slug)
 		if authorID != nil {

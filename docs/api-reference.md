@@ -162,8 +162,10 @@ that prefer a narrower fetch.
       "id": "site_...",
       "name": "My Site",
       "slug": "my-site",
+      "orgSlug": "demo",
       "updatedAt": "2 hours ago",
       "deployCount": 5,
+      "openCommentCount": 2,
       "liveUrl": "https://sites.example.com/~demo/my-site",
       "isPublic": true,
       "gitBranch": "main",
@@ -317,6 +319,150 @@ deploys that have not yet been captured return 404.
 - `401` — private site and no session
 - `403` — private site and the user is not in the org
 - `404` — site/deploy missing, or no thumbnail captured yet
+
+---
+
+## Comments
+
+Comments are pinned to a specific page on a specific deploy. They form
+single-level threads (a root comment plus replies). Any org member can
+post or resolve. Only the comment author or an org admin can delete.
+
+### `GET /api/sites/{siteID}/comments`
+
+Auth required. Caller must be a member of the site's org.
+
+**Query params:**
+- `deployId` (optional) — defaults to the site's current deploy.
+- `status` (optional) — `open` (default), `resolved`, or `all`.
+- `pagePath` (optional) — exact-match filter on the page path.
+
+**Response (200):**
+```json
+{
+  "comments": [
+    {
+      "id": "cm_...",
+      "siteId": "site_...",
+      "deployId": "dep_...",
+      "pagePath": "/",
+      "pinX": 0.5,
+      "pinY": 0.4,
+      "body": "Move this CTA above the fold",
+      "parentId": null,
+      "resolvedAt": null,
+      "resolvedBy": null,
+      "createdAt": "2026-05-18T19:30:00Z",
+      "author": {"id": "usr_...", "name": "Jane Chen", "username": "jane"}
+    }
+  ]
+}
+```
+
+Replies have a non-null `parentId` pointing at the root comment. Pin
+coordinates (`pinX`, `pinY`) are document-relative percentages in `[0,1]`
+captured by the comment-mode script injected when the deployed site is
+loaded with `?protopen-comments=1`.
+
+### `POST /api/sites/{siteID}/comments`
+
+Auth required. Caller must be a member of the site's org.
+
+**Request:**
+```json
+{
+  "deployId": "dep_...",
+  "pagePath": "/",
+  "pinX": 0.5,
+  "pinY": 0.4,
+  "parentId": null,
+  "body": "Move this CTA above the fold"
+}
+```
+`deployId` is optional and defaults to the site's current deploy.
+`parentId` is optional and indicates a reply.
+
+**Response (201):** `{ "comment": {...} }` with the same shape as the
+list response.
+
+On insert the author auto-subscribes to the root comment. For a top-level
+comment, the site's `createdBy` is also auto-subscribed if different from
+the author. Replies fan out notifications to every subscriber of the root
+except the reply's author.
+
+**Status codes:** `201` created, `400` invalid (missing body, parent
+belongs to a different site, deploy not on this site), `401`
+unauthenticated, `403` not a member of the org.
+
+### `DELETE /api/comments/{commentID}`
+
+Auth required. Caller must be the comment author or an org admin.
+Hard-deletes the row; replies cascade via FK.
+
+**Status codes:** `200` ok, `403` forbidden, `404` not found.
+
+### `POST /api/comments/{commentID}/resolve`
+
+Auth required. Any org member. Toggles `resolved_at` / `resolved_by`. If
+the comment is open, marks resolved by the caller. If already resolved,
+clears the resolution.
+
+**Response (200):** `{ "ok": true, "resolved": true }`.
+
+---
+
+## Notifications
+
+The notifications table is comment-driven for the MVP. A row appears
+when someone replies to a thread you're subscribed to.
+
+### `GET /api/notifications`
+
+Auth required.
+
+**Query params:**
+- `unread` (optional) — set to `1` to return only unread.
+
+**Response (200):**
+```json
+{
+  "notifications": [
+    {
+      "id": "notif_...",
+      "type": "comment_reply",
+      "readAt": null,
+      "createdAt": "2026-05-18T19:30:00Z",
+      "actor": {"id": "usr_...", "name": "Alex Rivera", "username": "alex"},
+      "comment": {
+        "id": "cm_reply",
+        "body": "Agreed — moving it now",
+        "pagePath": "/",
+        "siteId": "site_...",
+        "siteName": "Pricing Page",
+        "siteSlug": "pricing-page",
+        "orgSlug": "demo",
+        "parentId": "cm_root",
+        "resolvedAt": null
+      }
+    }
+  ],
+  "unreadCount": 1
+}
+```
+
+Capped at 100 most recent.
+
+### `POST /api/notifications/{notificationID}/read`
+
+Auth required. Sets `read_at` on a notification belonging to the caller.
+
+**Status codes:** `200` ok, `404` not found or not yours.
+
+### `POST /api/notifications/read-all`
+
+Auth required. Marks every unread notification for the caller as read.
+
+**Response (200):** `{ "ok": true }`.
 
 ---
 

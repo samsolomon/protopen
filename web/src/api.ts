@@ -1,4 +1,16 @@
-import type { AuthFormState, AuthMode, Deploy, OrgInfo, OrgMember, Site, SessionUser, UploadFile, UploadSummary } from './types'
+import type {
+  AuthFormState,
+  AuthMode,
+  Deploy,
+  Notification,
+  OrgInfo,
+  OrgMember,
+  Site,
+  SessionUser,
+  SiteComment,
+  UploadFile,
+  UploadSummary,
+} from './types'
 import { API_BASE_URL } from './constants'
 
 export async function fetchSession(): Promise<SessionUser | null> {
@@ -515,6 +527,113 @@ export async function updateAdminSettings(patch: { thumbnailsEnabled?: boolean }
   }
 
   return (await response.json()) as AdminSettings
+}
+
+export type CommentStatusFilter = 'open' | 'resolved' | 'all'
+
+export async function fetchSiteComments(
+  siteID: string,
+  opts: { deployId?: string; status?: CommentStatusFilter; pagePath?: string } = {},
+): Promise<SiteComment[]> {
+  const params = new URLSearchParams()
+  if (opts.deployId) params.set('deployId', opts.deployId)
+  if (opts.status) params.set('status', opts.status)
+  if (opts.pagePath) params.set('pagePath', opts.pagePath)
+  const qs = params.toString()
+  const url = `${API_BASE_URL}/api/sites/${siteID}/comments${qs ? `?${qs}` : ''}`
+  const response = await fetch(url, { credentials: 'include' })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not load comments')
+  }
+  const data = (await response.json()) as { comments: SiteComment[] }
+  return data.comments ?? []
+}
+
+export async function postSiteComment(
+  siteID: string,
+  payload: {
+    deployId?: string
+    pagePath: string
+    pinX?: number | null
+    pinY?: number | null
+    parentId?: string
+    body: string
+  },
+): Promise<SiteComment> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}/comments`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not post comment')
+  }
+  const data = (await response.json()) as { comment: SiteComment }
+  return data.comment
+}
+
+export async function deleteComment(commentID: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/comments/${commentID}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not delete comment')
+  }
+}
+
+export async function toggleResolveComment(commentID: string): Promise<{ resolved: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/comments/${commentID}/resolve`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not update comment')
+  }
+  const data = (await response.json()) as { resolved: boolean }
+  return data
+}
+
+export async function fetchNotifications(opts: { unread?: boolean } = {}): Promise<{ notifications: Notification[]; unreadCount: number }> {
+  const url = `${API_BASE_URL}/api/notifications${opts.unread ? '?unread=1' : ''}`
+  const response = await fetch(url, { credentials: 'include' })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) throw new Error('Could not load notifications')
+  return (await response.json()) as { notifications: Notification[]; unreadCount: number }
+}
+
+export async function markNotificationRead(notificationID: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationID}/read`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok && response.status !== 404) {
+    throw new Error('Could not mark notification read')
+  }
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) throw new Error('Could not mark notifications read')
 }
 
 

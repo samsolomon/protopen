@@ -38,6 +38,8 @@ func main() {
 		cmdToken(args)
 	case "visibility":
 		cmdVisibility(args)
+	case "comments":
+		cmdComments(args)
 	case "login":
 		cmdLogin(args)
 	case "logout":
@@ -64,6 +66,7 @@ Commands:
   deploys <name>               Show deploy history for a site
   rollback <name> <deploy-id>  Roll back to a previous deploy
   visibility <name> <public|private>  Set site visibility
+  comments <name>              Read comments left on a site
   token                        Show current token info
   login                        Authenticate and save your API token
   logout                       Remove saved token
@@ -228,6 +231,114 @@ func cmdDeploys(args []string) {
 			}
 		}
 		fmt.Printf("%s%-20s %4d files  %s%s%s\n", current, d.ID, d.FileCount, d.CreatedAt, label, gitInfo)
+	}
+}
+
+func cmdComments(args []string) {
+	fs := flag.NewFlagSet("comments", flag.ExitOnError)
+	org := fs.String("org", "", "Organization slug (defaults to personal org)")
+	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
+	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
+	deploy := fs.String("deploy", "", "Deploy ID to scope comments to (defaults to current)")
+	status := fs.String("status", "open", "Filter: open | resolved | all")
+	asJSON := fs.Bool("json", false, "Print raw JSON")
+	fs.Parse(args)
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "usage: protopen comments <site-name> [--status open|resolved|all] [--deploy <id>] [--json]")
+		os.Exit(1)
+	}
+
+	client := newClient(requireToken(*token), resolveURL(*url))
+	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	comments, err := client.listComments(proj.ID, struct{ DeployID, Status string }{*deploy, *status})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(map[string]any{"site": proj.Slug, "comments": comments})
+		return
+	}
+
+	if len(comments) == 0 {
+		fmt.Fprintf(os.Stderr, "no %s comments on %s\n", *status, proj.Slug)
+		return
+	}
+
+	// Group: root -> replies.
+	byParent := map[string][]commentInfo{}
+	roots := []commentInfo{}
+	for _, c := range comments {
+		if c.ParentID == nil {
+			roots = append(roots, c)
+		} else {
+			byParent[*c.ParentID] = append(byParent[*c.ParentID], c)
+		}
+	}
+
+	for i, root := range roots {
+		marker := " "
+		if root.ResolvedAt != nil {
+			marker = "✓"
+		}
+		author := "(unknown)"
+		if root.Author != nil {
+			author = root.Author.Name
+			if author == "" {
+				author = "@" + root.Author.Username
+			}
+		}
+		page := root.PagePath
+		if page == "" {
+			page = "/"
+		}
+		fmt.Printf("%s [%d] %s — %s · %s\n", marker, i+1, author, page, abbrevTime(root.CreatedAt))
+		printIndented(root.Body, "   ")
+		for _, reply := range byParent[root.ID] {
+			rauthor := "(unknown)"
+			if reply.Author != nil {
+				rauthor = reply.Author.Name
+				if rauthor == "" {
+					rauthor = "@" + reply.Author.Username
+				}
+			}
+			fmt.Printf("   ↪ %s · %s\n", rauthor, abbrevTime(reply.CreatedAt))
+			printIndented(reply.Body, "     ")
+		}
+		fmt.Println()
+	}
+}
+
+func printIndented(text, prefix string) {
+	for _, line := range strings.Split(text, "\n") {
+		fmt.Println(prefix + line)
+	}
+}
+
+func abbrevTime(iso string) string {
+	t, err := time.Parse(time.RFC3339, iso)
+	if err != nil {
+		return iso
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }
 

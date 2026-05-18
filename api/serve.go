@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -68,12 +70,185 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	target := w
+	var injector *commentScriptWriter
+	if r.URL.Query().Get("protopen-comments") == "1" {
+		injector = &commentScriptWriter{ResponseWriter: w}
+		target = injector
+	}
+
 	if app.store != nil {
-		app.serveFromR2(w, r, deployment.siteRoot, assetPath)
+		app.serveFromR2(target, r, deployment.siteRoot, assetPath)
 	} else {
-		app.serveFromFilesystem(w, r, deployment.siteRoot, assetPath)
+		app.serveFromFilesystem(target, r, deployment.siteRoot, assetPath)
+	}
+
+	if injector != nil {
+		injector.finalize()
 	}
 }
+
+// commentScriptWriter buffers an HTML response body so the comment-mode script
+// can be injected before </body>. Non-HTML responses pass through untouched.
+type commentScriptWriter struct {
+	http.ResponseWriter
+	buf         bytes.Buffer
+	status      int
+	isHTML      bool
+	headerSent  bool
+	contentType string
+}
+
+func (w *commentScriptWriter) WriteHeader(status int) {
+	if w.headerSent {
+		return
+	}
+	w.status = status
+	w.contentType = w.ResponseWriter.Header().Get("Content-Type")
+	if strings.HasPrefix(w.contentType, "text/html") {
+		w.isHTML = true
+		return
+	}
+	w.ResponseWriter.WriteHeader(status)
+	w.headerSent = true
+}
+
+func (w *commentScriptWriter) Write(p []byte) (int, error) {
+	if w.status == 0 && w.contentType == "" {
+		w.contentType = w.ResponseWriter.Header().Get("Content-Type")
+		if strings.HasPrefix(w.contentType, "text/html") {
+			w.isHTML = true
+			w.status = http.StatusOK
+		}
+	}
+	if w.isHTML {
+		return w.buf.Write(p)
+	}
+	if !w.headerSent {
+		w.ResponseWriter.WriteHeader(http.StatusOK)
+		w.headerSent = true
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *commentScriptWriter) finalize() {
+	if !w.isHTML {
+		return
+	}
+	body := injectCommentScript(w.buf.Bytes())
+	w.ResponseWriter.Header().Del("Content-Length")
+	w.ResponseWriter.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	status := w.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	w.ResponseWriter.WriteHeader(status)
+	w.ResponseWriter.Write(body)
+}
+
+func injectCommentScript(body []byte) []byte {
+	script := []byte(commentModeScript)
+	lower := bytes.ToLower(body)
+	if i := bytes.LastIndex(lower, []byte("</body>")); i >= 0 {
+		out := make([]byte, 0, len(body)+len(script))
+		out = append(out, body[:i]...)
+		out = append(out, script...)
+		out = append(out, body[i:]...)
+		return out
+	}
+	return append(body, script...)
+}
+
+// commentModeScript is injected into HTML responses served with
+// ?protopen-comments=1. It postMessages click/navigate/ready events to the
+// dashboard parent frame and renders pins supplied by the parent.
+const commentModeScript = `<script>
+(function () {
+  if (window.__protopenCommentsLoaded) return;
+  window.__protopenCommentsLoaded = true;
+
+  var state = { mode: 'comment', pins: [] };
+  var root = document.createElement('div');
+  root.id = '__protopen_pins';
+  root.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2147483646';
+  document.body.appendChild(root);
+
+  function post(msg) { try { window.parent.postMessage(msg, '*'); } catch (e) {} }
+  function path() { return location.pathname + location.search + location.hash; }
+  function dims() { return { w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight }; }
+
+  function renderPins() {
+    root.innerHTML = '';
+    var d = dims();
+    state.pins.forEach(function (pin, i) {
+      var el = document.createElement('div');
+      el.dataset.commentId = pin.id;
+      el.style.cssText = 'position:absolute;width:24px;height:24px;border-radius:50% 50% 50% 0;background:#ff8f52;color:white;font:600 12px/24px system-ui,sans-serif;text-align:center;transform:translate(-12px,-24px) rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;';
+      el.style.left = (pin.x * d.w) + 'px';
+      el.style.top = (pin.y * d.h) + 'px';
+      var inner = document.createElement('span');
+      inner.style.cssText = 'display:block;transform:rotate(45deg)';
+      inner.textContent = String(pin.seq || i + 1);
+      el.appendChild(inner);
+      el.addEventListener('click', function (e) {
+        e.stopPropagation();
+        post({ type: 'protopen-pin-click', id: pin.id });
+      });
+      root.appendChild(el);
+    });
+  }
+
+  function highlight(id) {
+    var el = root.querySelector('[data-comment-id="' + id + '"]');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.style.outline = '3px solid #0066ff';
+    setTimeout(function () { el.style.outline = ''; }, 1500);
+  }
+
+  document.addEventListener('click', function (e) {
+    if (state.mode !== 'comment') return;
+    if (e.target.closest && e.target.closest('a[href]')) return; // let links work
+    if (e.target.closest && e.target.closest('#__protopen_pins')) return;
+    var d = dims();
+    var x = (e.pageX || (e.clientX + window.scrollX)) / d.w;
+    var y = (e.pageY || (e.clientY + window.scrollY)) / d.h;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    e.preventDefault();
+    post({ type: 'protopen-click', x: x, y: y, pagePath: location.pathname });
+  }, true);
+
+  window.addEventListener('message', function (e) {
+    if (e.source !== window.parent) return;
+    var msg = e.data || {};
+    if (msg.type === 'protopen-set-pins') {
+      state.pins = msg.pins || [];
+      renderPins();
+    } else if (msg.type === 'protopen-set-mode') {
+      state.mode = msg.mode === 'browse' ? 'browse' : 'comment';
+    } else if (msg.type === 'protopen-highlight-pin') {
+      highlight(msg.id);
+    }
+  });
+
+  // Track navigation across same-document changes.
+  var lastPath = location.pathname;
+  function notifyNavigate() {
+    var p = location.pathname;
+    if (p !== lastPath) {
+      lastPath = p;
+      post({ type: 'protopen-navigate', path: p });
+    }
+  }
+  ['pushState', 'replaceState'].forEach(function (m) {
+    var orig = history[m];
+    history[m] = function () { var r = orig.apply(this, arguments); notifyNavigate(); return r; };
+  });
+  window.addEventListener('popstate', notifyNavigate);
+
+  post({ type: 'protopen-ready', path: location.pathname, dims: dims() });
+})();
+</script>`
 
 func (app *application) serveFromR2(w http.ResponseWriter, r *http.Request, prefix string, assetPath string) {
 	prefix = strings.TrimSuffix(prefix, "/")

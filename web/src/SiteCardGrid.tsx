@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ExternalLink, Copy, CopyPlus, History, Globe, Lock, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
+import { ExternalLink, Copy, CopyPlus, History, Globe, Lock, MessageSquare, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { commitURL } from '@/lib/utils'
 import { canMutateSite } from './site-scope'
@@ -37,6 +37,7 @@ type SiteCardGridProps = {
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onDuplicate?: (siteID: string) => void
+  onOpenComments?: (siteSlug: string) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
 }
@@ -50,6 +51,7 @@ export function SiteCardGrid({
   onDelete,
   onVisibilityToggle,
   onDuplicate,
+  onOpenComments,
   onSitesChanged,
   onSessionExpired,
 }: SiteCardGridProps) {
@@ -130,6 +132,20 @@ export function SiteCardGrid({
                         >
                           <CopyPlus />
                           Duplicate
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onOpenComments ? (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onOpenComments(site.slug)
+                          }}
+                        >
+                          <MessageSquare />
+                          Comments
+                          {site.openCommentCount > 0 ? (
+                            <span className="ml-auto text-xs text-muted-foreground">{site.openCommentCount}</span>
+                          ) : null}
                         </DropdownMenuItem>
                       ) : null}
                       {canMutate ? (

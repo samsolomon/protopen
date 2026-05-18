@@ -8,14 +8,56 @@ export type Site = {
   id: string
   name: string
   slug: string
+  orgSlug: string
   updatedAt: string
   deployCount: number
+  openCommentCount: number
   liveUrl: string
   isPublic: boolean
   gitBranch?: string | null
   gitCommitHash?: string | null
   gitRemoteURL?: string | null
   createdBy?: SiteAuthor | null
+}
+
+export type CommentAuthor = {
+  id: string
+  name: string
+  username: string
+}
+
+export type SiteComment = {
+  id: string
+  siteId: string
+  deployId: string
+  pagePath: string
+  pinX: number | null
+  pinY: number | null
+  body: string
+  parentId: string | null
+  resolvedAt: string | null
+  resolvedBy: string | null
+  createdAt: string
+  author: CommentAuthor | null
+}
+
+export type Notification = {
+  id: string
+  type: string
+  readAt: string | null
+  createdAt: string
+  actor: CommentAuthor | null
+  comment: {
+    id: string
+    body: string
+    pagePath: string
+    siteId: string
+    siteName: string
+    siteSlug: string
+    orgSlug: string
+    parentId: string | null
+    resolvedAt: string | null
+  } | null
 }
 
 export type SessionUser = {

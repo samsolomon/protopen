@@ -260,6 +260,71 @@ func (c *client) listDeploys(siteID string) ([]deployInfo, error) {
 	return result.Deploys, nil
 }
 
+type commentAuthor struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Username string `json:"username"`
+}
+
+type commentInfo struct {
+	ID         string          `json:"id"`
+	SiteID     string          `json:"siteId"`
+	DeployID   string          `json:"deployId"`
+	PagePath   string          `json:"pagePath"`
+	PinX       *float64        `json:"pinX"`
+	PinY       *float64        `json:"pinY"`
+	Body       string          `json:"body"`
+	ParentID   *string         `json:"parentId"`
+	ResolvedAt *string         `json:"resolvedAt"`
+	CreatedAt  string          `json:"createdAt"`
+	Author     *commentAuthor  `json:"author"`
+}
+
+func (c *client) listComments(siteID string, opts struct{ DeployID, Status string }) ([]commentInfo, error) {
+	url := c.baseURL + "/api/sites/" + siteID + "/comments"
+	params := []string{}
+	if opts.DeployID != "" {
+		params = append(params, "deployId="+opts.DeployID)
+	}
+	if opts.Status != "" {
+		params = append(params, "status="+opts.Status)
+	}
+	if len(params) > 0 {
+		url += "?" + strings.Join(params, "&")
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("forbidden — your token is not a member of this site's org")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+	}
+
+	var result struct {
+		Comments []commentInfo `json:"comments"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Comments, nil
+}
+
 func (c *client) rollback(siteID string, deployID string) error {
 	body, _ := json.Marshal(map[string]string{"deployId": deployID})
 	req, err := http.NewRequest("POST", c.baseURL+"/api/sites/"+siteID+"/rollback", bytes.NewReader(body))

@@ -75,17 +75,19 @@ type authRequest struct {
 }
 
 type site struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	UpdatedAt     string         `json:"updatedAt"`
-	DeployCount   int            `json:"deployCount"`
-	LiveURL       string         `json:"liveUrl"`
-	IsPublic      bool           `json:"isPublic"`
-	GitBranch     *string        `json:"gitBranch,omitempty"`
-	GitCommitHash *string        `json:"gitCommitHash,omitempty"`
-	GitRemoteURL  *string        `json:"gitRemoteURL,omitempty"`
-	CreatedBy     *authorSummary `json:"createdBy"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	Slug             string         `json:"slug"`
+	OrgSlug          string         `json:"orgSlug"`
+	UpdatedAt        string         `json:"updatedAt"`
+	DeployCount      int            `json:"deployCount"`
+	OpenCommentCount int            `json:"openCommentCount"`
+	LiveURL          string         `json:"liveUrl"`
+	IsPublic         bool           `json:"isPublic"`
+	GitBranch        *string        `json:"gitBranch,omitempty"`
+	GitCommitHash    *string        `json:"gitCommitHash,omitempty"`
+	GitRemoteURL     *string        `json:"gitRemoteURL,omitempty"`
+	CreatedBy        *authorSummary `json:"createdBy"`
 }
 
 type authorSummary struct {
@@ -269,6 +271,9 @@ func main() {
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
 	appMux.HandleFunc("/api/admin/settings", app.instanceSettingsHandler)
+	appMux.HandleFunc("/api/comments/", app.commentByIDHandler)
+	appMux.HandleFunc("/api/notifications", app.notificationsHandler)
+	appMux.HandleFunc("/api/notifications/", app.notificationByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.rateLimit(app.authLimiter, app.deviceCodePollHandler))
 	serveFrontend(appMux, frontendOrigin, contentSecurityHeaders(http.HandlerFunc(app.serveSiteHandler)))

@@ -18,6 +18,8 @@ import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { AdminUsersPanel } from './AdminUsersPanel'
 import { AdminSettings } from './AdminSettings'
+import { InboxPage } from './InboxPage'
+import { CommentsOverlay } from './CommentsOverlay'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -88,13 +90,23 @@ function writeScopeToURL(scope: SiteScope) {
   window.history.replaceState(null, '', buildScopeURL(window.location.href, scope))
 }
 
-type DashboardView = 'dashboard' | 'settings'
+type DashboardView = 'dashboard' | 'settings' | 'inbox' | 'comments'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
   if (path === '/settings/users') return isAdmin ? 'users' : 'profile'
   if (path === '/settings/instance') return isAdmin ? 'instance' : 'profile'
   return 'profile'
+}
+
+const COMMENTS_PATH_RE = /^\/sites\/([^/]+)\/comments\/?$/
+
+function viewFromPath(path: string): { view: DashboardView; commentsSlug?: string } {
+  if (path.startsWith('/settings')) return { view: 'settings' }
+  if (path === '/inbox') return { view: 'inbox' }
+  const match = COMMENTS_PATH_RE.exec(path)
+  if (match) return { view: 'comments', commentsSlug: match[1] }
+  return { view: 'dashboard' }
 }
 
 type DashboardProps = {
@@ -126,9 +138,9 @@ export function Dashboard({
   onSitesChanged,
   onSessionExpired,
 }: DashboardProps) {
-  const [view, setView] = useState<DashboardView>(() => {
-    return window.location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
-  })
+  const initialRoute = viewFromPath(window.location.pathname)
+  const [view, setView] = useState<DashboardView>(initialRoute.view)
+  const [commentsSlug, setCommentsSlug] = useState<string | null>(initialRoute.commentsSlug ?? null)
   const [settingsTab, setSettingsTab] = useState(() =>
     settingsTabFromPath(window.location.pathname, !!user.isAdmin)
   )
@@ -178,10 +190,22 @@ export function Dashboard({
     if (next === 'settings') {
       setSettingsTab('profile')
       navigateTo('/settings')
-    } else {
+    } else if (next === 'inbox') {
+      navigateTo('/inbox')
+    } else if (next !== 'comments') {
       navigateTo('/')
     }
     setView(next)
+    window.scrollTo(0, 0)
+  }
+
+  const openComments = (siteSlug: string, focusCommentID?: string) => {
+    setCommentsSlug(siteSlug)
+    setView('comments')
+    const url = focusCommentID
+      ? `/sites/${siteSlug}/comments?focus=${encodeURIComponent(focusCommentID)}`
+      : `/sites/${siteSlug}/comments`
+    navigateTo(url)
     window.scrollTo(0, 0)
   }
 
@@ -193,11 +217,15 @@ export function Dashboard({
   useEffect(() => {
     const onPopState = () => {
       const path = window.location.pathname
-      if (path.startsWith('/settings')) {
-        setView('settings')
+      const route = viewFromPath(path)
+      setView(route.view)
+      if (route.view === 'settings') {
         setSettingsTab(settingsTabFromPath(path, !!user.isAdmin))
+      }
+      if (route.view === 'comments') {
+        setCommentsSlug(route.commentsSlug ?? null)
       } else {
-        setView('dashboard')
+        setCommentsSlug(null)
       }
     }
     window.addEventListener('popstate', onPopState)
@@ -207,6 +235,35 @@ export function Dashboard({
   const handleUploadOpenChange = (open: boolean) => {
     setUploadOpen(open)
     if (!open) setPendingFiles(null)
+  }
+
+  if (view === 'comments' && commentsSlug) {
+    const target = sites.find((s) => s.slug === commentsSlug)
+    if (!target) {
+      // The site list hasn't loaded yet (or doesn't include this slug). Render a
+      // minimal placeholder rather than the dashboard chrome — keeps the URL
+      // honest while waiting.
+      return (
+        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+          Loading site...
+        </div>
+      )
+    }
+    const params = new URLSearchParams(window.location.search)
+    const focus = params.get('focus')
+    return (
+      <CommentsOverlay
+        siteID={target.id}
+        orgSlug={target.orgSlug}
+        siteSlug={target.slug}
+        siteName={target.name}
+        currentUserID={user.id}
+        isOrgAdmin={isOrgAdmin}
+        focusCommentID={focus}
+        onBack={() => switchView('dashboard')}
+        onSessionExpired={onSessionExpired}
+      />
+    )
   }
 
   return (
@@ -223,6 +280,9 @@ export function Dashboard({
               <Button variant="ghost">{user.name}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => switchView('inbox')}>
+                Inbox
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => switchView('settings')}>
                 Settings
               </DropdownMenuItem>
@@ -284,7 +344,12 @@ export function Dashboard({
           </div>
         ) : null}
 
-        {view === 'settings' ? (
+        {view === 'inbox' ? (
+          <InboxPage
+            onSessionExpired={onSessionExpired}
+            onOpenComment={(_orgSlug, siteSlug, commentId) => openComments(siteSlug, commentId)}
+          />
+        ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -404,6 +469,7 @@ export function Dashboard({
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onDuplicate={handleDuplicate}
+                    onOpenComments={(slug) => openComments(slug)}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />
@@ -417,6 +483,7 @@ export function Dashboard({
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onDuplicate={handleDuplicate}
+                    onOpenComments={(slug) => openComments(slug)}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />

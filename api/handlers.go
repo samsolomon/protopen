@@ -67,6 +67,12 @@ func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) 
 			app.siteThumbnailHandler(w, r, siteID)
 		case "duplicate":
 			app.duplicateSiteHandler(w, r, siteID)
+		case "comments":
+			if r.Method == http.MethodPost {
+				app.createSiteCommentHandler(w, r, siteID)
+			} else {
+				app.listSiteCommentsHandler(w, r, siteID)
+			}
 		default:
 			http.NotFound(w, r)
 		}

@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, CopyPlus, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, CopyPlus, ExternalLink, GitBranch, Globe, Lock, MessageSquare, Trash2 } from 'lucide-react'
 import { commitURL } from '@/lib/utils'
 import { canMutateSite } from './site-scope'
 
@@ -37,6 +37,7 @@ type SitesTableProps = {
   onDelete: (siteID: string) => void
   onVisibilityToggle: (siteID: string, isPublic: boolean) => void
   onDuplicate?: (siteID: string) => void
+  onOpenComments?: (siteSlug: string) => void
   onSitesChanged: () => void
   onSessionExpired: () => void
 }
@@ -50,6 +51,7 @@ export function SitesTable({
   onDelete,
   onVisibilityToggle,
   onDuplicate,
+  onOpenComments,
   onSitesChanged,
   onSessionExpired,
 }: SitesTableProps) {
@@ -167,6 +169,26 @@ export function SitesTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {onOpenComments ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => onOpenComments(site.slug)}
+                              aria-label="Comments"
+                            >
+                              <MessageSquare />
+                              {site.openCommentCount > 0 ? (
+                                <span className="ml-1 text-xs font-medium">{site.openCommentCount}</span>
+                              ) : null}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {site.openCommentCount > 0 ? `${site.openCommentCount} open comment${site.openCommentCount === 1 ? '' : 's'}` : 'Comments'}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
                       {onDuplicate ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
