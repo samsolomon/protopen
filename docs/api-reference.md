@@ -6,8 +6,8 @@ All endpoints return JSON. Errors use `{"error": "message"}`.
 
 ## URL Format
 
-- Authenticated projects: `https://sites.example.com/~{orgSlug}/{projectSlug}`
-- Versioned deploys: `https://sites.example.com/~{orgSlug}/{projectSlug}/_v/{deployId}`
+- Authenticated sites: `https://sites.example.com/~{orgSlug}/{siteSlug}`
+- Versioned deploys: `https://sites.example.com/~{orgSlug}/{siteSlug}/_v/{deployId}`
 
 ## Authentication
 
@@ -138,9 +138,9 @@ Password must be at least 8 characters. Invalidates all existing sessions. Also 
 
 ---
 
-## Projects
+## Sites
 
-### `GET /api/projects`
+### `GET /api/sites`
 
 Auth required.
 
@@ -149,9 +149,9 @@ Auth required.
 **Response (200):**
 ```json
 {
-  "projects": [
+  "sites": [
     {
-      "id": "proj_...",
+      "id": "site_...",
       "name": "My Site",
       "slug": "my-site",
       "updatedAt": "2 hours ago",
@@ -168,18 +168,18 @@ Auth required.
 
 Git fields are null when not available.
 
-### `DELETE /api/projects/{projectID}`
+### `DELETE /api/sites/{siteID}`
 
-Auth required. Soft-deletes the project.
+Auth required. Soft-deletes the site.
 
 **Response (200):**
 ```json
 {"ok": true}
 ```
 
-### `PATCH /api/projects/{projectID}`
+### `PATCH /api/sites/{siteID}`
 
-Auth required. Update project visibility.
+Auth required. Update site visibility.
 
 **Request:**
 ```json
@@ -191,9 +191,9 @@ Auth required. Update project visibility.
 {"ok": true, "isPublic": true}
 ```
 
-### `GET /api/projects/{projectID}/deploys`
+### `GET /api/sites/{siteID}/deploys`
 
-Auth required. List deploys for a project.
+Auth required. List deploys for a site.
 
 **Response (200):**
 ```json
@@ -218,7 +218,7 @@ Auth required. List deploys for a project.
 }
 ```
 
-### `POST /api/projects/{projectID}/rollback`
+### `POST /api/sites/{siteID}/rollback`
 
 Auth required. Roll back to a previous deploy.
 
@@ -268,7 +268,7 @@ Auth required. Multipart form data.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | yes | Project name (becomes URL slug) |
+| `name` | string | yes | Site name (becomes URL slug) |
 | `mode` | string | no | `"zip"` for zip files, `"files"` for individual files |
 | `label` | string | no | Deploy label |
 | `files` | file | yes | File(s) to upload |
@@ -285,8 +285,8 @@ Auth required. Multipart form data.
 {
   "message": "Upload staged and recorded.",
   "status": "queued",
-  "project": {
-    "id": "proj_...",
+  "site": {
+    "id": "site_...",
     "name": "My Site",
     "slug": "my-site",
     "updatedAt": "Just now",

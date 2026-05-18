@@ -101,8 +101,8 @@ export async function deleteSiteById(siteID: string): Promise<void> {
   }
 }
 
-export async function updateProjectVisibility(projectId: string, isPublic: boolean): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}`, {
+export async function updateProjectVisibility(siteID: string, isPublic: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}`, {
     method: 'PATCH',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -115,12 +115,12 @@ export async function updateProjectVisibility(projectId: string, isPublic: boole
 
   if (!response.ok) {
     const body = (await response.json()) as { error?: string }
-    throw new Error(body.error ?? 'Could not update project')
+    throw new Error(body.error ?? 'Could not update site')
   }
 }
 
-export async function fetchDeploys(projectId: string): Promise<Deploy[]> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/deploys`, {
+export async function fetchDeploys(siteID: string): Promise<Deploy[]> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}/deploys`, {
     credentials: 'include',
   })
 
@@ -136,8 +136,8 @@ export async function fetchDeploys(projectId: string): Promise<Deploy[]> {
   return data.deploys ?? []
 }
 
-export async function rollbackDeploy(projectId: string, deployId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/rollback`, {
+export async function rollbackDeploy(siteID: string, deployId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteID}/rollback`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
