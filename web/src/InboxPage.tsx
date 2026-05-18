@@ -10,33 +10,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
+import { initialsFor } from './AuthorChip'
+import { timeAgo } from './lib/time'
 
 type InboxFilter = 'all' | 'unread'
 
 type InboxPageProps = {
   onSessionExpired: () => void
   onOpenComment: (orgSlug: string, siteSlug: string, commentId: string) => void
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString()
-}
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0] ?? '')
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
 }
 
 export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
@@ -146,14 +127,14 @@ export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
                   }`}
                   aria-hidden
                 >
-                  {initials(actor)}
+                  {initialsFor(actor)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm">
                     <span className="font-medium">{actor}</span>
                     <span className="text-muted-foreground"> commented on </span>
                     <span className="font-medium">{c?.siteName ?? 'a site'}</span>
-                    <span className="text-muted-foreground"> · {timeAgo(n.createdAt)}</span>
+                    <span className="text-muted-foreground"> · {timeAgo(n.createdAt, { longForm: true })}</span>
                   </p>
                   {c?.body ? (
                     <p className="mt-1 truncate text-sm text-muted-foreground">{c.body}</p>

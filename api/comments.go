@@ -203,7 +203,6 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	}
 	defer tx.Rollback(r.Context())
 
-	// Resolve deploy id (caller may omit; default to site's current_deploy_id).
 	deployID := strings.TrimSpace(req.DeployID)
 	if deployID == "" {
 		var current *string
@@ -213,7 +212,6 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		}
 		deployID = *current
 	} else {
-		// Validate the deploy belongs to this site.
 		var ownerSiteID string
 		if err := tx.QueryRow(r.Context(), `select site_id from deploys where id = $1`, deployID).Scan(&ownerSiteID); err != nil || ownerSiteID != siteID {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "deploy does not belong to this site"})
@@ -221,21 +219,15 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// Walk parent chain to find the root comment id (for subscription writes).
+	// The UI only exposes single-level threads, so parent_id always points
+	// at a root. coalesce(parent_id, id) returns the root id directly.
 	rootID := ""
 	if req.ParentID != nil && *req.ParentID != "" {
-		var parentSite string
-		var parentRoot sql.NullString
-		err := tx.QueryRow(r.Context(), `
-			with recursive ancestry as (
-				select id, site_id, parent_id from comments where id = $1
-				union all
-				select c.id, c.site_id, c.parent_id from comments c
-				join ancestry a on c.id = a.parent_id
-			)
-			select site_id, (select id from ancestry where parent_id is null limit 1) as root_id
-			from ancestry where id = $1
-		`, *req.ParentID).Scan(&parentSite, &parentRoot)
+		var parentSite, parentRoot string
+		err := tx.QueryRow(r.Context(),
+			`select site_id, coalesce(parent_id, id) from comments where id = $1`,
+			*req.ParentID,
+		).Scan(&parentSite, &parentRoot)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "parent comment not found"})
 			return
@@ -244,11 +236,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "parent comment belongs to a different site"})
 			return
 		}
-		if parentRoot.Valid {
-			rootID = parentRoot.String
-		} else {
-			rootID = *req.ParentID
-		}
+		rootID = parentRoot
 	}
 
 	commentID := generateID("cm")
@@ -268,26 +256,23 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		subscriptionRoot = commentID
 	}
 
-	// Author auto-subscribes to the root comment.
 	if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
 		log.Printf("subscribe author: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create comment"})
 		return
 	}
 
-	// For top-level comments only, auto-subscribe the site's createdBy if different.
+	// Top-level comments also subscribe the site owner so they hear about
+	// activity on their work even if they did not participate in the thread.
 	if rootID == "" {
 		var siteOwner *string
 		if err := tx.QueryRow(r.Context(), `select created_by from sites where id = $1`, siteID).Scan(&siteOwner); err == nil && siteOwner != nil && *siteOwner != user.ID {
 			if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, *siteOwner); err != nil {
-				log.Printf("subscribe site owner: %v", err)
-				// non-fatal: the comment is already inserted.
+				log.Printf("subscribe site owner: %v", err) // non-fatal: comment is inserted
 			}
 		}
 	}
 
-	// Fan out notifications to all subscribers of the root except the author.
-	// Only fires when this is a reply (rootID != "").
 	if rootID != "" {
 		subRows, err := tx.Query(r.Context(), `
 			select user_id from comment_subscriptions where comment_id = $1 and user_id != $2

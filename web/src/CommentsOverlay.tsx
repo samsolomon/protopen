@@ -14,6 +14,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Check, RotateCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { initialsFor } from './AuthorChip'
+import { timeAgo } from './lib/time'
 
 type Mode = 'comment' | 'browse'
 
@@ -27,22 +29,6 @@ type CommentsOverlayProps = {
   focusCommentID?: string | null
   onBack: () => void
   onSessionExpired: () => void
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function initials(name: string | undefined): string {
-  if (!name) return '?'
-  return name.split(/\s+/).map((p) => p[0] ?? '').slice(0, 2).join('').toUpperCase()
 }
 
 const CONTENT_BASE_URL =
@@ -100,7 +86,6 @@ export function CommentsOverlay({
     void refresh()
   }, [refresh])
 
-  // Pins on the current page only.
   const pinsForCurrentPath = useMemo(
     () =>
       comments
@@ -109,17 +94,14 @@ export function CommentsOverlay({
     [comments, currentPath],
   )
 
-  // Send pin updates to the iframe whenever the set changes.
   useEffect(() => {
     iframeRef.current?.contentWindow?.postMessage({ type: 'protopen-set-pins', pins: pinsForCurrentPath }, '*')
   }, [pinsForCurrentPath])
 
-  // Send mode updates to the iframe.
   useEffect(() => {
     iframeRef.current?.contentWindow?.postMessage({ type: 'protopen-set-mode', mode }, '*')
   }, [mode])
 
-  // Receive postMessage events from the iframe.
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.source !== iframeRef.current?.contentWindow) return
@@ -165,16 +147,17 @@ export function CommentsOverlay({
     return () => window.removeEventListener('message', handler)
   }, [pinsForCurrentPath, mode, currentPath])
 
-  // Deep-link: when focusCommentID is supplied, highlight it once loaded.
   useEffect(() => {
     if (!focusCommentID) return
     const target = comments.find((c) => c.id === focusCommentID)
     if (!target) return
     if (target.pagePath !== currentPath) {
-      // Navigate the iframe to that page (target.pagePath is site-relative).
+      // target.pagePath is site-relative and may contain its own query string,
+      // so merge ?protopen-comments=1 rather than blindly appending.
       if (iframeRef.current) {
         const rel = target.pagePath.startsWith('/') ? target.pagePath : '/' + target.pagePath
-        iframeRef.current.src = `${siteRoot}${rel === '/' ? '/' : rel}?protopen-comments=1`
+        const sep = rel.includes('?') ? '&' : '?'
+        iframeRef.current.src = `${siteRoot}${rel}${sep}protopen-comments=1`
       }
     } else {
       iframeRef.current?.contentWindow?.postMessage(
@@ -252,7 +235,6 @@ export function CommentsOverlay({
 
   const canMutateComment = (c: SiteComment) => c.author?.id === currentUserID || isOrgAdmin
 
-  // Group: root comments with their replies.
   const threads = useMemo(() => {
     const byId = new Map<string, { root: SiteComment; replies: SiteComment[] }>()
     for (const c of comments) {
@@ -269,7 +251,6 @@ export function CommentsOverlay({
     )
   }, [comments])
 
-  // Mobile fallback.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   if (isMobile) {
     return (
@@ -379,7 +360,7 @@ export function CommentsOverlay({
                           </span>
                         ) : (
                           <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                            {initials(t.root.author?.name)}
+                            {initialsFor(t.root.author?.name ?? '')}
                           </span>
                         )}
                         <div className="min-w-0 flex-1">
