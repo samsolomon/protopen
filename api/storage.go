@@ -186,7 +186,7 @@ func (app *application) deleteSite(ctx context.Context, orgID string, siteID str
 	return commandTag.RowsAffected() > 0, nil
 }
 
-func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, orgSlug string, creatorUserID string, prepared preparedUpload) (site, error) {
+func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, orgSlug string, callerUserID string, callerRole string, prepared preparedUpload) (site, error) {
 	tx, err := app.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return site{}, err
@@ -213,6 +213,13 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 	var entry siteRecord
 	if len(matches) == 1 {
 		entry = matches[0]
+		// Mutation gate on re-upload to an existing site: only the original
+		// creator or an admin can overwrite. Legacy rows with NULL creator
+		// fall through to admin-only.
+		canMutate := callerRole == roleAdmin || (entry.CreatedBy != nil && *entry.CreatedBy == callerUserID)
+		if !canMutate {
+			return site{}, ErrSiteMutateForbidden
+		}
 		if _, err := tx.Exec(ctx, `update sites set updated_at = $2 where id = $1`, entry.ID, now); err != nil {
 			return site{}, err
 		}
@@ -234,8 +241,8 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 		// caller becomes the canonical creator. Slug-match re-uploads above
 		// only touch updated_at, preserving the original author.
 		var creator *string
-		if creatorUserID != "" {
-			creator = &creatorUserID
+		if callerUserID != "" {
+			creator = &callerUserID
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
@@ -306,7 +313,7 @@ func (app *application) buildLiveURL(orgSlug, siteSlug string) string {
 
 func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]siteRecord, error) {
 	rows, err := tx.Query(ctx, `
-		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count
+		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count, p.created_by
 		from sites p
 		join organizations o on o.id = p.org_id
 		left join deploys d on d.site_id = p.id
@@ -323,7 +330,7 @@ func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string)
 	for rows.Next() {
 		var entry siteRecord
 		var deployCount int64
-		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount, &entry.CreatedBy); err != nil {
 			return nil, err
 		}
 		entry.Deploys = int(deployCount)

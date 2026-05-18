@@ -113,12 +113,13 @@ type preparedUpload struct {
 }
 
 type siteRecord struct {
-	ID      string
-	OrgID   string
-	Name    string
-	Slug    string
-	OrgSlug string
-	Deploys int
+	ID        string
+	OrgID     string
+	Name      string
+	Slug      string
+	OrgSlug   string
+	Deploys   int
+	CreatedBy *string
 }
 
 type liveDeploy struct {

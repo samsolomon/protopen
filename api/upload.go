@@ -6,6 +6,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -62,11 +63,20 @@ func (app *application) uploadsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.upsertSiteFromUpload(r.Context(), orgID, orgSlug, user.ID, prepared)
+	role, _ := orgRole(user, orgID)
+
+	result, err := app.upsertSiteFromUpload(r.Context(), orgID, orgSlug, user.ID, role, prepared)
 	if err != nil {
 		cleanupPreparedUpload(prepared)
 		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "multiple existing sites") {
+		switch {
+		case errors.Is(err, ErrSiteMutateForbidden):
+			status = http.StatusForbidden
+			writeJSON(w, status, map[string]string{
+				"error": "this site belongs to a teammate. Duplicate it to make changes under your own copy.",
+			})
+			return
+		case strings.Contains(err.Error(), "multiple existing sites"):
 			status = http.StatusConflict
 		}
 
