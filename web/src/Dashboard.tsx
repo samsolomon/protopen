@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { Site, SessionUser } from './types'
 import { duplicateSite, resendVerification } from './api'
+import {
+  scopeFromSearch,
+  buildScopeURL,
+  filterSitesByScope,
+  filterSitesByQuery,
+  type SiteScope,
+} from './site-scope'
 import { UploadPanel } from './UploadPanel'
 import { SiteCardGrid } from './SiteCardGrid'
 import { SitesTable } from './SitesTable'
@@ -78,21 +85,8 @@ function EmptyMineState({ onViewAll, onUploadOpen }: { onViewAll: () => void; on
   )
 }
 
-type SiteScope = 'mine' | 'all'
-
-function scopeFromSearch(search: string): SiteScope {
-  const params = new URLSearchParams(search)
-  return params.get('view') === 'all' ? 'all' : 'mine'
-}
-
 function writeScopeToURL(scope: SiteScope) {
-  const url = new URL(window.location.href)
-  if (scope === 'all') {
-    url.searchParams.set('view', 'all')
-  } else {
-    url.searchParams.delete('view')
-  }
-  window.history.replaceState(null, '', url.toString())
+  window.history.replaceState(null, '', buildScopeURL(window.location.href, scope))
 }
 
 type DashboardView = 'dashboard' | 'settings'
@@ -157,20 +151,9 @@ export function Dashboard({
   const hasTeammateSites = sites.some(
     (site) => site.createdBy && site.createdBy.id !== user.id,
   )
-  const showScopeTabs = hasTeammateSites
-  const effectiveScope: SiteScope = showScopeTabs ? scope : 'all'
-  const scopedSites =
-    effectiveScope === 'mine'
-      ? sites.filter((site) => site.createdBy?.id === user.id)
-      : sites
-  const trimmedQuery = searchQuery.trim().toLowerCase()
-  const visibleSites = trimmedQuery
-    ? scopedSites.filter(
-        (site) =>
-          site.name.toLowerCase().includes(trimmedQuery) ||
-          site.slug.toLowerCase().includes(trimmedQuery),
-      )
-    : scopedSites
+  const effectiveScope: SiteScope = hasTeammateSites ? scope : 'all'
+  const scopedSites = filterSitesByScope(sites, effectiveScope, user.id)
+  const visibleSites = filterSitesByQuery(scopedSites, searchQuery)
 
   const activeOrg = user.orgs.find((org) => org.isPersonal) ?? user.orgs[0]
   const isOrgAdmin = activeOrg?.role === 'admin'
@@ -180,7 +163,7 @@ export function Dashboard({
       const site = await duplicateSite(siteID)
       toast.success(`Duplicated as "${site.name}"`)
       onSitesChanged()
-      if (showScopeTabs && scope !== 'mine') {
+      if (hasTeammateSites && scope !== 'mine') {
         setScope('mine')
       }
     } catch (err) {
@@ -356,7 +339,7 @@ export function Dashboard({
               {sites.length > 0 ? (
                 <div className="mb-4 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    {showScopeTabs ? (
+                    {hasTeammateSites ? (
                       <Tabs value={scope} onValueChange={(value) => setScope(value as SiteScope)}>
                         <TabsList>
                           <TabsTrigger value="mine">My sites</TabsTrigger>
@@ -407,7 +390,7 @@ export function Dashboard({
               ) : sites.length === 0 ? (
                 <EmptyState onUploadOpen={() => setUploadOpen(true)} />
               ) : visibleSites.length === 0 ? (
-                trimmedQuery ? (
+                searchQuery.trim() ? (
                   <Card>
                     <CardContent className="py-8 text-center text-sm text-muted-foreground">
                       No sites match "{searchQuery}".

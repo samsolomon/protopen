@@ -26,6 +26,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronRight, CopyPlus, ExternalLink, GitBranch, Globe, Lock, Trash2 } from 'lucide-react'
 import { commitURL } from '@/lib/utils'
+import { canMutateSite } from './site-scope'
 
 type SitesTableProps = {
   sites: Site[]
@@ -87,8 +88,7 @@ export function SitesTable({
           {sites.map((site) => {
             const isExpanded = expandedRows.has(site.id)
             const isDeleting = deletingSiteID === site.id
-            const canMutate =
-              isOrgAdmin || (!!site.createdBy && site.createdBy.id === currentUserId)
+            const canMutate = canMutateSite(site, currentUserId, isOrgAdmin)
 
             return (
               <Fragment key={site.id}>

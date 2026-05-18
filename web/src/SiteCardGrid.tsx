@@ -26,6 +26,7 @@ import {
 import { ExternalLink, Copy, CopyPlus, History, Globe, Lock, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { commitURL } from '@/lib/utils'
+import { canMutateSite } from './site-scope'
 
 type SiteCardGridProps = {
   sites: Site[]
@@ -63,8 +64,7 @@ export function SiteCardGrid({
       >
         {sites.map((site) => {
           const isDeleting = deletingSiteID === site.id
-          const canMutate =
-            isOrgAdmin || (!!site.createdBy && site.createdBy.id === currentUserId)
+          const canMutate = canMutateSite(site, currentUserId, isOrgAdmin)
 
           return (
             <Card key={site.id} className="relative pt-0">
