@@ -2,7 +2,10 @@ import { useState } from 'react'
 import type { Site } from './types'
 import { DeployHistory } from './DeployHistory'
 import { SiteThumbnail } from './SiteThumbnail'
+import { CopyButton } from './CopyButton'
+import { VisibilityBadge } from './VisibilityBadge'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -19,8 +22,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ExternalLink, Copy, History, Globe, Lock, Trash2, MoreHorizontal } from 'lucide-react'
+import { ExternalLink, Copy, History, Globe, Lock, Trash2, MoreHorizontal, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
+import { commitURL } from '@/lib/utils'
 
 type SiteCardGridProps = {
   sites: Site[]
@@ -52,15 +56,18 @@ export function SiteCardGrid({
           const isDeleting = deletingSiteID === site.id
 
           return (
-            <Card
-              key={site.id}
-              className="cursor-pointer pt-0"
-              onClick={() => window.open(site.liveUrl, '_blank')}
-            >
+            <Card key={site.id} className="relative pt-0">
+              <a
+                href={site.liveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${site.name}`}
+                className="absolute inset-0 z-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              />
               <SiteThumbnail site={site} />
               <CardHeader>
-                <CardTitle className="truncate">{site.name}</CardTitle>
-                <CardAction>
+                <CardTitle className="truncate" title={site.name}>{site.name}</CardTitle>
+                <CardAction className="relative z-10">
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={
@@ -129,7 +136,51 @@ export function SiteCardGrid({
                   </DropdownMenu>
                 </CardAction>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <VisibilityBadge isPublic={site.isPublic} />
+                  <Badge variant="secondary">
+                    {site.deployCount} {site.deployCount === 1 ? 'deploy' : 'deploys'}
+                  </Badge>
+                </div>
+                <div className="relative z-10 flex items-center gap-1 text-sm">
+                  <a
+                    href={site.liveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={site.liveUrl}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-primary underline-offset-4 hover:underline"
+                  >
+                    <span className="truncate">{site.liveUrl}</span>
+                    <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                  </a>
+                  <CopyButton text={site.liveUrl} />
+                </div>
+                {site.gitBranch ? (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <GitBranch className="size-3 shrink-0" />
+                    <span className="truncate" title={site.gitBranch}>{site.gitBranch}</span>
+                    {site.gitCommitHash ? (
+                      site.gitRemoteURL ? (
+                        <a
+                          href={commitURL(site.gitRemoteURL, site.gitCommitHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="relative z-10 font-mono hover:underline"
+                          title={site.gitCommitHash}
+                        >
+                          {site.gitCommitHash.slice(0, 8)}
+                        </a>
+                      ) : (
+                        <span className="font-mono" title={site.gitCommitHash}>
+                          {site.gitCommitHash.slice(0, 8)}
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                ) : null}
                 <p className="text-xs text-muted-foreground">{site.updatedAt}</p>
               </CardContent>
             </Card>
