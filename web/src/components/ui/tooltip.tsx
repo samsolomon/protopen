@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
@@ -20,10 +21,31 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
 }
 
 function TooltipTrigger({
-  asChild: _,
+  asChild,
+  children,
+  render,
   ...props
 }: TooltipPrimitive.Trigger.Props & { asChild?: boolean }) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  // Translate Radix-style `asChild` to Base UI's `render` prop so the trigger
+  // replaces (not wraps) the child element. Avoids nested <button> warnings.
+  if (asChild && render === undefined && React.isValidElement(children)) {
+    return (
+      <TooltipPrimitive.Trigger
+        data-slot="tooltip-trigger"
+        render={children as React.ReactElement}
+        {...props}
+      />
+    )
+  }
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      render={render}
+      {...props}
+    >
+      {children}
+    </TooltipPrimitive.Trigger>
+  )
 }
 
 function TooltipContent({

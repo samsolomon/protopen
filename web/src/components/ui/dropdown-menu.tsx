@@ -13,10 +13,31 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
 }
 
 function DropdownMenuTrigger({
-  asChild: _,
+  asChild,
+  children,
+  render,
   ...props
 }: MenuPrimitive.Trigger.Props & { asChild?: boolean }) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+  // Translate Radix-style `asChild` to Base UI's `render` prop so the trigger
+  // replaces (not wraps) the child element. Avoids nested <button> warnings.
+  if (asChild && render === undefined && React.isValidElement(children)) {
+    return (
+      <MenuPrimitive.Trigger
+        data-slot="dropdown-menu-trigger"
+        render={children as React.ReactElement}
+        {...props}
+      />
+    )
+  }
+  return (
+    <MenuPrimitive.Trigger
+      data-slot="dropdown-menu-trigger"
+      render={render}
+      {...props}
+    >
+      {children}
+    </MenuPrimitive.Trigger>
+  )
 }
 
 function DropdownMenuContent({
