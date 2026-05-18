@@ -45,7 +45,7 @@ export function ProfilePanel({ user, onUserUpdated, onSessionExpired }: ProfileP
             id="profile-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="max-w-[240px] text-right"
+            className="max-w-[240px]"
           />
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -55,7 +55,7 @@ export function ProfilePanel({ user, onUserUpdated, onSessionExpired }: ProfileP
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="max-w-[240px] text-right"
+            className="max-w-[240px]"
           />
         </div>
         <div className="flex items-center justify-between px-4 py-3">

@@ -55,15 +55,10 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
   const { available, enabled, reason } = settings.thumbnails
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-        <p className="text-sm text-muted-foreground">Instance-wide capture and behavior controls.</p>
-      </div>
-
-      <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+    <div className="rounded-lg border bg-card">
+      <div className="flex items-start justify-between gap-6 px-4 py-3">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="thumbnails-toggle" className="text-sm font-medium">Deploy thumbnails</Label>
+          <Label htmlFor="thumbnails-toggle" className="text-sm font-normal">Deploy thumbnails</Label>
           <p className="text-sm text-muted-foreground">
             Render a screenshot of each new deploy and show it on dashboard cards.
           </p>

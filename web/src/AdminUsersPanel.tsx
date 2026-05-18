@@ -118,12 +118,9 @@ export function AdminUsersPanel({ user, onSessionExpired }: AdminUsersPanelProps
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Users</h2>
-          <p className="text-sm text-muted-foreground">{users.length} total</p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">{users.length} total</p>
         <div className="flex items-center gap-2">
           <Input
             type="email"
@@ -134,15 +131,22 @@ export function AdminUsersPanel({ user, onSessionExpired }: AdminUsersPanelProps
             disabled={inviting || !targetOrgId}
             className="w-64"
           />
-          <select
-            value={inviteRole}
-            onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}
-            disabled={inviting || !targetOrgId}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={inviting || !targetOrgId}
+                aria-label="Invite role"
+              >
+                {inviteRole === 'admin' ? 'Admin' : 'Member'}
+                <ChevronDown className="size-3.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setInviteRole('member')}>Member</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setInviteRole('admin')}>Admin</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => void handleInvite()} disabled={inviting || !inviteEmail.trim() || !targetOrgId}>
             Invite
           </Button>
