@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -70,9 +71,9 @@ func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
+		orgID, _, err := app.requireSiteMutate(r.Context(), user, siteID)
 		if err != nil {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+			writeJSON(w, statusForSiteMutateError(err), map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -104,9 +105,9 @@ func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
+	orgID, _, err := app.requireSiteMutate(r.Context(), user, siteID)
 	if err != nil {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		writeJSON(w, statusForSiteMutateError(err), map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -138,4 +139,20 @@ func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "isPublic": *payload.IsPublic})
+}
+
+// statusForSiteMutateError maps the three failure modes of requireSiteMutate
+// onto HTTP status codes: 404 for missing sites, 403 for everything else (not
+// a member, or member-but-not-creator-or-admin).
+func statusForSiteMutateError(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	if errors.Is(err, ErrSiteMutateForbidden) {
+		return http.StatusForbidden
+	}
+	if strings.Contains(err.Error(), "not found") {
+		return http.StatusNotFound
+	}
+	return http.StatusForbidden
 }

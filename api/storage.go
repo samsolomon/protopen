@@ -56,6 +56,40 @@ func (app *application) requireSiteAccess(ctx context.Context, user sessionUser,
 	return orgID, role, nil
 }
 
+// ErrSiteMutateForbidden is returned by requireSiteMutate when the caller is a
+// member of the owning org but is neither the creator nor an admin. Surface this
+// to clients as 403 with a duplicate-suggestion hint where relevant.
+var ErrSiteMutateForbidden = fmt.Errorf("only the original creator or an org admin can modify this site")
+
+// requireSiteMutate enforces the mutation gate: caller must be the site's
+// creator or an admin of the owning org. Used by DELETE, PATCH (visibility),
+// and the existing-site branch of upload. Returns (orgID, role) on success.
+func (app *application) requireSiteMutate(ctx context.Context, user sessionUser, siteID string) (string, string, error) {
+	var (
+		orgID     string
+		createdBy *string
+	)
+	err := app.db.QueryRow(ctx, `
+		select org_id, created_by
+		from sites
+		where id = $1 and deleted_at is null
+	`, siteID).Scan(&orgID, &createdBy)
+	if err != nil {
+		return "", "", fmt.Errorf("site not found")
+	}
+	role, ok := orgRole(user, orgID)
+	if !ok {
+		return "", "", fmt.Errorf("not a member of this organization")
+	}
+	if role == roleAdmin {
+		return orgID, role, nil
+	}
+	if createdBy != nil && *createdBy == user.ID {
+		return orgID, role, nil
+	}
+	return "", "", ErrSiteMutateForbidden
+}
+
 func orgRole(user sessionUser, orgID string) (string, bool) {
 	for _, o := range user.Orgs {
 		if o.ID == orgID {

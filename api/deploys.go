@@ -87,9 +87,9 @@ func (app *application) rollbackHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
+	orgID, _, err := app.requireSiteMutate(r.Context(), user, siteID)
 	if err != nil {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		writeJSON(w, statusForSiteMutateError(err), map[string]string{"error": err.Error()})
 		return
 	}
 
