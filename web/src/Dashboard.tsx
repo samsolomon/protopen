@@ -92,9 +92,9 @@ type DashboardView = 'dashboard' | 'settings'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
-  if (path === '/settings/users') return isAdmin ? 'users' : 'account'
-  if (path === '/settings/instance') return isAdmin ? 'instance' : 'account'
-  return 'account'
+  if (path === '/settings/users') return isAdmin ? 'users' : 'profile'
+  if (path === '/settings/instance') return isAdmin ? 'instance' : 'profile'
+  return 'profile'
 }
 
 type DashboardProps = {
@@ -176,7 +176,7 @@ export function Dashboard({
 
   const switchView = (next: DashboardView) => {
     if (next === 'settings') {
-      setSettingsTab('account')
+      setSettingsTab('profile')
       navigateTo('/settings')
     } else {
       navigateTo('/')
@@ -187,7 +187,7 @@ export function Dashboard({
 
   const switchSettingsTab = (tab: string) => {
     setSettingsTab(tab)
-    navigateTo(tab === 'account' ? '/settings' : `/settings/${tab}`)
+    navigateTo(tab === 'profile' ? '/settings' : `/settings/${tab}`)
   }
 
   useEffect(() => {
@@ -287,12 +287,12 @@ export function Dashboard({
         {view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
-              <TabsTrigger value="account">Account</TabsTrigger>
+              <TabsTrigger value="profile">Profile</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
               {user.isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
             </TabsList>
-            <TabsContent value="account" className="max-w-2xl">
+            <TabsContent value="profile" className="max-w-2xl">
               <div className="flex flex-col gap-8">
                 <ProfilePanel
                   user={user}
