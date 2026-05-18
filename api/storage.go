@@ -12,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func loadUserOrgs(ctx context.Context, db interface{ Query(context.Context, string, ...any) (pgx.Rows, error) }, userID string) ([]orgInfo, error) {
+func loadUserOrgs(ctx context.Context, db interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, userID string) ([]orgInfo, error) {
 	rows, err := db.Query(ctx, `
 		select o.id, o.slug, o.name, o.is_personal, m.role
 		from org_members m
@@ -124,7 +126,18 @@ func resolveOrgFromParam(user sessionUser, orgParam string) (string, string, err
 	return "", "", fmt.Errorf("organization not found")
 }
 
-func (app *application) listSites(ctx context.Context, orgID string) ([]site, error) {
+type listSitesOpts struct {
+	// AuthorUserID, when non-empty, filters the listing to sites whose
+	// created_by matches the given user id.
+	AuthorUserID string
+}
+
+func (app *application) listSites(ctx context.Context, orgID string, opts listSitesOpts) ([]site, error) {
+	var authorFilter *string
+	if opts.AuthorUserID != "" {
+		authorFilter = &opts.AuthorUserID
+	}
+
 	rows, err := app.db.Query(ctx, `
 		select
 			p.id,
@@ -136,13 +149,19 @@ func (app *application) listSites(ctx context.Context, orgID string) ([]site, er
 			p.is_public,
 			cd.git_branch,
 			cd.git_commit_hash,
-			cd.git_remote_url
+			cd.git_remote_url,
+			u.id,
+			u.name,
+			u.username
 		from sites p
 		join organizations o on o.id = p.org_id
 		left join deploys cd on cd.id = p.current_deploy_id
-		where p.org_id = $1 and p.deleted_at is null
+		left join users u on u.id = p.created_by
+		where p.org_id = $1
+		  and p.deleted_at is null
+		  and ($2::text is null or p.created_by = $2)
 		order by p.updated_at desc
-	`, orgID)
+	`, orgID, authorFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -151,24 +170,42 @@ func (app *application) listSites(ctx context.Context, orgID string) ([]site, er
 	var sites []site
 	for rows.Next() {
 		var (
-			entry       site
-			updatedAt   time.Time
-			orgSlug     string
-			deployCount int64
+			entry          site
+			updatedAt      time.Time
+			orgSlug        string
+			deployCount    int64
+			authorID       *string
+			authorName     *string
+			authorUsername *string
 		)
 
 		if err := rows.Scan(&entry.ID, &entry.Name, &entry.Slug, &updatedAt, &deployCount, &orgSlug, &entry.IsPublic,
-			&entry.GitBranch, &entry.GitCommitHash, &entry.GitRemoteURL); err != nil {
+			&entry.GitBranch, &entry.GitCommitHash, &entry.GitRemoteURL,
+			&authorID, &authorName, &authorUsername); err != nil {
 			return nil, err
 		}
 
 		entry.DeployCount = int(deployCount)
 		entry.UpdatedAt = relativeTime(updatedAt)
 		entry.LiveURL = app.buildLiveURL(orgSlug, entry.Slug)
+		if authorID != nil {
+			entry.CreatedBy = &authorSummary{
+				ID:       *authorID,
+				Name:     stringValue(authorName),
+				Username: stringValue(authorUsername),
+			}
+		}
 		sites = append(sites, entry)
 	}
 
 	return sites, rows.Err()
+}
+
+func stringValue(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
 
 func (app *application) deleteSite(ctx context.Context, orgID string, siteID string) (bool, error) {

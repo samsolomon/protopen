@@ -75,16 +75,23 @@ type authRequest struct {
 }
 
 type site struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Slug          string  `json:"slug"`
-	UpdatedAt     string  `json:"updatedAt"`
-	DeployCount   int     `json:"deployCount"`
-	LiveURL       string  `json:"liveUrl"`
-	IsPublic      bool    `json:"isPublic"`
-	GitBranch     *string `json:"gitBranch,omitempty"`
-	GitCommitHash *string `json:"gitCommitHash,omitempty"`
-	GitRemoteURL  *string `json:"gitRemoteURL,omitempty"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	UpdatedAt     string         `json:"updatedAt"`
+	DeployCount   int            `json:"deployCount"`
+	LiveURL       string         `json:"liveUrl"`
+	IsPublic      bool           `json:"isPublic"`
+	GitBranch     *string        `json:"gitBranch,omitempty"`
+	GitCommitHash *string        `json:"gitCommitHash,omitempty"`
+	GitRemoteURL  *string        `json:"gitRemoteURL,omitempty"`
+	CreatedBy     *authorSummary `json:"createdBy"`
+}
+
+type authorSummary struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Username string `json:"username"`
 }
 
 type uploadRequest struct {

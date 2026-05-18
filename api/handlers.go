@@ -28,7 +28,15 @@ func (app *application) sitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sites, err := app.listSites(r.Context(), orgID)
+	// ?author=me is the only currently supported value; resolve it to the
+	// caller's id. Other values are silently ignored so future expansions
+	// (e.g. author=<username>) don't break older clients.
+	opts := listSitesOpts{}
+	if r.URL.Query().Get("author") == "me" {
+		opts.AuthorUserID = user.ID
+	}
+
+	sites, err := app.listSites(r.Context(), orgID, opts)
 	if err != nil {
 		log.Printf("list sites: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load sites"})
