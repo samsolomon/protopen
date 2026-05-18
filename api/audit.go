@@ -10,9 +10,7 @@ import (
 
 const (
 	auditActionDeleteUser = "delete_user"
-	auditActionDeleteSite = "delete_site"
 	auditTargetUser       = "user"
-	auditTargetSite       = "site"
 )
 
 // logAdminAction writes a row to audit_log. Best-effort: an insert failure is

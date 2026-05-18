@@ -17,7 +17,6 @@ import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { AdminUsersPanel } from './AdminUsersPanel'
-import { AdminSitesPanel } from './AdminSitesPanel'
 import { AdminSettings } from './AdminSettings'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -94,7 +93,6 @@ type DashboardView = 'dashboard' | 'settings'
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
   if (path === '/settings/users') return isAdmin ? 'users' : 'account'
-  if (path === '/settings/sites') return isAdmin ? 'sites' : 'account'
   if (path === '/settings/instance') return isAdmin ? 'instance' : 'account'
   return 'account'
 }
@@ -292,7 +290,6 @@ export function Dashboard({
               <TabsTrigger value="account">Account</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
               {user.isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
-              {user.isAdmin && <TabsTrigger value="sites">All sites</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
             </TabsList>
             <TabsContent value="account" className="max-w-2xl">
@@ -316,9 +313,6 @@ export function Dashboard({
               <>
                 <TabsContent value="users" className="min-w-0 flex-1">
                   <AdminUsersPanel user={user} onSessionExpired={onSessionExpired} />
-                </TabsContent>
-                <TabsContent value="sites" className="min-w-0 flex-1">
-                  <AdminSitesPanel onSessionExpired={onSessionExpired} />
                 </TabsContent>
                 <TabsContent value="instance" className="max-w-2xl">
                   <AdminSettings onSessionExpired={onSessionExpired} />

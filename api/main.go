@@ -268,8 +268,6 @@ func main() {
 	appMux.HandleFunc("/api/reset-password", app.resetPasswordHandler)
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
-	appMux.HandleFunc("/api/admin/sites", app.adminSitesHandler)
-	appMux.HandleFunc("/api/admin/sites/", app.adminSiteByIDHandler)
 	appMux.HandleFunc("/api/admin/settings", app.instanceSettingsHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))
 	appMux.HandleFunc("/api/auth/device/", app.rateLimit(app.authLimiter, app.deviceCodePollHandler))
