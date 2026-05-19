@@ -225,6 +225,9 @@ func insertSeedSite(ctx context.Context, tx pgx.Tx, ingestRoot string, orgID str
 	`, siteID, orgID, slug, name, now, createdByUserID); err != nil {
 		return err
 	}
+	if err := upsertSiteSubscription(ctx, tx, siteID, createdByUserID); err != nil {
+		return err
+	}
 
 	seedRemoteURL := "https://github.com/protopen-team/" + slug
 

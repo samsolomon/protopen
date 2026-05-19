@@ -32,6 +32,7 @@ type application struct {
 	store          *objectStore
 	ingestRoot     string
 	contentBaseURL string
+	appBaseURL     string
 	frontendOrigin string
 	appOrigin      string
 	contentOrigin  string
@@ -40,6 +41,7 @@ type application struct {
 	mailer *emailClient
 
 	authLimiter        *rateLimiter
+	commentLimiter     *rateLimiter
 	deviceTokens       *deviceTokenStore
 	adminEmails        []string
 	trustedProxyHeader string
@@ -221,6 +223,7 @@ func main() {
 		trustedProxyHeader: trustedProxyHeader,
 	}
 	app.authLimiter = newRateLimiter(10, 15*time.Minute)
+	app.commentLimiter = newRateLimiter(20, time.Minute)
 	app.deviceTokens = newDeviceTokenStore()
 
 	if getenv("SEED_DEMO", "") != "" {
@@ -247,6 +250,7 @@ func main() {
 	}
 
 	app.authLimiter.startCleanup(ctx)
+	app.commentLimiter.startCleanup(ctx)
 	app.startCleanupLoop(ctx)
 	app.startThumbnailBackstopLoop(ctx)
 
@@ -257,6 +261,7 @@ func main() {
 	appMux.HandleFunc("/api/sign-up", app.rateLimit(app.authLimiter, app.signUpHandler))
 	appMux.HandleFunc("/api/sign-out", app.signOutHandler)
 	appMux.HandleFunc("/api/sites", app.sitesHandler)
+	appMux.HandleFunc("/api/sites/by-slug/", app.commentContextHandler)
 	appMux.HandleFunc("/api/sites/", app.siteByIDHandler)
 	appMux.HandleFunc("/api/uploads", app.uploadsHandler)
 	appMux.HandleFunc("/api/tokens", app.tokensHandler)
@@ -285,7 +290,11 @@ func main() {
 		addr := ":" + listenAddr
 		contentHost := strings.TrimPrefix(contentOrigin, "https://")
 		contentHost = strings.TrimPrefix(contentHost, "http://")
-		appHandler := appSecurityHeaders(withCORS(frontendOrigin, verifyOrigin(appOrigin, limitJSONBody(appMux))))
+		if app.appBaseURL == "" {
+			app.appBaseURL = appOrigin
+		}
+		allowedOrigins := []string{frontendOrigin, appOrigin, contentOrigin}
+		appHandler := appSecurityHeaders(withCORS(allowedOrigins, verifyOrigin(allowedOrigins, limitJSONBody(appMux))))
 		contentHandler := contentSecurityHeaders(contentMux)
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -314,11 +323,20 @@ func main() {
 	if os.Getenv("PUBLIC_CONTENT_URL") == "" {
 		app.contentBaseURL = "http://localhost" + appListenAddr
 	}
+	// Compute app's base URL so the injected runtime knows where to call
+	// the API from. In production this is appOrigin; in dev we point at the
+	// app port directly.
+	if appOrigin != "" {
+		app.appBaseURL = appOrigin
+	} else {
+		app.appBaseURL = "http://localhost" + appListenAddr
+	}
 
 	// Local dev mode: two separate servers
+	allowedOrigins := []string{frontendOrigin, appOrigin, contentOrigin, "http://localhost" + contentListenAddr, "http://127.0.0.1" + contentListenAddr}
 	appServer := &http.Server{
 		Addr:              appListenAddr,
-		Handler:           appSecurityHeaders(withCORS(frontendOrigin, verifyOrigin(appOrigin, limitJSONBody(appMux)))),
+		Handler:           appSecurityHeaders(withCORS(allowedOrigins, verifyOrigin(allowedOrigins, limitJSONBody(appMux)))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

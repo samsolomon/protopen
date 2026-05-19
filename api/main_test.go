@@ -389,7 +389,7 @@ func TestValidateUploadZipModeRejectsMultipleZips(t *testing.T) {
 func TestWithCORSAllowsMatchingOrigin(t *testing.T) {
 	t.Parallel()
 
-	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := withCORS([]string{"http://localhost:5173"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -409,7 +409,7 @@ func TestWithCORSAllowsMatchingOrigin(t *testing.T) {
 func TestWithCORSRejectsNonMatchingOrigin(t *testing.T) {
 	t.Parallel()
 
-	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := withCORS([]string{"http://localhost:5173"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -433,7 +433,7 @@ func TestWithCORSOptionsReturnNoContent(t *testing.T) {
 	t.Parallel()
 
 	called := false
-	handler := withCORS("http://localhost:5173", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := withCORS([]string{"http://localhost:5173"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 	}))
 

@@ -254,6 +254,9 @@ func (app *application) duplicateSite(ctx context.Context, sourceSiteID string, 
 	`, newSiteID, sourceOrgID, newSlug, newName, now, callerUserID); err != nil {
 		return site{}, err
 	}
+	if err := upsertSiteSubscription(ctx, tx, newSiteID, callerUserID); err != nil {
+		return site{}, err
+	}
 
 	// Re-point a new deploys row at the source's current storage_prefix
 	// (deploys are immutable, so no file copy is required). Git and label
@@ -374,6 +377,11 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 			values ($1, $2, $3, $4, $5, $5, $6)
 		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now, creator); err != nil {
 			return site{}, err
+		}
+		if creator != nil {
+			if err := upsertSiteSubscription(ctx, tx, entry.ID, *creator); err != nil {
+				return site{}, err
+			}
 		}
 	}
 

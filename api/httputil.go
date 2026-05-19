@@ -164,15 +164,21 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
-func withCORS(frontendOrigin string, next http.Handler) http.Handler {
+func withCORS(allowedOrigins []string, next http.Handler) http.Handler {
+	allowed := map[string]struct{}{}
+	for _, o := range allowedOrigins {
+		if o != "" {
+			allowed[o] = struct{}{}
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Origin")
 		origin := r.Header.Get("Origin")
-		if origin == frontendOrigin {
+		if _, ok := allowed[origin]; ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Protopen-Client")
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
 
 		if r.Method == http.MethodOptions {
@@ -199,19 +205,28 @@ func limitJSONBody(next http.Handler) http.Handler {
 }
 
 // verifyOrigin rejects cross-origin POST/PATCH/PUT/DELETE requests where the
-// browser-supplied Origin header doesn't match appOrigin. Skips when:
-//   - appOrigin is empty (local dev, no canonical origin to check against);
+// browser-supplied Origin header doesn't match any allowedOrigins entry.
+// Skips when:
+//   - the allowed list is effectively empty (local dev, no canonical origin);
 //   - the Origin header is empty (non-browser clients like the CLI, which
 //     authenticate via Bearer tokens — cookie auth is already protected by
 //     the session cookie's SameSite=Lax mode).
-func verifyOrigin(appOrigin string, next http.Handler) http.Handler {
+func verifyOrigin(allowedOrigins []string, next http.Handler) http.Handler {
+	allowed := map[string]struct{}{}
+	for _, o := range allowedOrigins {
+		if o != "" {
+			allowed[o] = struct{}{}
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete:
 			origin := r.Header.Get("Origin")
-			if appOrigin != "" && origin != "" && origin != appOrigin {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
-				return
+			if len(allowed) > 0 && origin != "" {
+				if _, ok := allowed[origin]; !ok {
+					writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
+					return
+				}
 			}
 		}
 		next.ServeHTTP(w, r)

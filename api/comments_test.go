@@ -639,9 +639,9 @@ func TestMarkAllNotificationsRead(t *testing.T) {
 	}
 }
 
-// Compilation guard: ensures the comment-mode script is non-empty.
-func TestCommentModeScriptNotEmpty(t *testing.T) {
-	if !strings.Contains(commentModeScript, "__protopenCommentsLoaded") {
-		t.Fatalf("comment-mode script missing sentinel")
+// Compilation guard: ensures the comment runtime is non-empty.
+func TestCommentRuntimeNotEmpty(t *testing.T) {
+	if !strings.Contains(commentRuntimeJS, "__protopenCommentsLoaded") {
+		t.Fatalf("comment runtime missing sentinel")
 	}
 }

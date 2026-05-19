@@ -14,7 +14,7 @@ func TestVerifyOriginAllowsSameOrigin(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := verifyOrigin("https://app.example.com", next)
+	h := verifyOrigin([]string{"https://app.example.com"}, next)
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/account/profile", strings.NewReader(`{}`))
 	req.Header.Set("Origin", "https://app.example.com")
@@ -31,7 +31,7 @@ func TestVerifyOriginRejectsCrossOrigin(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("next handler should not have been called")
 	})
-	h := verifyOrigin("https://app.example.com", next)
+	h := verifyOrigin([]string{"https://app.example.com"}, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/sign-out", strings.NewReader(`{}`))
 	req.Header.Set("Origin", "https://evil.example.com")
@@ -50,7 +50,7 @@ func TestVerifyOriginAllowsEmptyOrigin(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := verifyOrigin("https://app.example.com", next)
+	h := verifyOrigin([]string{"https://app.example.com"}, next)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/sites/abc", nil)
 	rec := httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestVerifyOriginSkipsForLocalDev(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := verifyOrigin("", next)
+	h := verifyOrigin(nil, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/sign-in", strings.NewReader(`{}`))
 	req.Header.Set("Origin", "https://anything.example.com")
@@ -87,7 +87,7 @@ func TestVerifyOriginIgnoresSafeMethods(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := verifyOrigin("https://app.example.com", next)
+	h := verifyOrigin([]string{"https://app.example.com"}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/session", nil)
 	req.Header.Set("Origin", "https://evil.example.com")

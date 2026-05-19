@@ -14,12 +14,13 @@ import (
 )
 
 type notification struct {
-	ID         string                  `json:"id"`
-	Type       string                  `json:"type"`
-	ReadAt     *string                 `json:"readAt"`
-	CreatedAt  string                  `json:"createdAt"`
-	Actor      *authorSummary          `json:"actor"`
-	Comment    *notificationCommentRef `json:"comment"`
+	ID        string                  `json:"id"`
+	Type      string                  `json:"type"`
+	ReadAt    *string                 `json:"readAt"`
+	CreatedAt string                  `json:"createdAt"`
+	Actor     *authorSummary          `json:"actor"`
+	GuestName *string                 `json:"guestName"`
+	Comment   *notificationCommentRef `json:"comment"`
 }
 
 type notificationCommentRef struct {
@@ -56,11 +57,11 @@ func (app *application) notificationsHandler(w http.ResponseWriter, r *http.Requ
 	rows, err := app.db.Query(r.Context(), `
 		select n.id, n.type, n.read_at, n.created_at,
 		       actor.id, actor.name, actor.username,
-		       c.id, c.body, c.page_path, c.parent_id, c.resolved_at,
+		       c.id, c.body, c.page_path, c.parent_id, c.resolved_at, c.guest_name,
 		       s.id, s.name, s.slug,
 		       o.slug
 		from notifications n
-		join users actor on actor.id = n.actor_id
+		left join users actor on actor.id = n.actor_id
 		left join comments c on c.id = n.comment_id
 		left join sites s on s.id = c.site_id
 		left join organizations o on o.id = s.org_id
@@ -78,25 +79,26 @@ func (app *application) notificationsHandler(w http.ResponseWriter, r *http.Requ
 	notifications := []notification{}
 	for rows.Next() {
 		var (
-			n            notification
-			readAt       sql.NullTime
-			createdAt    time.Time
-			actorID      string
-			actorName    string
-			actorUser    string
-			cID          sql.NullString
-			cBody        sql.NullString
-			cPagePath    sql.NullString
-			cParentID    sql.NullString
-			cResolvedAt  sql.NullTime
-			sID          sql.NullString
-			sName        sql.NullString
-			sSlug        sql.NullString
-			oSlug        sql.NullString
+			n           notification
+			readAt      sql.NullTime
+			createdAt   time.Time
+			actorID     sql.NullString
+			actorName   sql.NullString
+			actorUser   sql.NullString
+			cID         sql.NullString
+			cBody       sql.NullString
+			cPagePath   sql.NullString
+			cParentID   sql.NullString
+			cResolvedAt sql.NullTime
+			cGuestName  sql.NullString
+			sID         sql.NullString
+			sName       sql.NullString
+			sSlug       sql.NullString
+			oSlug       sql.NullString
 		)
 		if err := rows.Scan(&n.ID, &n.Type, &readAt, &createdAt,
 			&actorID, &actorName, &actorUser,
-			&cID, &cBody, &cPagePath, &cParentID, &cResolvedAt,
+			&cID, &cBody, &cPagePath, &cParentID, &cResolvedAt, &cGuestName,
 			&sID, &sName, &sSlug,
 			&oSlug); err != nil {
 			log.Printf("scan notification: %v", err)
@@ -107,7 +109,13 @@ func (app *application) notificationsHandler(w http.ResponseWriter, r *http.Requ
 			n.ReadAt = &s
 		}
 		n.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-		n.Actor = &authorSummary{ID: actorID, Name: actorName, Username: actorUser}
+		if actorID.Valid {
+			n.Actor = &authorSummary{ID: actorID.String, Name: actorName.String, Username: actorUser.String}
+		}
+		if cGuestName.Valid {
+			g := cGuestName.String
+			n.GuestName = &g
+		}
 		if cID.Valid {
 			ref := &notificationCommentRef{
 				ID:       cID.String,

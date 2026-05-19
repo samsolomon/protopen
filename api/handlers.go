@@ -73,6 +73,8 @@ func (app *application) siteByIDHandler(w http.ResponseWriter, r *http.Request) 
 			} else {
 				app.listSiteCommentsHandler(w, r, siteID)
 			}
+		case "mention-candidates":
+			app.mentionCandidatesHandler(w, r, siteID)
 		default:
 			http.NotFound(w, r)
 		}

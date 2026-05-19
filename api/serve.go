@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"log"
@@ -22,13 +23,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-//go:embed comment_mode.js
-var commentModeJS string
+//go:embed comment_runtime.js
+var commentRuntimeJS string
 
-// commentModeScript wraps the embedded client lib in a <script> tag for
-// inline injection. The client postMessages click/navigate/ready events
-// to the dashboard parent frame and renders pins supplied by the parent.
-var commentModeScript = "<script>" + commentModeJS + "</script>"
+// commentRuntimeScriptTag is injected before </body> on every deployed-site
+// HTML response (by default). The runtime is served separately so it can be
+// cached and inspected as a normal JS file in DevTools.
+const commentRuntimeScriptTag = `<script src="/__protopen/comment-runtime.js" defer data-site-org="%s" data-site-slug="%s" data-api-base="%s"></script>`
 
 const privateSiteHTML = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Private Site</title></head>
@@ -39,6 +40,13 @@ const privateSiteHTML = `<!DOCTYPE html>
 func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if r.URL.Path == "/__protopen/comment-runtime.js" {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Write([]byte(commentRuntimeJS))
 		return
 	}
 
@@ -79,10 +87,21 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Inject the comment runtime into HTML by default. Skip injection for:
+	//   - Thumbnail capture requests (carry the internal token).
+	//   - Explicit opt-out via ?protopen-comments=0 (ad-hoc embeds, screenshots).
+	shouldInject := !app.checkThumbnailToken(r) && r.URL.Query().Get("protopen-comments") != "0"
 	target := w
 	var injector *commentScriptWriter
-	if r.URL.Query().Get("protopen-comments") == "1" {
-		injector = &commentScriptWriter{ResponseWriter: w}
+	if shouldInject {
+		apiBase := app.appBaseURL
+		if apiBase == "" {
+			apiBase = "http://" + r.Host
+		}
+		injector = &commentScriptWriter{
+			ResponseWriter: w,
+			scriptTag:      fmt.Sprintf(commentRuntimeScriptTag, html.EscapeString(orgSlug), html.EscapeString(slug), html.EscapeString(apiBase)),
+		}
 		target = injector
 	}
 
@@ -97,8 +116,9 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// commentScriptWriter buffers an HTML response body so the comment-mode script
-// can be injected before </body>. Non-HTML responses pass through untouched.
+// commentScriptWriter buffers an HTML response body so the comment-runtime
+// <script> tag can be injected before </body>. Non-HTML responses pass through
+// untouched. scriptTag is computed per-request with the org/site slugs.
 type commentScriptWriter struct {
 	http.ResponseWriter
 	buf         bytes.Buffer
@@ -106,6 +126,7 @@ type commentScriptWriter struct {
 	isHTML      bool
 	headerSent  bool
 	contentType string
+	scriptTag   string
 }
 
 func (w *commentScriptWriter) WriteHeader(status int) {
@@ -144,7 +165,7 @@ func (w *commentScriptWriter) finalize() {
 	if !w.isHTML {
 		return
 	}
-	body := injectCommentScript(w.buf.Bytes())
+	body := injectCommentScript(w.buf.Bytes(), w.scriptTag)
 	w.ResponseWriter.Header().Del("Content-Length")
 	w.ResponseWriter.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	status := w.status
@@ -155,8 +176,8 @@ func (w *commentScriptWriter) finalize() {
 	w.ResponseWriter.Write(body)
 }
 
-func injectCommentScript(body []byte) []byte {
-	script := []byte(commentModeScript)
+func injectCommentScript(body []byte, scriptTag string) []byte {
+	script := []byte(scriptTag)
 	lower := bytes.ToLower(body)
 	if i := bytes.LastIndex(lower, []byte("</body>")); i >= 0 {
 		out := make([]byte, 0, len(body)+len(script))

@@ -10,36 +10,44 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-const notificationTypeCommentReply = "comment_reply"
 
 type comment struct {
-	ID         string         `json:"id"`
-	SiteID     string         `json:"siteId"`
-	DeployID   string         `json:"deployId"`
-	PagePath   string         `json:"pagePath"`
-	PinX       *float64       `json:"pinX"`
-	PinY       *float64       `json:"pinY"`
-	Body       string         `json:"body"`
-	ParentID   *string        `json:"parentId"`
-	ResolvedAt *string        `json:"resolvedAt"`
-	ResolvedBy *string        `json:"resolvedBy"`
-	CreatedAt  string         `json:"createdAt"`
-	Author     *authorSummary `json:"author"`
+	ID              string         `json:"id"`
+	SiteID          string         `json:"siteId"`
+	DeployID        string         `json:"deployId"`
+	PagePath        string         `json:"pagePath"`
+	PinX            *float64       `json:"pinX"`
+	PinY            *float64       `json:"pinY"`
+	ElementSelector *string        `json:"elementSelector"`
+	ElementOffsetX  *float64       `json:"elementOffsetX"`
+	ElementOffsetY  *float64       `json:"elementOffsetY"`
+	Body            string         `json:"body"`
+	ParentID        *string        `json:"parentId"`
+	ResolvedAt      *string        `json:"resolvedAt"`
+	ResolvedBy      *string        `json:"resolvedBy"`
+	CreatedAt       string         `json:"createdAt"`
+	Author          *authorSummary `json:"author"`
+	GuestName       *string        `json:"guestName"`
 }
 
 type createCommentRequest struct {
-	DeployID string   `json:"deployId,omitempty"`
-	PagePath string   `json:"pagePath"`
-	PinX     *float64 `json:"pinX,omitempty"`
-	PinY     *float64 `json:"pinY,omitempty"`
-	ParentID *string  `json:"parentId,omitempty"`
-	Body     string   `json:"body"`
+	DeployID        string   `json:"deployId,omitempty"`
+	PagePath        string   `json:"pagePath"`
+	PinX            *float64 `json:"pinX,omitempty"`
+	PinY            *float64 `json:"pinY,omitempty"`
+	ParentID        *string  `json:"parentId,omitempty"`
+	Body            string   `json:"body"`
+	GuestName       string   `json:"guestName,omitempty"`
+	ElementSelector string   `json:"elementSelector,omitempty"`
+	ElementOffsetX  *float64 `json:"elementOffsetX,omitempty"`
+	ElementOffsetY  *float64 `json:"elementOffsetY,omitempty"`
 }
 
 // listSiteCommentsHandler: GET /api/sites/:siteID/comments
@@ -53,14 +61,28 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	user, err := app.requireSessionUser(r)
+
+	meta, err := app.loadSiteMeta(r.Context(), siteID)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 		return
 	}
-	if _, _, err := app.requireSiteAccess(r.Context(), user, siteID); err != nil {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-		return
+
+	// Guests can read comments on public sites; signed-in users get the same
+	// view scoped by org membership. Private sites require membership.
+	user, sessErr := app.requireSessionUser(r)
+	if sessErr != nil {
+		if !meta.IsPublic {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+	} else {
+		if _, _, err := app.requireSiteAccess(r.Context(), user, siteID); err != nil {
+			if !meta.IsPublic {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+				return
+			}
+		}
 	}
 
 	q := r.URL.Query()
@@ -99,11 +121,12 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	query := fmt.Sprintf(`
-		select c.id, c.site_id, c.deploy_id, c.page_path, c.pin_x, c.pin_y, c.body,
-		       c.parent_id, c.resolved_at, c.resolved_by, c.created_at,
-		       u.id, u.name, u.username
+		select c.id, c.site_id, c.deploy_id, c.page_path, c.pin_x, c.pin_y,
+		       c.element_selector, c.element_offset_x, c.element_offset_y,
+		       c.body, c.parent_id, c.resolved_at, c.resolved_by, c.created_at,
+		       u.id, u.name, u.username, c.guest_name
 		from comments c
-		join users u on u.id = c.user_id
+		left join users u on u.id = c.user_id
 		where c.site_id = $1 and c.deploy_id = $2 %s %s
 		order by c.created_at asc
 	`, statusClause, pagePathClause)
@@ -119,20 +142,25 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 	comments := []comment{}
 	for rows.Next() {
 		var (
-			c           comment
-			pinX        sql.NullFloat64
-			pinY        sql.NullFloat64
-			parentID    sql.NullString
-			resolvedAt  sql.NullTime
-			resolvedBy  sql.NullString
-			createdAt   time.Time
-			authorID    string
-			authorName  string
-			authorUser  string
+			c              comment
+			pinX           sql.NullFloat64
+			pinY           sql.NullFloat64
+			elementSel     sql.NullString
+			elementOffsetX sql.NullFloat64
+			elementOffsetY sql.NullFloat64
+			parentID       sql.NullString
+			resolvedAt     sql.NullTime
+			resolvedBy     sql.NullString
+			createdAt      time.Time
+			authorID       sql.NullString
+			authorName     sql.NullString
+			authorUser     sql.NullString
+			guestName      sql.NullString
 		)
-		if err := rows.Scan(&c.ID, &c.SiteID, &c.DeployID, &c.PagePath, &pinX, &pinY, &c.Body,
-			&parentID, &resolvedAt, &resolvedBy, &createdAt,
-			&authorID, &authorName, &authorUser); err != nil {
+		if err := rows.Scan(&c.ID, &c.SiteID, &c.DeployID, &c.PagePath, &pinX, &pinY,
+			&elementSel, &elementOffsetX, &elementOffsetY,
+			&c.Body, &parentID, &resolvedAt, &resolvedBy, &createdAt,
+			&authorID, &authorName, &authorUser, &guestName); err != nil {
 			log.Printf("scan comment: %v", err)
 			continue
 		}
@@ -143,6 +171,18 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 		if pinY.Valid {
 			y := pinY.Float64
 			c.PinY = &y
+		}
+		if elementSel.Valid {
+			s := elementSel.String
+			c.ElementSelector = &s
+		}
+		if elementOffsetX.Valid {
+			x := elementOffsetX.Float64
+			c.ElementOffsetX = &x
+		}
+		if elementOffsetY.Valid {
+			y := elementOffsetY.Float64
+			c.ElementOffsetY = &y
 		}
 		if parentID.Valid {
 			p := parentID.String
@@ -157,7 +197,13 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 			c.ResolvedBy = &s
 		}
 		c.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-		c.Author = &authorSummary{ID: authorID, Name: authorName, Username: authorUser}
+		if authorID.Valid {
+			c.Author = &authorSummary{ID: authorID.String, Name: authorName.String, Username: authorUser.String}
+		}
+		if guestName.Valid {
+			g := guestName.String
+			c.GuestName = &g
+		}
 		comments = append(comments, c)
 	}
 
@@ -165,19 +211,61 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 }
 
 // createSiteCommentHandler: POST /api/sites/:siteID/comments
+//
+// Accepts both authenticated (org member) and guest (name-only) commenters.
+// Guests can only comment on public sites. Cross-origin requests carrying
+// credentials must include X-Protopen-Client: runtime — the custom header
+// forces a CORS preflight that a malicious cross-site form cannot satisfy.
 func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	user, err := app.requireSessionUser(r)
+
+	if app.commentLimiter != nil {
+		ip := clientIP(r, app.trustedProxyHeader)
+		allowed, retryAfter := app.commentLimiter.allow(ip)
+		if !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit exceeded, try again later"})
+			return
+		}
+	}
+
+	meta, err := app.loadSiteMeta(r.Context(), siteID)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
 		return
 	}
-	if _, _, err := app.requireSiteAccess(r.Context(), user, siteID); err != nil {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+
+	// CSRF defense: when the request comes from the content origin (where the
+	// injected runtime runs), require the custom X-Protopen-Client header. A
+	// custom header forces a CORS preflight that a malicious cross-site form
+	// cannot satisfy. The dashboard's frontendOrigin and the canonical
+	// appOrigin are trusted (under our control, protected by SameSite=Lax).
+	// Empty Origin (non-browser clients like the CLI) carries Bearer auth.
+	origin := r.Header.Get("Origin")
+	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
+	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing client header"})
 		return
+	}
+
+	user, sessErr := app.requireSessionUser(r)
+	isGuest := sessErr != nil
+	switch {
+	case isGuest && !meta.IsPublic:
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	case !isGuest:
+		if _, _, err := app.requireSiteAccess(r.Context(), user, siteID); err != nil {
+			if !meta.IsPublic {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+				return
+			}
+			// Signed-in user without org access on a public site comments as a guest.
+			isGuest = true
+		}
 	}
 
 	var req createCommentRequest
@@ -193,6 +281,15 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	if len(body) > 8000 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body too long"})
 		return
+	}
+
+	guestName := ""
+	if isGuest {
+		guestName = sanitizeGuestName(req.GuestName)
+		if guestName == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "guestName required"})
+			return
+		}
 	}
 
 	tx, err := app.db.BeginTx(r.Context(), pgx.TxOptions{})
@@ -242,10 +339,37 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	commentID := generateID("cm")
 	now := time.Now().UTC()
 
+	var userIDArg, guestNameArg, guestFPArg *string
+	if isGuest {
+		guestNameArg = &guestName
+		fp := guestFingerprint(clientIP(r, app.trustedProxyHeader), r.UserAgent(), siteID)
+		guestFPArg = &fp
+	} else {
+		userIDArg = &user.ID
+	}
+
+	var elementSelectorArg *string
+	if s := strings.TrimSpace(req.ElementSelector); s != "" {
+		if len(s) > 200 {
+			s = s[:200]
+		}
+		elementSelectorArg = &s
+	}
+
 	if _, err := tx.Exec(r.Context(), `
-		insert into comments (id, site_id, deploy_id, user_id, page_path, pin_x, pin_y, body, parent_id, created_at, updated_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-	`, commentID, siteID, deployID, user.ID, req.PagePath, req.PinX, req.PinY, body, req.ParentID, now); err != nil {
+		insert into comments (
+			id, site_id, deploy_id, user_id, page_path,
+			pin_x, pin_y, body, parent_id,
+			guest_name, guest_fingerprint,
+			element_selector, element_offset_x, element_offset_y,
+			created_at, updated_at
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
+	`, commentID, siteID, deployID, userIDArg, req.PagePath,
+		req.PinX, req.PinY, body, req.ParentID,
+		guestNameArg, guestFPArg,
+		elementSelectorArg, req.ElementOffsetX, req.ElementOffsetY,
+		now); err != nil {
 		log.Printf("insert comment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create comment"})
 		return
@@ -256,47 +380,76 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		subscriptionRoot = commentID
 	}
 
-	if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
-		log.Printf("subscribe author: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create comment"})
-		return
+	// Author auto-subscribes to the thread, but only when signed in (guests
+	// have no inbox to receive replies in).
+	if !isGuest {
+		if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
+			log.Printf("subscribe author: %v", err)
+		}
 	}
 
-	// Top-level comments also subscribe the site owner so they hear about
-	// activity on their work even if they did not participate in the thread.
-	if rootID == "" {
-		var siteOwner *string
-		if err := tx.QueryRow(r.Context(), `select created_by from sites where id = $1`, siteID).Scan(&siteOwner); err == nil && siteOwner != nil && *siteOwner != user.ID {
-			if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, *siteOwner); err != nil {
-				log.Printf("subscribe site owner: %v", err) // non-fatal: comment is inserted
+	// Fan-out: union of thread subscribers (replies only) and site
+	// subscribers (every comment). Mentions override the notification type
+	// for the mentioned user and also subscribe them to the thread.
+	recipients := map[string]string{}
+
+	var rootArg *string
+	if rootID != "" {
+		rootArg = &rootID
+	}
+	subRows, err := tx.Query(r.Context(), `
+		select user_id from site_subscriptions where site_id = $1
+		union
+		select user_id from comment_subscriptions where $2::text is not null and comment_id = $2
+	`, siteID, rootArg)
+	if err == nil {
+		for subRows.Next() {
+			var uid string
+			if err := subRows.Scan(&uid); err != nil {
+				continue
+			}
+			recipients[uid] = notificationTypeCommentReply
+		}
+		subRows.Close()
+	} else {
+		log.Printf("fan-out subs: %v", err)
+	}
+
+	if mentions := parseMentions(body); len(mentions) > 0 {
+		mentionedIDs, err := resolveMentionUserIDs(r.Context(), tx, meta.OrgID, mentions)
+		if err != nil {
+			log.Printf("resolve mentions: %v", err)
+		}
+		for _, uid := range mentionedIDs {
+			recipients[uid] = notificationTypeCommentMention
+			if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, uid); err != nil {
+				log.Printf("subscribe mentioned: %v", err)
 			}
 		}
 	}
 
-	if rootID != "" {
-		subRows, err := tx.Query(r.Context(), `
-			select user_id from comment_subscriptions where comment_id = $1 and user_id != $2
-		`, rootID, user.ID)
-		if err != nil {
-			log.Printf("fan-out query: %v", err)
-		} else {
-			defer subRows.Close()
-			recipients := []string{}
-			for subRows.Next() {
-				var uid string
-				if err := subRows.Scan(&uid); err != nil {
-					continue
-				}
-				recipients = append(recipients, uid)
-			}
-			for _, uid := range recipients {
-				if _, err := tx.Exec(r.Context(), `
-					insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at)
-					values ($1, $2, $3, $4, $5, $6)
-				`, generateID("notif"), uid, user.ID, notificationTypeCommentReply, commentID, now); err != nil {
-					log.Printf("create notification: %v", err)
-				}
-			}
+	if !isGuest {
+		delete(recipients, user.ID)
+	}
+
+	if len(recipients) > 0 {
+		var actorIDArg *string
+		if !isGuest {
+			actorIDArg = &user.ID
+		}
+		var (
+			args         []any
+			placeholders []string
+		)
+		i := 1
+		for uid, ntype := range recipients {
+			placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
+			args = append(args, generateID("notif"), uid, actorIDArg, ntype, commentID, now)
+			i += 6
+		}
+		query := "insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at) values " + strings.Join(placeholders, ", ")
+		if _, err := tx.Exec(r.Context(), query, args...); err != nil {
+			log.Printf("create notifications: %v", err)
 		}
 	}
 
@@ -306,24 +459,126 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"comment": comment{
-			ID:        commentID,
-			SiteID:    siteID,
-			DeployID:  deployID,
-			PagePath:  req.PagePath,
-			PinX:      req.PinX,
-			PinY:      req.PinY,
-			Body:      body,
-			ParentID:  req.ParentID,
-			CreatedAt: now.Format(time.RFC3339),
-			Author: &authorSummary{
-				ID:       user.ID,
-				Name:     user.Name,
-				Username: user.Username,
-			},
-		},
+	resp := comment{
+		ID:        commentID,
+		SiteID:    siteID,
+		DeployID:  deployID,
+		PagePath:  req.PagePath,
+		PinX:      req.PinX,
+		PinY:      req.PinY,
+		Body:      body,
+		ParentID:  req.ParentID,
+		CreatedAt: now.Format(time.RFC3339),
+	}
+	resp.ElementSelector = elementSelectorArg
+	resp.ElementOffsetX = req.ElementOffsetX
+	resp.ElementOffsetY = req.ElementOffsetY
+	if isGuest {
+		gn := guestName
+		resp.GuestName = &gn
+	} else {
+		resp.Author = &authorSummary{
+			ID:       user.ID,
+			Name:     user.Name,
+			Username: user.Username,
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"comment": resp})
+}
+
+// commentContextHandler: GET /api/sites/by-slug/:org/:slug/comment-context
+//
+// Bootstrap endpoint for the injected runtime, which only knows the URL
+// slugs. Returns the siteID + current deployID so subsequent comment API
+// calls can use the ID-keyed endpoints.
+func (app *application) commentContextHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/api/sites/by-slug/")
+	rest = strings.Trim(rest, "/")
+	parts := strings.Split(rest, "/")
+	if len(parts) < 3 || parts[2] != "comment-context" {
+		http.NotFound(w, r)
+		return
+	}
+	orgSlug, siteSlug := parts[0], parts[1]
+	if orgSlug == "" || siteSlug == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid slug"})
+		return
+	}
+	meta, deployID, err := app.loadSiteMetaBySlug(r.Context(), orgSlug, siteSlug)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
+		return
+	}
+	// For private sites, only return context to org members so anonymous
+	// visitors can't enumerate site IDs.
+	if !meta.IsPublic {
+		user, sessErr := app.requireSessionUser(r)
+		if sessErr != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+		if _, _, err := app.requireSiteAccess(r.Context(), user, meta.ID); err != nil {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"siteId":   meta.ID,
+		"deployId": deployID,
+		"isPublic": meta.IsPublic,
+		"siteName": meta.Name,
 	})
+}
+
+// mentionCandidatesHandler: GET /api/sites/:siteID/mention-candidates?q=...
+//
+// Returns up to 10 org members whose username starts with q. Auth required:
+// only signed-in org members can mention. Guests get a 401 — the runtime
+// should hide the autocomplete UI for them.
+func (app *application) mentionCandidatesHandler(w http.ResponseWriter, r *http.Request, siteID string) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	prefix := q + "%"
+	rows, err := app.db.Query(r.Context(), `
+		select u.id, u.name, u.username
+		from users u
+		join org_members m on m.user_id = u.id
+		where m.org_id = $1 and lower(u.username) like $2
+		order by u.username
+		limit 10
+	`, orgID, prefix)
+	if err != nil {
+		log.Printf("mention candidates: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load candidates"})
+		return
+	}
+	defer rows.Close()
+	out := []authorSummary{}
+	for rows.Next() {
+		var a authorSummary
+		if err := rows.Scan(&a.ID, &a.Name, &a.Username); err != nil {
+			continue
+		}
+		out = append(out, a)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"candidates": out})
 }
 
 func upsertCommentSubscription(ctx context.Context, tx pgx.Tx, commentID, userID string) error {
@@ -372,7 +627,7 @@ func (app *application) deleteCommentHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	var (
-		authorID string
+		authorID sql.NullString
 		siteID   string
 	)
 	if err := app.db.QueryRow(r.Context(), `select user_id, site_id from comments where id = $1`, commentID).Scan(&authorID, &siteID); err != nil {
@@ -390,7 +645,8 @@ func (app *application) deleteCommentHandler(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
 	}
-	if user.ID != authorID && role != roleAdmin {
+	isAuthor := authorID.Valid && authorID.String == user.ID
+	if !isAuthor && role != roleAdmin {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the comment author or an org admin can delete this"})
 		return
 	}

@@ -253,15 +253,11 @@ export function Dashboard({
     const focus = params.get('focus')
     return (
       <CommentsOverlay
-        siteID={target.id}
         orgSlug={target.orgSlug}
         siteSlug={target.slug}
         siteName={target.name}
-        currentUserID={user.id}
-        isOrgAdmin={isOrgAdmin}
         focusCommentID={focus}
         onBack={() => switchView('dashboard')}
-        onSessionExpired={onSessionExpired}
       />
     )
   }
