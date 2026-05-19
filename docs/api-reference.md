@@ -325,12 +325,42 @@ deploys that have not yet been captured return 404.
 ## Comments
 
 Comments are pinned to a specific page on a specific deploy. They form
-single-level threads (a root comment plus replies). Any org member can
-post or resolve. Only the comment author or an org admin can delete.
+single-level threads (a root comment plus replies). Posting is open to
+signed-in org members and, on public sites, to anonymous guests
+identified by a display name. Only the comment author or an org admin
+can delete; any member can toggle resolve.
+
+A Figma-style runtime is injected into every deployed HTML response and
+renders the comment overlay (Browse/Comment toggle, pin layer, side
+panel, composer with `@mention` autocomplete) directly on the live URL.
+Injection is skipped for thumbnail-token requests and when
+`?protopen-comments=0` is set. The runtime is served at
+`GET /__protopen/comment-runtime.js` from the content origin.
+
+### `GET /api/sites/by-slug/{orgSlug}/{siteSlug}/comment-context`
+
+Bootstrap endpoint for the injected runtime. Returns the IDs the
+slug-only context needs to call the other comment endpoints.
+
+No auth required for public sites; org membership required for private.
+
+**Response (200):**
+```json
+{
+  "siteId": "site_...",
+  "deployId": "dep_...",
+  "isPublic": true,
+  "siteName": "Mobile Nav"
+}
+```
+
+**Status codes:** `200` ok, `401` private site without session, `403`
+private site, signed in but not a member, `404` site not found.
 
 ### `GET /api/sites/{siteID}/comments`
 
-Auth required. Caller must be a member of the site's org.
+Signed-in org members can read on any site. Guests (no session) can read
+on public sites only.
 
 **Query params:**
 - `deployId` (optional) — defaults to the site's current deploy.
@@ -348,25 +378,34 @@ Auth required. Caller must be a member of the site's org.
       "pagePath": "/",
       "pinX": 0.5,
       "pinY": 0.4,
+      "elementSelector": "[data-testid=\"cta\"]",
+      "elementOffsetX": 0.5,
+      "elementOffsetY": 0.5,
       "body": "Move this CTA above the fold",
       "parentId": null,
       "resolvedAt": null,
       "resolvedBy": null,
       "createdAt": "2026-05-18T19:30:00Z",
-      "author": {"id": "usr_...", "name": "Jane Chen", "username": "jane"}
+      "author": {"id": "usr_...", "name": "Jane Chen", "username": "jane"},
+      "guestName": null
     }
   ]
 }
 ```
 
-Replies have a non-null `parentId` pointing at the root comment. Pin
-coordinates (`pinX`, `pinY`) are document-relative percentages in `[0,1]`
-captured by the comment-mode script injected when the deployed site is
-loaded with `?protopen-comments=1`.
+Replies have a non-null `parentId` pointing at the root comment.
+`author` is null for guest-authored comments; `guestName` carries the
+display name they typed. The two are mutually exclusive.
+
+Pin anchoring is a DOM `elementSelector` plus normalized offset within
+that element (`elementOffsetX`/`elementOffsetY` in `[0,1]`). When the
+selector can't be resolved at render time, the runtime falls back to
+the legacy document-relative `pinX`/`pinY` percentages.
 
 ### `POST /api/sites/{siteID}/comments`
 
-Auth required. Caller must be a member of the site's org.
+Open to signed-in org members on any site, and to guests on public sites
+(provide `guestName`). Rate-limited per client IP.
 
 **Request:**
 ```json
@@ -375,29 +414,69 @@ Auth required. Caller must be a member of the site's org.
   "pagePath": "/",
   "pinX": 0.5,
   "pinY": 0.4,
+  "elementSelector": "[data-testid=\"cta\"]",
+  "elementOffsetX": 0.5,
+  "elementOffsetY": 0.5,
   "parentId": null,
-  "body": "Move this CTA above the fold"
+  "body": "Move this CTA above the fold @jane",
+  "guestName": "Sam Tester"
 }
 ```
-`deployId` is optional and defaults to the site's current deploy.
-`parentId` is optional and indicates a reply.
+
+- `deployId` is optional and defaults to the site's current deploy.
+- `parentId` is optional and indicates a reply.
+- `guestName` is required for guest posts; ignored when signed in.
+- `elementSelector` / `elementOffsetX` / `elementOffsetY` are optional;
+  the runtime captures them at click time. `pinX` / `pinY` are kept as
+  a fallback.
+
+**Header:** `X-Protopen-Client: runtime` is required on cross-origin
+requests (i.e. POSTs from the deployed-site origin). Same-origin
+requests from the dashboard and API origin do not need it.
 
 **Response (201):** `{ "comment": {...} }` with the same shape as the
 list response.
 
-On insert the author auto-subscribes to the root comment. For a top-level
-comment, the site's `createdBy` is also auto-subscribed if different from
-the author. Replies fan out notifications to every subscriber of the root
-except the reply's author.
+**Fan-out:**
+- Site owner is auto-subscribed to every comment on their site via the
+  `site_subscriptions` table (seeded on site creation).
+- Authors auto-subscribe to threads they create or reply to.
+- `@username` mentions resolved against org members fire a
+  `comment_mention` notification and auto-subscribe the mentioned user
+  to the thread.
+- Every notification recipient gets one row in a single multi-row
+  insert. The author never notifies themselves.
 
-**Status codes:** `201` created, `400` invalid (missing body, parent
-belongs to a different site, deploy not on this site), `401`
-unauthenticated, `403` not a member of the org.
+**Status codes:** `201` created, `400` invalid (missing body, missing
+`guestName` for guest, parent belongs to a different site, deploy not
+on this site), `401` private site without session, `403` cross-origin
+without the runtime header, `429` rate limited.
+
+### `GET /api/sites/{siteID}/mention-candidates`
+
+Returns up to 10 org members whose username starts with `q`, for the
+`@mention` autocomplete in the runtime composer.
+
+Auth required: signed-in org member. Guests get 401.
+
+**Query params:**
+- `q` (optional) — case-insensitive prefix.
+
+**Response (200):**
+```json
+{
+  "candidates": [
+    {"id": "usr_...", "name": "Jane Chen", "username": "jane"}
+  ]
+}
+```
 
 ### `DELETE /api/comments/{commentID}`
 
 Auth required. Caller must be the comment author or an org admin.
-Hard-deletes the row; replies cascade via FK.
+Guest-authored comments can only be deleted by an admin (guests cannot
+sign in to delete their own). Hard-deletes the row; replies cascade
+via FK.
 
 **Status codes:** `200` ok, `403` forbidden, `404` not found.
 
@@ -413,8 +492,10 @@ clears the resolution.
 
 ## Notifications
 
-The notifications table is comment-driven for the MVP. A row appears
-when someone replies to a thread you're subscribed to.
+The notifications table is comment-driven. A row appears when someone
+replies to a thread you're subscribed to, when a comment lands on a site
+you own (via `site_subscriptions`), or when you're `@mentioned` in a
+comment body.
 
 ### `GET /api/notifications`
 
@@ -433,6 +514,7 @@ Auth required.
       "readAt": null,
       "createdAt": "2026-05-18T19:30:00Z",
       "actor": {"id": "usr_...", "name": "Alex Rivera", "username": "alex"},
+      "guestName": null,
       "comment": {
         "id": "cm_reply",
         "body": "Agreed — moving it now",
@@ -450,7 +532,14 @@ Auth required.
 }
 ```
 
-Capped at 100 most recent.
+**Notification types:**
+- `comment_reply` — fired for thread subscribers and site-level
+  subscribers when any comment is posted.
+- `comment_mention` — fired for users named in `@mentions`; takes
+  precedence over `comment_reply` for the same recipient.
+
+For guest-authored comments, `actor` is null and `guestName` carries
+the display name. Capped at 100 most recent.
 
 ### `POST /api/notifications/{notificationID}/read`
 
@@ -825,6 +914,11 @@ are intentionally narrow:
 | Password minimum | 8 characters |
 | Email verification token expiry | 24 hours |
 | Password reset token expiry | 1 hour |
+| Comment body max | 8,000 characters |
+| Guest name max | 60 characters |
+| Mention `@username` pattern | `[a-zA-Z0-9_-]{2,32}` |
+| Element selector max | 200 characters |
+| Comment POST rate limit | 20/minute per IP |
 
 ## Miscellaneous
 

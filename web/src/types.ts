@@ -26,21 +26,6 @@ export type CommentAuthor = {
   username: string
 }
 
-export type SiteComment = {
-  id: string
-  siteId: string
-  deployId: string
-  pagePath: string
-  pinX: number | null
-  pinY: number | null
-  body: string
-  parentId: string | null
-  resolvedAt: string | null
-  resolvedBy: string | null
-  createdAt: string
-  author: CommentAuthor | null
-}
-
 export type Notification = {
   id: string
   type: string
