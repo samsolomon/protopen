@@ -589,8 +589,18 @@
   }
   function openThread(rootId, pinEl) {
     closeThread();
-    var root = state.comments.find(function (c) { return c.id === rootId; });
-    if (!root) return;
+    var found = state.comments.find(function (c) { return c.id === rootId; });
+    if (!found) return;
+    // Deep-links from inbox notifications can point at a reply, not the root.
+    // Walk up to the root so the popover anchors to the thread's pin.
+    if (found.parentId) {
+      var parent = state.comments.find(function (c) { return c.id === found.parentId; });
+      if (parent) {
+        rootId = parent.id;
+        found = parent;
+      }
+    }
+    var root = found;
     if (!pinEl) pinEl = pinLayer.querySelector('[data-comment-id="' + rootId + '"]');
     state.activeThreadId = rootId;
 
