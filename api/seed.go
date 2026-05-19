@@ -120,7 +120,144 @@ func (app *application) seedDemoData(ctx context.Context) error {
 		}
 	}
 
+	if err := seedSiteComments(ctx, tx, orgID, userID, teammateIDs); err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
+}
+
+// seedSiteComments wipes any existing comments + notifications on demo sites
+// and reseeds a small, realistic thread per site with valid pin coordinates.
+// Idempotent: safe to run on every startup.
+func seedSiteComments(ctx context.Context, tx pgx.Tx, orgID, userID string, teammateIDs map[string]string) error {
+	// Per-site seed threads. pinX/pinY are normalized [0,1] page coords; the
+	// runtime accepts them directly. elementSelector is intentionally omitted
+	// so the seed never relies on selectors that may not exist in deploy HTML.
+	type seedReply struct {
+		author, body string
+	}
+	type seedThread struct {
+		author, body string
+		pinX, pinY   float64
+		replies      []seedReply
+	}
+	// At least one thread per site is authored by the demo user so teammates'
+	// replies create notifications for demo — populates the inbox out of the
+	// box when you sign in as the seeded demo account.
+	siteThreads := map[string][]seedThread{
+		"mobile-nav": {
+			{"demo", "Should we lock the hamburger when the drawer is open?", 0.18, 0.22, []seedReply{
+				{"jane", "Good call — trap focus inside it and we're set."},
+				{"alex", "+1, also fade the page behind it for clarity."},
+			}},
+			{"alex", "Bottom safe area on iPhone 15 looked off in QA — can you verify?", 0.42, 0.78, nil},
+			{"morgan", "The signed-in avatar shouldn't show on the public marketing page.", 0.72, 0.84, []seedReply{
+				{"demo", "Splitting that into a separate component this week."},
+			}},
+		},
+		"pricing-page": {
+			{"demo", "Should the annual/monthly toggle default to annual?", 0.5, 0.18, []seedReply{
+				{"morgan", "Annual feels right — bigger commitment, less churn."},
+			}},
+			{"jane", "Enterprise tier needs a 'Contact sales' CTA, not 'Get started'.", 0.84, 0.55, []seedReply{
+				{"alex", "Updated — wired it to mailto for now."},
+			}},
+		},
+		"ai-signup-flow": {
+			{"demo", "Step indicator state mismatches the form — should I flip the highlight?", 0.78, 0.32, []seedReply{
+				{"alex", "Yes — easier to update the indicator than the form logic."},
+			}},
+			{"jane", "The Google OAuth button is missing the Google G icon.", 0.78, 0.74, []seedReply{
+				{"demo", "Will add the official asset before the next deploy."},
+			}},
+		},
+		"product-teardown": {
+			{"demo", "Pin 4 covers the CTA — should I offset it further right?", 0.82, 0.62, []seedReply{
+				{"jane", "Yeah, shift it ~24px right and it stops occluding."},
+			}},
+		},
+		"dashboard-widgets": {
+			{"demo", "Avg preview time KPI should be green when it drops, not red.", 0.62, 0.30, []seedReply{
+				{"morgan", "Lower-is-better metrics need their own delta-direction flag — agreed."},
+			}},
+		},
+	}
+
+	authorIDs := map[string]string{"demo": userID}
+	for username, id := range teammateIDs {
+		authorIDs[username] = id
+	}
+
+	for slug, threads := range siteThreads {
+		var siteID, deployID string
+		err := tx.QueryRow(ctx, `
+			select p.id, p.current_deploy_id
+			from sites p
+			where p.org_id = $1 and p.slug = $2 and p.deleted_at is null
+		`, orgID, slug).Scan(&siteID, &deployID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if deployID == "" {
+			continue
+		}
+
+		// Wipe comments + notifications on this site. notifications has FK on
+		// comments(id) so its rows go via the cascade in the migration.
+		if _, err := tx.Exec(ctx, `delete from comments where site_id = $1`, siteID); err != nil {
+			return err
+		}
+
+		pagePath := fmt.Sprintf("/~%s/%s/", demoUsername, slug)
+		now := time.Now().UTC()
+		for i, thread := range threads {
+			rootAuthorID := authorIDs[thread.author]
+			if rootAuthorID == "" {
+				continue
+			}
+			rootID := generateID("cm")
+			rootCreated := now.Add(-time.Duration(len(threads)-i) * time.Hour)
+			if _, err := tx.Exec(ctx, `
+				insert into comments (id, site_id, deploy_id, user_id, page_path, pin_x, pin_y, body, created_at, updated_at)
+				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+			`, rootID, siteID, deployID, rootAuthorID, pagePath, thread.pinX, thread.pinY, thread.body, rootCreated); err != nil {
+				return err
+			}
+			if err := upsertCommentSubscription(ctx, tx, rootID, rootAuthorID); err != nil {
+				return err
+			}
+			for ri, reply := range thread.replies {
+				replyAuthorID := authorIDs[reply.author]
+				if replyAuthorID == "" {
+					continue
+				}
+				replyID := generateID("cm")
+				replyCreated := rootCreated.Add(time.Duration(ri+1) * 15 * time.Minute)
+				if _, err := tx.Exec(ctx, `
+					insert into comments (id, site_id, deploy_id, user_id, page_path, body, parent_id, created_at, updated_at)
+					values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+				`, replyID, siteID, deployID, replyAuthorID, pagePath, reply.body, rootID, replyCreated); err != nil {
+					return err
+				}
+				// Notify the root author when someone else replies; gives the
+				// inbox content out of the box.
+				if replyAuthorID != rootAuthorID {
+					notifID := generateID("ntf")
+					if _, err := tx.Exec(ctx, `
+						insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at)
+						values ($1, $2, $3, 'comment_reply', $4, $5)
+					`, notifID, rootAuthorID, replyAuthorID, replyID, replyCreated); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func ensureDemoUser(ctx context.Context, tx pgx.Tx) (string, string, error) {
