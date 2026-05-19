@@ -246,7 +246,7 @@ func seedSiteComments(ctx context.Context, tx pgx.Tx, orgID, userID string, team
 				// Notify the root author when someone else replies; gives the
 				// inbox content out of the box.
 				if replyAuthorID != rootAuthorID {
-					notifID := generateID("ntf")
+					notifID := generateID("notif")
 					if _, err := tx.Exec(ctx, `
 						insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at)
 						values ($1, $2, $3, 'comment_reply', $4, $5)

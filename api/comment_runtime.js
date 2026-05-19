@@ -26,6 +26,7 @@
   }
 
   var TOPBAR_H = 40;
+  var HASH_PREFIX = 'protopen-comment=';
 
   // ---------- state ----------
   var state = {
@@ -47,9 +48,8 @@
   host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646';
   document.documentElement.appendChild(host);
 
-  // Shift the page content down so the fixed topbar doesn't cover the site's
-  // own nav. Use padding-top, not margin-top: body's margin-top collapses
-  // through to <html> and won't actually move static-positioned content.
+  // padding-top, not margin-top: body's margin-top collapses through to
+  // <html> and won't actually move static-positioned content down.
   function applyBodyShift() {
     if (!document.body) return;
     if (document.body.dataset.protopenShifted) return;
@@ -213,23 +213,19 @@
     api('/api/session').then(function (s) { if (s && s.user) state.user = s.user; }).catch(function () {});
   }
 
-  // Open the popover for the comment named in the URL hash, if any. Called
-  // once after the first comment load and again on hashchange. Silently
-  // no-ops if the comment isn't on this page (no pin rendered).
   function focusHashThread() {
     if (!state.activeThreadId) return;
     openThread(state.activeThreadId, null);
   }
 
-  // Pull deploys list and render the version selector. Silently no-ops for
-  // signed-out visitors (the endpoint requires org membership).
   function loadDeploys() {
     if (!state.siteId) return;
+    // 401s silently for non-members; that's the signal to hide the selector.
     api('/api/sites/' + state.siteId + '/deploys').then(function (resp) {
       var deploys = (resp && resp.deploys) || [];
       if (deploys.length < 2) return;
       renderVersionSelector(deploys);
-    }).catch(function () { /* not a member — hide selector */ });
+    }).catch(function () {});
   }
 
   function siteAssetPath() {
@@ -521,7 +517,7 @@
       copyBtn.textContent = 'Copy link';
       copyBtn.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        var url = location.origin + location.pathname + '#protopen-comment=' + c.id;
+        var url = location.origin + location.pathname + '#' + HASH_PREFIX + c.id;
         var done = function () {
           copyBtn.textContent = 'Copied';
           copyBtn.classList.add('copied');
@@ -798,9 +794,6 @@
   }, true);
 
   // ---------- textarea ergonomics ----------
-  // attachSendButton wires the textarea + send-button pair used by both the
-  // popover reply row and the new-comment composer: the button stays gray
-  // until the textarea has non-empty content, then lights up orange.
   function attachSendButton(textarea, btn, submit) {
     btn.innerHTML = SEND_SVG;
     function sync() { btn.classList.toggle('active', textarea.value.trim().length > 0); }
@@ -941,13 +934,13 @@
   });
   window.addEventListener('popstate', maybeNavigate);
 
-  // Deep-link: highlight a specific comment by hash #protopen-comment=<id>.
   function maybeFocusFromHash() {
-    var m = location.hash.match(/protopen-comment=([a-zA-Z0-9_]+)/);
+    var m = location.hash.match(new RegExp(HASH_PREFIX + '([a-zA-Z0-9_]+)'));
     if (m) state.activeThreadId = m[1];
   }
   maybeFocusFromHash();
-  window.addEventListener('hashchange', function () { maybeFocusFromHash(); renderPins(); focusHashThread(); });
+  // openThread calls renderPins itself, so no separate renderPins here.
+  window.addEventListener('hashchange', function () { maybeFocusFromHash(); focusHashThread(); });
 
   bootstrap();
 })();
