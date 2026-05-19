@@ -55,10 +55,15 @@
     '.pin span { display: block; transform: rotate(45deg); }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
-    '.toggle { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 0; background: #111; color: white; border-radius: 999px; padding: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.35); pointer-events: auto; }' +
-    '.toggle button { background: transparent; color: inherit; border: 0; padding: 8px 16px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; }' +
-    '.toggle button.active { background: #ff8f52; }' +
-    '.toggle .count { display: inline-block; margin-left: 6px; background: rgba(255,255,255,.2); border-radius: 999px; padding: 0 6px; font-size: 11px; }' +
+    '.topbar { position: fixed; top: 0; left: 0; right: 0; height: 40px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
+    '.topbar .brand { display: flex; align-items: center; gap: 8px; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }' +
+    '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
+    '.topbar .toggle-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); padding: 6px 14px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; transition: background .15s, border-color .15s; }' +
+    '.topbar .toggle-btn:hover { border-color: rgba(255,255,255,.4); }' +
+    '.topbar .toggle-btn.active { background: #ff8f52; border-color: #ff8f52; }' +
+    '.topbar .toggle-btn .count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 6px; align-items: center; justify-content: center; background: rgba(255,255,255,.22); border-radius: 999px; font-size: 11px; }' +
+    '.topbar .toggle-btn .count:empty { display: none; }' +
+    '.topbar .shortcut { opacity: .55; font-size: 11px; margin-left: 4px; }' +
     '.sidebar { position: fixed; top: 0; right: 0; width: 360px; max-width: 100vw; height: 100vh; background: white; color: #111; border-left: 1px solid #e5e5e5; box-shadow: -4px 0 24px rgba(0,0,0,.15); pointer-events: auto; transform: translateX(100%); transition: transform .2s ease-out; display: flex; flex-direction: column; }' +
     '.sidebar.open { transform: translateX(0); }' +
     '.sidebar header { padding: 16px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }' +
@@ -88,9 +93,13 @@
     '.guest { color: #888; font-weight: 400; }' +
     '</style>' +
     '<div class="pin-layer"></div>' +
-    '<div class="toggle">' +
-      '<button class="browse-btn">Browse</button>' +
-      '<button class="comment-btn">Comment<span class="count"></span></button>' +
+    '<div class="topbar">' +
+      '<div class="brand">Protopen</div>' +
+      '<button class="toggle-btn" aria-pressed="false">' +
+        '<span class="label">Comments</span>' +
+        '<span class="count"></span>' +
+        '<span class="shortcut">C</span>' +
+      '</button>' +
     '</div>' +
     '<aside class="sidebar">' +
       '<header><strong>Comments</strong><button class="sidebar-close" aria-label="Close">×</button></header>' +
@@ -99,9 +108,8 @@
   );
 
   var pinLayer = shadow.querySelector('.pin-layer');
-  var browseBtn = shadow.querySelector('.browse-btn');
-  var commentBtn = shadow.querySelector('.comment-btn');
-  var countBadge = shadow.querySelector('.toggle .count');
+  var toggleBtn = shadow.querySelector('.toggle-btn');
+  var countBadge = shadow.querySelector('.toggle-btn .count');
   var sidebar = shadow.querySelector('.sidebar');
   var sidebarClose = shadow.querySelector('.sidebar-close');
   var threadsEl = shadow.querySelector('.threads');
@@ -116,15 +124,16 @@
   // ---------- mode + chrome interactions ----------
   function setMode(mode) {
     state.mode = mode === 'comment' ? 'comment' : 'browse';
-    browseBtn.classList.toggle('active', state.mode === 'browse');
-    commentBtn.classList.toggle('active', state.mode === 'comment');
-    cursorStyle.textContent = state.mode === 'comment' ? 'body { cursor: crosshair !important; }' : '';
-    if (state.mode === 'comment') {
-      sidebar.classList.add('open');
-    }
+    var on = state.mode === 'comment';
+    toggleBtn.classList.toggle('active', on);
+    toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    cursorStyle.textContent = on ? 'body { cursor: crosshair !important; }' : '';
+    if (on) sidebar.classList.add('open');
+    else closeComposer();
   }
-  browseBtn.addEventListener('click', function () { setMode('browse'); closeComposer(); });
-  commentBtn.addEventListener('click', function () { setMode('comment'); });
+  toggleBtn.addEventListener('click', function () {
+    setMode(state.mode === 'comment' ? 'browse' : 'comment');
+  });
   sidebarClose.addEventListener('click', function () { sidebar.classList.remove('open'); });
   setMode('browse');
 
@@ -137,7 +146,6 @@
     if (e.composedPath && e.composedPath().some(function (n) { return n && n.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName); })) return;
     if (e.key === 'c' || e.key === 'C') {
       setMode(state.mode === 'comment' ? 'browse' : 'comment');
-      if (state.mode === 'browse') closeComposer();
       e.preventDefault();
     } else if (e.key === 'Escape') {
       if (composerEl) {
