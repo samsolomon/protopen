@@ -230,14 +230,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// The dashboard's frontendOrigin and the canonical appOrigin are trusted
-	// (under our control, protected by SameSite=Lax). Empty Origin (CLI/Bearer)
-	// is allowed through. Anything else (notably the content origin where the
-	// injected runtime runs) must send the custom header.
-	origin := r.Header.Get("Origin")
-	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
-	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing client header"})
+	if !app.requireRuntimeOrigin(w, r) {
 		return
 	}
 
@@ -314,13 +307,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	commentID := generateID("cm")
 	now := time.Now().UTC()
 
-	var elementSelectorArg *string
-	if s := strings.TrimSpace(req.ElementSelector); s != "" {
-		if len(s) > 200 {
-			s = s[:200]
-		}
-		elementSelectorArg = &s
-	}
+	elementSelectorArg := clampSelector(req.ElementSelector)
 
 	if _, err := tx.Exec(r.Context(), `
 		insert into comments (
@@ -571,23 +558,23 @@ func (app *application) commentByIDHandler(w http.ResponseWriter, r *http.Reques
 }
 
 type updateCommentRequest struct {
-	PinX            *float64 `json:"pinX"`
-	PinY            *float64 `json:"pinY"`
-	ElementSelector *string  `json:"elementSelector"`
-	ElementOffsetX  *float64 `json:"elementOffsetX"`
-	ElementOffsetY  *float64 `json:"elementOffsetY"`
+	PinX            *float64 `json:"pinX,omitempty"`
+	PinY            *float64 `json:"pinY,omitempty"`
+	ElementSelector *string  `json:"elementSelector,omitempty"`
+	ElementOffsetX  *float64 `json:"elementOffsetX,omitempty"`
+	ElementOffsetY  *float64 `json:"elementOffsetY,omitempty"`
+	// ClearAnchor unsets element_selector + element_offset_{x,y} in one
+	// shot. The runtime sends this on drag drop so the pin becomes purely
+	// x/y-positioned and gets the dashed "unanchored" outline.
+	ClearAnchor bool `json:"clearAnchor,omitempty"`
 }
 
 // updateCommentHandler: PATCH /api/comments/{commentID}
-// Updates pin position / anchor fields. Author or org admin only.
+// Updates pin position / anchor fields. Author or org admin only. Only
+// fields present in the request body are mutated; omitted fields keep
+// their current values.
 func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Request, commentID string) {
-	// CSRF defense: match the pattern in createSiteCommentHandler. Cross-origin
-	// requests from the runtime must send the custom header; trusted origins
-	// (app + frontend) and empty-Origin clients (CLI) are exempt.
-	origin := r.Header.Get("Origin")
-	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
-	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing client header"})
+	if !app.requireRuntimeOrigin(w, r) {
 		return
 	}
 
@@ -628,27 +615,30 @@ func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Clamp the selector length to match createSiteCommentHandler's policy.
+	// nil pointers mean "field omitted" — COALESCE keeps the current value.
+	// clearAnchor wins over a populated ElementSelector (only one matters in
+	// practice; the runtime never sends both).
 	var selectorArg *string
-	if req.ElementSelector != nil {
-		s := strings.TrimSpace(*req.ElementSelector)
-		if s == "" {
-			selectorArg = nil
-		} else {
-			if len(s) > 200 {
-				s = s[:200]
-			}
-			selectorArg = &s
-		}
+	if req.ClearAnchor {
+		selectorArg = nil
+	} else if req.ElementSelector != nil {
+		selectorArg = clampSelector(*req.ElementSelector)
 	}
 
 	if _, err := app.db.Exec(r.Context(), `
 		update comments
-		set pin_x = $2, pin_y = $3,
-		    element_selector = $4, element_offset_x = $5, element_offset_y = $6,
+		set pin_x = coalesce($2, pin_x),
+		    pin_y = coalesce($3, pin_y),
+		    element_selector = case
+		        when $7::boolean then null
+		        when $4::text is not null then $4
+		        else element_selector
+		    end,
+		    element_offset_x = case when $7::boolean then null else coalesce($5, element_offset_x) end,
+		    element_offset_y = case when $7::boolean then null else coalesce($6, element_offset_y) end,
 		    updated_at = now()
 		where id = $1
-	`, commentID, req.PinX, req.PinY, selectorArg, req.ElementOffsetX, req.ElementOffsetY); err != nil {
+	`, commentID, req.PinX, req.PinY, selectorArg, req.ElementOffsetX, req.ElementOffsetY, req.ClearAnchor); err != nil {
 		log.Printf("update comment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update comment"})
 		return

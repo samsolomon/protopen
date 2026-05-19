@@ -51,13 +51,13 @@
     '<style>' +
     ':host, * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }' +
     '.pin-layer { position: absolute; inset: 0; pointer-events: none; }' +
-    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: #ff8f52; color: white; font: 600 12px/28px system-ui, sans-serif; text-align: center; transform: translate(-14px, -28px) rotate(-45deg); box-shadow: 0 2px 8px rgba(0,0,0,.3); pointer-events: auto; cursor: pointer; transition: transform .15s; }' +
-    '.pin:hover { transform: translate(-14px, -28px) rotate(-45deg) scale(1.1); }' +
+    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: #ff8f52; color: white; font: 600 12px/28px system-ui, sans-serif; text-align: center; --pin-scale: 1; transform: translate(-14px, -28px) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.3); pointer-events: auto; cursor: pointer; transition: transform .15s; }' +
+    '.pin:hover { --pin-scale: 1.1; }' +
     '.pin span { display: block; transform: rotate(45deg); }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
     '.pin.draggable { cursor: grab; }' +
-    '.pin.dragging { opacity: .75; transform: translate(-14px, -28px) rotate(-45deg) scale(1.15) !important; cursor: grabbing; transition: none; z-index: 2147483646; }' +
+    '.pin.dragging { --pin-scale: 1.15; opacity: .75; cursor: grabbing; transition: none; z-index: 2147483646; }' +
     '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
     '.topbar .brand { display: flex; align-items: center; gap: 8px; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }' +
     '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
@@ -352,9 +352,7 @@
           body: JSON.stringify({
             pinX: Math.max(0, Math.min(1, newLeft / w)),
             pinY: Math.max(0, Math.min(1, newTop / h)),
-            elementSelector: null,
-            elementOffsetX: null,
-            elementOffsetY: null,
+            clearAnchor: true,
           }),
         }).then(loadComments).catch(function (err) {
           alert('Failed to move pin: ' + err.message);
@@ -496,14 +494,14 @@
     pop.style.top = top + 'px';
   }
 
-  // Click outside to close
+  // Click outside the popover or any pin closes the thread.
   document.addEventListener('click', function (e) {
     if (!popoverEl) return;
-    if (e.composedPath && e.composedPath().some(function (n) { return n === popoverEl; })) return;
-    if (e.target && e.target.closest && e.target.closest('.pin')) return;
     var path = e.composedPath ? e.composedPath() : [];
     for (var i = 0; i < path.length; i++) {
-      if (path[i] && path[i].classList && path[i].classList.contains('pin')) return;
+      var n = path[i];
+      if (n === popoverEl) return;
+      if (n && n.classList && n.classList.contains('pin')) return;
     }
     closeThread();
   }, true);

@@ -477,21 +477,23 @@ Auth required: signed-in org member. Guests get 401.
 Auth required. Caller must be the comment author or an org admin. Used
 by the runtime to commit a pin drag.
 
-**Request:** (all fields optional; nulls clear the column)
+**Request:** every field is optional; omitted fields are left unchanged.
 ```json
 {
   "pinX": 0.5,
   "pinY": 0.4,
-  "elementSelector": null,
-  "elementOffsetX": null,
-  "elementOffsetY": null
+  "elementSelector": "[data-testid=\"cta\"]",
+  "elementOffsetX": 0.5,
+  "elementOffsetY": 0.5,
+  "clearAnchor": false
 }
 ```
 
-When the runtime drops a dragged pin, it sends new `pinX`/`pinY` and
-explicitly nulls the element anchor — the pin becomes "unanchored"
-(rendered with a dashed outline) until a new comment is created on a
-specific element.
+When the runtime drops a dragged pin it sends `pinX` / `pinY` plus
+`clearAnchor: true`, which unsets `elementSelector` + both offsets in
+one shot. The pin becomes "unanchored" (rendered with a dashed
+outline). `clearAnchor` takes precedence over a populated
+`elementSelector` in the same request.
 
 **Header:** `X-Protopen-Client: runtime` is required on cross-origin
 PATCHes, matching the POST policy.

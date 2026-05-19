@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -120,6 +121,34 @@ func resolveMentionUserIDs(ctx context.Context, tx pgx.Tx, orgID string, usernam
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// clampSelector trims, length-caps, and converts an element selector string
+// to the optional form used by the database (nil for empty, *string for
+// non-empty truncated to 200 chars).
+func clampSelector(raw string) *string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil
+	}
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return &s
+}
+
+// requireRuntimeOrigin enforces the X-Protopen-Client header on cross-origin
+// requests. Same-origin (frontend/app) and empty-Origin (CLI/Bearer) clients
+// pass through. Returns true when the request should proceed; on false the
+// helper has already written the 403 response.
+func (app *application) requireRuntimeOrigin(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
+	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing client header"})
+		return false
+	}
+	return true
 }
 
 // upsertSiteSubscription auto-subscribes a user to all comments on a site.
