@@ -24,6 +24,8 @@
     return parts[1] || '';
   }
 
+  var TOPBAR_H = 40;
+
   // ---------- state ----------
   var state = {
     mode: 'browse',          // 'browse' | 'comment'
@@ -34,7 +36,7 @@
     siteName: '',
     user: null,              // signed-in session user, if any
     pendingPin: null,        // captured but not yet posted
-    activeThreadId: null,    // currently-open thread in sidebar
+    activeThreadId: null,    // currently-open thread popover
     mentionCandidates: [],
   };
 
@@ -54,7 +56,7 @@
     '.pin span { display: block; transform: rotate(45deg); }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
-    '.topbar { position: fixed; top: 0; left: 0; right: 0; height: 40px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
+    '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
     '.topbar .brand { display: flex; align-items: center; gap: 8px; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }' +
     '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
     '.topbar .toggle-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); padding: 6px 14px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; transition: background .15s, border-color .15s; }' +
@@ -73,6 +75,24 @@
     '.composer .signin { font-size: 13px; color: #444; padding: 4px 0 8px; line-height: 1.4; }' +
     '.composer .signin a { color: #ff8f52; font-weight: 600; text-decoration: none; }' +
     '.composer .signin a:hover { text-decoration: underline; }' +
+    '.popover { position: absolute; pointer-events: auto; background: white; color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
+    '.pop-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0 14px; }' +
+    '.pop-header .seq { font-weight: 600; color: #71717a; font-size: 12px; }' +
+    '.pop-body { padding: 12px 14px; max-height: 320px; overflow-y: auto; }' +
+    '.msg { margin-bottom: 10px; }' +
+    '.msg:last-child { margin-bottom: 0; }' +
+    '.msg-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }' +
+    '.avatar { width: 22px; height: 22px; border-radius: 50%; background: #18181b; color: white; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }' +
+    '.msg-author { font-weight: 600; font-size: 12px; }' +
+    '.msg-time { color: #a1a1aa; font-size: 11px; }' +
+    '.msg-body { line-height: 1.5; white-space: pre-wrap; word-break: break-word; }' +
+    '.replies { border-top: 1px solid #f4f4f5; margin-top: 8px; padding-top: 8px; }' +
+    '.reply-msg { margin-bottom: 8px; padding-left: 10px; border-left: 2px solid #e4e4e7; }' +
+    '.reply-msg:last-child { margin-bottom: 0; }' +
+    '.pop-compose { border-top: 1px solid #e4e4e7; padding: 8px 10px; display: flex; align-items: flex-end; gap: 6px; }' +
+    '.pop-compose textarea { flex: 1; border: 0; background: transparent; padding: 6px 0; font-family: inherit; font-size: 12px; resize: none; outline: none; min-height: 18px; max-height: 80px; overflow-y: auto; line-height: 1.4; }' +
+    '.pop-compose .send { width: 28px; height: 28px; border-radius: 50%; background: #e4e4e7; color: #a1a1aa; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
+    '.pop-compose .send.active { background: #ff8f52; color: white; }' +
     '.mentions { position: absolute; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
     '.mentions div { padding: 6px 10px; cursor: pointer; font-size: 13px; }' +
     '.mentions div:hover, .mentions div.selected { background: #f0f7ff; }' +
@@ -126,6 +146,8 @@
     } else if (e.key === 'Escape') {
       if (composerEl) {
         closeComposer();
+      } else if (popoverEl) {
+        closeThread();
       } else if (state.mode === 'comment') {
         setMode('browse');
       } else {
@@ -162,9 +184,9 @@
   }
 
   function loadComments() {
-    if (!state.siteId) return;
+    if (!state.siteId) return Promise.resolve();
     var path = encodeURIComponent(location.pathname);
-    api('/api/sites/' + state.siteId + '/comments?status=all&pagePath=' + path).then(function (resp) {
+    return api('/api/sites/' + state.siteId + '/comments?status=all&pagePath=' + path).then(function (resp) {
       state.comments = resp.comments || [];
       renderPins();
     }).catch(function () {});
@@ -267,13 +289,154 @@
       el.appendChild(inner);
       el.addEventListener('click', function (e) {
         e.stopPropagation();
-        state.activeThreadId = c.id;
-        renderPins();
+        openThread(c.id, el);
       });
       pinLayer.appendChild(el);
     });
     countBadge.textContent = roots.length ? String(roots.length) : '';
   }
+
+  // ---------- thread popover ----------
+  var popoverEl = null;
+  function repliesFor(rootId) {
+    return state.comments.filter(function (c) { return c.parentId === rootId; });
+  }
+  function initial(name) {
+    return (name || '?').charAt(0).toUpperCase();
+  }
+  function relTime(iso) {
+    var t = Date.parse(iso); if (isNaN(t)) return '';
+    var delta = (Date.now() - t) / 1000;
+    if (delta < 60) return 'just now';
+    if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
+    if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
+    return Math.floor(delta / 86400) + 'd ago';
+  }
+  function messageNode(c, isReply) {
+    var msg = document.createElement('div');
+    msg.className = isReply ? 'reply-msg' : 'msg';
+    var head = document.createElement('div');
+    head.className = 'msg-head';
+    var av = document.createElement('div');
+    av.className = 'avatar';
+    var name = c.author ? c.author.name : (c.guestName || 'Guest');
+    av.textContent = initial(name);
+    var who = document.createElement('span');
+    who.className = 'msg-author';
+    who.textContent = name;
+    var when = document.createElement('span');
+    when.className = 'msg-time';
+    when.textContent = relTime(c.createdAt);
+    head.appendChild(av);
+    head.appendChild(who);
+    head.appendChild(when);
+    msg.appendChild(head);
+    var body = document.createElement('div');
+    body.className = 'msg-body';
+    body.textContent = c.body;
+    msg.appendChild(body);
+    return msg;
+  }
+  function openThread(rootId, pinEl) {
+    closeThread();
+    var root = state.comments.find(function (c) { return c.id === rootId; });
+    if (!root) return;
+    if (!pinEl) pinEl = pinLayer.querySelector('[data-comment-id="' + rootId + '"]');
+    if (!pinEl) return;
+    var idx = rootComments().indexOf(root) + 1;
+    state.activeThreadId = rootId;
+
+    popoverEl = document.createElement('div');
+    popoverEl.className = 'popover';
+
+    var header = document.createElement('div');
+    header.className = 'pop-header';
+    var seq = document.createElement('span');
+    seq.className = 'seq';
+    seq.textContent = '#' + idx;
+    header.appendChild(seq);
+    popoverEl.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'pop-body';
+    body.appendChild(messageNode(root, false));
+    var replies = repliesFor(rootId);
+    if (replies.length) {
+      var rWrap = document.createElement('div');
+      rWrap.className = 'replies';
+      replies.forEach(function (r) { rWrap.appendChild(messageNode(r, true)); });
+      body.appendChild(rWrap);
+    }
+    popoverEl.appendChild(body);
+
+    if (state.user) {
+      var compose = document.createElement('div');
+      compose.className = 'pop-compose';
+      var ta = document.createElement('textarea');
+      ta.placeholder = 'Reply…';
+      var send = document.createElement('button');
+      send.className = 'send';
+      send.type = 'button';
+      send.title = 'Reply';
+      send.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l14-7-7 14-2-5-5-2z"/></svg>';
+      function syncSend() { send.classList.toggle('active', ta.value.trim().length > 0); }
+      ta.addEventListener('input', syncSend);
+      function submitReply() {
+        var text = ta.value.trim();
+        if (!text) return;
+        postComment({ parentId: rootId, body: text, pagePath: location.pathname })
+          .then(function () { ta.value = ''; syncSend(); loadComments().then(function () { openThread(rootId, null); }); })
+          .catch(function (e) { alert('Failed: ' + e.message); });
+      }
+      send.addEventListener('click', submitReply);
+      attachMentions(ta);
+      compose.appendChild(ta);
+      compose.appendChild(send);
+      popoverEl.appendChild(compose);
+      setTimeout(function () { ta.focus(); }, 0);
+    }
+
+    shadow.appendChild(popoverEl);
+    positionPopover(popoverEl, pinEl);
+    renderPins();
+  }
+  function closeThread() {
+    if (popoverEl && popoverEl.parentNode) popoverEl.parentNode.removeChild(popoverEl);
+    popoverEl = null;
+    if (state.activeThreadId) {
+      state.activeThreadId = null;
+      renderPins();
+    }
+  }
+  function positionPopover(pop, pinEl) {
+    var pinRect = pinEl.getBoundingClientRect();
+    var popW = pop.offsetWidth || 320;
+    var popH = pop.offsetHeight || 200;
+    var left = pinRect.right + 12 + window.scrollX;
+    if (left + popW > window.scrollX + window.innerWidth - 8) {
+      left = pinRect.left - popW - 12 + window.scrollX;
+    }
+    if (left < window.scrollX + 8) left = window.scrollX + 8;
+    var top = pinRect.top + window.scrollY;
+    var minTop = window.scrollY + TOPBAR_H + 4;
+    var maxTop = window.scrollY + window.innerHeight - popH - 8;
+    if (top < minTop) top = minTop;
+    if (top > maxTop) top = Math.max(minTop, maxTop);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  // Click outside to close
+  document.addEventListener('click', function (e) {
+    if (!popoverEl) return;
+    if (e.composedPath && e.composedPath().some(function (n) { return n === popoverEl; })) return;
+    if (e.target && e.target.closest && e.target.closest('.pin')) return;
+    var path = e.composedPath ? e.composedPath() : [];
+    for (var i = 0; i < path.length; i++) {
+      if (path[i] && path[i].classList && path[i].classList.contains('pin')) return;
+    }
+    closeThread();
+  }, true);
 
   // ---------- composer ----------
   var composerEl = null;
