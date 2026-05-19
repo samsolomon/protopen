@@ -70,7 +70,7 @@
     '.composer { position: fixed; background: white; color: #111; border: 1px solid #ddd; border-radius: 12px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.18); width: 320px; pointer-events: auto; z-index: 2; }' +
     '.composer label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }' +
     '.composer input, .composer textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font: 13px system-ui; }' +
-    '.composer textarea { min-height: 80px; margin-top: 8px; resize: vertical; }' +
+    '.composer textarea { min-height: 18px; margin-top: 8px; resize: none; overflow-y: auto; line-height: 1.4; }' +
     '.composer .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }' +
     '.composer button { background: #ff8f52; color: white; border: 0; padding: 6px 14px; border-radius: 6px; cursor: pointer; font: 500 13px system-ui; }' +
     '.composer button.secondary { background: #eee; color: #333; }' +
@@ -458,9 +458,13 @@
       }
       send.addEventListener('click', submitReply);
       attachMentions(ta);
+      attachAutoGrow(ta, 80);
+      attachEnterToSubmit(ta, submitReply);
       compose.appendChild(ta);
       compose.appendChild(send);
       popoverEl.appendChild(compose);
+      // Defer focus a tick so the popover finishes painting before the
+      // textarea grabs focus (otherwise iOS skips the keyboard).
       setTimeout(function () { ta.focus(); }, 0);
     }
 
@@ -534,12 +538,12 @@
     var ta = composerEl.querySelector('.body-input');
     ta.focus();
     attachMentions(ta);
-    composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
-    composerEl.querySelector('.submit').addEventListener('click', function () {
-      var body = ta.value.trim();
-      if (!body) return;
+    attachAutoGrow(ta, 120);
+    function submitNew() {
+      var text = ta.value.trim();
+      if (!text) return;
       postComment({
-        body: body,
+        body: text,
         pagePath: location.pathname,
         pinX: pin.pinX,
         pinY: pin.pinY,
@@ -552,7 +556,10 @@
       }).catch(function (e) {
         alert('Failed: ' + e.message);
       });
-    });
+    }
+    attachEnterToSubmit(ta, submitNew);
+    composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
+    composerEl.querySelector('.submit').addEventListener('click', submitNew);
   }
 
   function closeComposer() {
@@ -596,6 +603,23 @@
     };
     openComposer(pin);
   }, true);
+
+  // ---------- textarea ergonomics ----------
+  function attachAutoGrow(textarea, maxH) {
+    function grow() {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, maxH) + 'px';
+    }
+    textarea.addEventListener('input', grow);
+    grow();
+  }
+  function attachEnterToSubmit(textarea, submit) {
+    textarea.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      submit();
+    });
+  }
 
   // ---------- mention autocomplete (signed-in only) ----------
   function attachMentions(textarea) {
