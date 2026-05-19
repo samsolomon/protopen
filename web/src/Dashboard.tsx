@@ -257,7 +257,6 @@ export function Dashboard({
         siteSlug={target.slug}
         siteName={target.name}
         focusCommentID={focus}
-        onBack={() => switchView('dashboard')}
       />
     )
   }

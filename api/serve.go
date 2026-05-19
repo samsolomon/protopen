@@ -29,7 +29,7 @@ var commentRuntimeJS string
 // commentRuntimeScriptTag is injected before </body> on every deployed-site
 // HTML response (by default). The runtime is served separately so it can be
 // cached and inspected as a normal JS file in DevTools.
-const commentRuntimeScriptTag = `<script src="/__protopen/comment-runtime.js" defer data-site-org="%s" data-site-slug="%s" data-api-base="%s"></script>`
+const commentRuntimeScriptTag = `<script src="/__protopen/comment-runtime.js" defer data-site-org="%s" data-site-slug="%s" data-api-base="%s" data-deploy-id="%s"></script>`
 
 const privateSiteHTML = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Private Site</title></head>
@@ -100,7 +100,7 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 		}
 		injector = &commentScriptWriter{
 			ResponseWriter: w,
-			scriptTag:      fmt.Sprintf(commentRuntimeScriptTag, html.EscapeString(orgSlug), html.EscapeString(slug), html.EscapeString(apiBase)),
+			scriptTag:      fmt.Sprintf(commentRuntimeScriptTag, html.EscapeString(orgSlug), html.EscapeString(slug), html.EscapeString(apiBase), html.EscapeString(deployment.deployID)),
 		}
 		target = injector
 	}

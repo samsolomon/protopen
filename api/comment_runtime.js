@@ -15,6 +15,7 @@
   var orgSlug = dataset.siteOrg || deriveSlugFromPath(0);
   var siteSlug = dataset.siteSlug || deriveSlugFromPath(1);
   var apiBase = (dataset.apiBase || '').replace(/\/$/, '');
+  var servedDeployId = dataset.deployId || '';
   if (!orgSlug || !siteSlug) return;
 
   function deriveSlugFromPath(index) {
@@ -45,6 +46,19 @@
   host.id = '__protopen_host';
   host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646';
   document.documentElement.appendChild(host);
+
+  // Shift the page content down so the fixed topbar doesn't cover the site's
+  // own nav. Use padding-top, not margin-top: body's margin-top collapses
+  // through to <html> and won't actually move static-positioned content.
+  function applyBodyShift() {
+    if (!document.body) return;
+    if (document.body.dataset.protopenShifted) return;
+    var existing = parseFloat(getComputedStyle(document.body).paddingTop) || 0;
+    document.body.style.paddingTop = (existing + TOPBAR_H) + 'px';
+    document.body.dataset.protopenShifted = '1';
+  }
+  if (document.body) applyBodyShift();
+  else document.addEventListener('DOMContentLoaded', applyBodyShift);
   var shadow = host.attachShadow({ mode: 'open' });
 
   shadow.innerHTML = (
@@ -59,7 +73,8 @@
     '.pin.draggable { cursor: grab; }' +
     '.pin.dragging { --pin-scale: 1.15; opacity: .75; cursor: grabbing; transition: none; z-index: 2147483646; }' +
     '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
-    '.topbar .brand { display: flex; align-items: center; gap: 8px; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }' +
+    '.topbar .brand { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; transition: opacity .15s; }' +
+    '.topbar .brand:hover { opacity: 1; }' +
     '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
     '.topbar .toggle-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); padding: 6px 14px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; transition: background .15s, border-color .15s; }' +
     '.topbar .toggle-btn:hover { border-color: rgba(255,255,255,.4); }' +
@@ -67,6 +82,10 @@
     '.topbar .toggle-btn .count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 6px; align-items: center; justify-content: center; background: rgba(255,255,255,.22); border-radius: 999px; font-size: 11px; }' +
     '.topbar .toggle-btn .count:empty { display: none; }' +
     '.topbar .shortcut { opacity: .55; font-size: 11px; margin-left: 4px; }' +
+    '.topbar-right { display: flex; align-items: center; gap: 10px; }' +
+    '.topbar .versions { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid rgba(255,255,255,.2); color: inherit; font: 500 12px system-ui; padding: 5px 24px 5px 12px; border-radius: 999px; cursor: pointer; background-image: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\' viewBox=\'0 0 8 8\'><path d=\'M2 3l2 2 2-2\' stroke=\'white\' stroke-width=\'1\' fill=\'none\'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; outline: none; }' +
+    '.topbar .versions:hover { border-color: rgba(255,255,255,.4); }' +
+    '.topbar .versions option { background: #111; color: white; }' +
     '.composer { position: fixed; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: #18181b; border: 1px solid #e4e4e7; border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,.12); padding: 6px 6px 6px 14px; pointer-events: auto; z-index: 2; min-width: 260px; max-width: 360px; display: flex; align-items: flex-end; gap: 6px; }' +
     '.composer textarea { flex: 1; border: 0; background: transparent; padding: 8px 0; font: 13px system-ui; resize: none; outline: none; min-height: 18px; max-height: 120px; overflow-y: auto; line-height: 1.4; }' +
     '.composer .send { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #e4e4e7; color: #a1a1aa; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
@@ -77,10 +96,9 @@
     '.composer .close { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: #a1a1aa; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }' +
     '.composer .close:hover { color: #71717a; background: rgba(0,0,0,.04); }' +
     '.popover { position: absolute; pointer-events: auto; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
-    '.pop-header { display: flex; align-items: center; justify-content: flex-end; padding: 6px 8px 0 8px; }' +
-    '.pop-toolbar { display: flex; align-items: center; gap: 2px; position: relative; }' +
-    '.pop-toolbar button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #d4d4d8; padding: 0; transition: color .12s, background .12s; }' +
-    '.pop-toolbar button:hover { color: #71717a; background: rgba(0,0,0,.03); }' +
+    '.pop-toolbar { display: flex; align-items: center; gap: 2px; position: relative; margin-left: auto; }' +
+    '.pop-toolbar button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #71717a; padding: 0; transition: color .12s, background .12s; }' +
+    '.pop-toolbar button:hover { color: #18181b; background: rgba(0,0,0,.05); }' +
     '.pop-toolbar button.on { color: #18181b; }' +
     '.pop-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; background: #18181b; border-radius: 8px; padding: 4px 0; min-width: 160px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 4; }' +
     '.pop-menu button { display: block; width: 100%; text-align: left; padding: 7px 14px; background: transparent; border: 0; color: white; font: 500 12px system-ui; cursor: pointer; border-radius: 0; }' +
@@ -97,8 +115,8 @@
     '.replies { border-top: 1px solid #f4f4f5; margin-top: 8px; padding-top: 8px; }' +
     '.reply-msg { margin-bottom: 8px; padding-left: 10px; border-left: 2px solid #e4e4e7; }' +
     '.reply-msg:last-child { margin-bottom: 0; }' +
-    '.pop-compose { border-top: 1px solid #e4e4e7; padding: 8px 10px; display: flex; align-items: flex-end; gap: 6px; }' +
-    '.pop-compose textarea { flex: 1; border: 0; background: transparent; padding: 6px 0; font-family: inherit; font-size: 12px; resize: none; outline: none; min-height: 18px; max-height: 80px; overflow-y: auto; line-height: 1.4; }' +
+    '.pop-compose { border-top: 1px solid #e4e4e7; padding: 8px 10px; display: flex; align-items: center; gap: 6px; }' +
+    '.pop-compose textarea { flex: 1; border: 0; background: transparent; padding: 6px 0; font-family: inherit; font-size: 12px; resize: none; outline: none; min-height: 28px; max-height: 80px; overflow-y: auto; line-height: 16px; box-sizing: border-box; }' +
     '.pop-compose .send { width: 28px; height: 28px; border-radius: 50%; background: #e4e4e7; color: #a1a1aa; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
     '.pop-compose .send.active { background: #ff8f52; color: white; }' +
     '.mentions { position: absolute; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
@@ -107,18 +125,21 @@
     '</style>' +
     '<div class="pin-layer"></div>' +
     '<div class="topbar">' +
-      '<div class="brand">Protopen</div>' +
-      '<button class="toggle-btn" aria-pressed="false">' +
-        '<span class="label">Comments</span>' +
-        '<span class="count"></span>' +
-        '<span class="shortcut">C</span>' +
-      '</button>' +
+      '<a class="brand" href="' + escapeHTML(apiBase || '/') + '" target="_blank" rel="noopener">Protopen</a>' +
+      '<div class="topbar-right">' +
+        '<button class="toggle-btn" aria-pressed="false">' +
+          '<span class="label">Comments</span>' +
+          '<span class="count"></span>' +
+          '<span class="shortcut">C</span>' +
+        '</button>' +
+      '</div>' +
     '</div>'
   );
 
   var pinLayer = shadow.querySelector('.pin-layer');
   var toggleBtn = shadow.querySelector('.toggle-btn');
   var countBadge = shadow.querySelector('.toggle-btn .count');
+  var topbarRight = shadow.querySelector('.topbar-right');
 
   // Cursor style for the host page when in comment mode. Single <style> in
   // <head> is the only host-page mutation aside from #__protopen_host.
@@ -185,10 +206,64 @@
       state.isPublic = ctx.isPublic;
       state.siteName = ctx.siteName;
       loadComments();
+      loadDeploys();
     }).catch(function (err) {
       console.warn('protopen: bootstrap failed', err);
     });
     api('/api/session').then(function (s) { if (s && s.user) state.user = s.user; }).catch(function () {});
+  }
+
+  // Pull deploys list and render the version selector. Silently no-ops for
+  // signed-out visitors (the endpoint requires org membership).
+  function loadDeploys() {
+    if (!state.siteId) return;
+    api('/api/sites/' + state.siteId + '/deploys').then(function (resp) {
+      var deploys = (resp && resp.deploys) || [];
+      if (deploys.length < 2) return;
+      renderVersionSelector(deploys);
+    }).catch(function () { /* not a member — hide selector */ });
+  }
+
+  function siteAssetPath() {
+    var prefix = '/~' + orgSlug + '/' + siteSlug;
+    var p = location.pathname;
+    if (p.indexOf(prefix) !== 0) return '/';
+    p = p.slice(prefix.length) || '/';
+    var m = p.match(/^\/_v\/[^/]+(\/.*)?$/);
+    if (m) p = m[1] || '/';
+    return p;
+  }
+
+  function deployUrl(deploy) {
+    var prefix = '/~' + orgSlug + '/' + siteSlug;
+    var asset = siteAssetPath();
+    if (deploy.isCurrent) return prefix + asset;
+    return prefix + '/_v/' + deploy.id + asset;
+  }
+
+  function renderVersionSelector(deploys) {
+    var sel = document.createElement('select');
+    sel.className = 'versions';
+    sel.title = 'Switch deploy version';
+    // listDeploys returns newest first; reverse so v1 is the first deploy.
+    var ordered = deploys.slice().reverse();
+    var activeIdx = -1;
+    ordered.forEach(function (d, i) {
+      var opt = document.createElement('option');
+      opt.value = d.id;
+      var label = 'v' + (i + 1);
+      if (d.isCurrent) label += ' (Latest)';
+      if (d.label) label += ' — ' + d.label;
+      opt.textContent = label;
+      if (d.id === (servedDeployId || state.deployId)) activeIdx = i;
+      sel.appendChild(opt);
+    });
+    if (activeIdx >= 0) sel.selectedIndex = activeIdx;
+    sel.addEventListener('change', function () {
+      var picked = ordered[sel.selectedIndex];
+      if (picked) window.location.href = deployUrl(picked);
+    });
+    topbarRight.insertBefore(sel, topbarRight.firstChild);
   }
 
   function loadComments() {
@@ -473,7 +548,7 @@
     return bar;
   }
 
-  function messageNode(c, isReply) {
+  function messageNode(c, isReply, trailing) {
     var msg = document.createElement('div');
     msg.className = isReply ? 'reply-msg' : 'msg';
     var head = document.createElement('div');
@@ -491,6 +566,7 @@
     head.appendChild(av);
     head.appendChild(who);
     head.appendChild(when);
+    if (trailing) head.appendChild(trailing);
     msg.appendChild(head);
     var body = document.createElement('div');
     body.className = 'msg-body';
@@ -508,15 +584,13 @@
 
     popoverEl = document.createElement('div');
     popoverEl.className = 'popover';
-
-    var header = document.createElement('div');
-    header.className = 'pop-header';
-    header.appendChild(buildToolbar(root));
-    popoverEl.appendChild(header);
+    // Hide until positioned to avoid a one-frame flash at the shadow root's
+    // top-left corner before positionPopover runs.
+    popoverEl.style.visibility = 'hidden';
 
     var body = document.createElement('div');
     body.className = 'pop-body';
-    body.appendChild(messageNode(root, false));
+    body.appendChild(messageNode(root, false, buildToolbar(root)));
     var replies = repliesFor(rootId);
     if (replies.length) {
       var rWrap = document.createElement('div');
@@ -530,6 +604,7 @@
       var compose = document.createElement('div');
       compose.className = 'pop-compose';
       var ta = document.createElement('textarea');
+      ta.rows = 1;
       ta.placeholder = 'Reply…';
       var send = document.createElement('button');
       send.className = 'send';
@@ -556,6 +631,7 @@
 
     shadow.appendChild(popoverEl);
     positionPopover(popoverEl, pinEl);
+    popoverEl.style.visibility = '';
     renderPins();
   }
   function closeThread(opts) {
@@ -619,7 +695,7 @@
     }
 
     composerEl.innerHTML =
-      '<textarea class="body-input" placeholder="Add a comment… @ to mention"></textarea>' +
+      '<textarea class="body-input" rows="1" placeholder="Add a comment… @ to mention"></textarea>' +
       '<button class="send" type="button" title="Comment"></button>';
     shadow.appendChild(composerEl);
     var ta = composerEl.querySelector('.body-input');
@@ -791,10 +867,13 @@
 
     textarea.addEventListener('keydown', function (e) {
       if (!dropdown || !matches.length) return;
-      if (e.key === 'ArrowDown') { selectedIdx = (selectedIdx + 1) % matches.length; render(); e.preventDefault(); }
-      else if (e.key === 'ArrowUp') { selectedIdx = (selectedIdx - 1 + matches.length) % matches.length; render(); e.preventDefault(); }
-      else if (e.key === 'Enter') { pick(selectedIdx); e.preventDefault(); }
-      else if (e.key === 'Escape') { close(); e.preventDefault(); }
+      // stopImmediatePropagation prevents the submit-on-Enter handler from
+      // also firing on the same event — mentions runs first because it's
+      // attached first at each call site.
+      if (e.key === 'ArrowDown') { selectedIdx = (selectedIdx + 1) % matches.length; render(); e.preventDefault(); e.stopImmediatePropagation(); }
+      else if (e.key === 'ArrowUp') { selectedIdx = (selectedIdx - 1 + matches.length) % matches.length; render(); e.preventDefault(); e.stopImmediatePropagation(); }
+      else if (e.key === 'Enter') { pick(selectedIdx); e.preventDefault(); e.stopImmediatePropagation(); }
+      else if (e.key === 'Escape') { close(); e.preventDefault(); e.stopImmediatePropagation(); }
     });
 
     textarea.addEventListener('blur', function () { setTimeout(close, 100); });
