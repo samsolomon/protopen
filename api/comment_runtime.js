@@ -33,7 +33,6 @@
     isPublic: false,
     siteName: '',
     user: null,              // signed-in session user, if any
-    guestName: (function () { try { return localStorage.getItem('protopen.guestName') || ''; } catch (e) { return ''; } })(),
     pendingPin: null,        // captured but not yet posted
     activeThreadId: null,    // currently-open thread in sidebar
     mentionCandidates: [],
@@ -86,6 +85,9 @@
     '.composer .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }' +
     '.composer button { background: #ff8f52; color: white; border: 0; padding: 6px 14px; border-radius: 6px; cursor: pointer; font: 500 13px system-ui; }' +
     '.composer button.secondary { background: #eee; color: #333; }' +
+    '.composer .signin { font-size: 13px; color: #444; padding: 4px 0 8px; line-height: 1.4; }' +
+    '.composer .signin a { color: #ff8f52; font-weight: 600; text-decoration: none; }' +
+    '.composer .signin a:hover { text-decoration: underline; }' +
     '.mentions { position: absolute; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
     '.mentions div { padding: 6px 10px; cursor: pointer; font-size: 13px; }' +
     '.mentions div:hover, .mentions div.selected { background: #f0f7ff; }' +
@@ -381,37 +383,32 @@
     closeComposer();
     composerEl = document.createElement('div');
     composerEl.className = 'composer';
-    // Position near the click, clamping to viewport
     var maxLeft = window.innerWidth - 340;
     var maxTop = window.innerHeight - 220;
     composerEl.style.left = Math.max(8, Math.min(maxLeft, pin.viewportX + 16)) + 'px';
     composerEl.style.top = Math.max(8, Math.min(maxTop, pin.viewportY + 16)) + 'px';
-    var needsName = !state.user && !state.guestName;
-    var html = '';
-    if (needsName) {
-      html += '<label>Your name</label><input class="name-input" maxlength="60" placeholder="Sam" />';
+
+    if (!state.user) {
+      var signInURL = apiBase + '/';
+      composerEl.innerHTML =
+        '<div class="signin">Sign in to leave a comment. <a href="' + escapeHTML(signInURL) + '" target="_blank" rel="noopener">Open sign-in →</a></div>' +
+        '<div class="actions"><button class="secondary cancel">Close</button></div>';
+      shadow.appendChild(composerEl);
+      composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
+      return;
     }
-    html += '<textarea class="body-input" placeholder="Add a comment… use @ to mention"></textarea>';
-    html += '<div class="actions"><button class="secondary cancel">Cancel</button><button class="submit">Comment</button></div>';
-    composerEl.innerHTML = html;
+
+    composerEl.innerHTML =
+      '<textarea class="body-input" placeholder="Add a comment… use @ to mention"></textarea>' +
+      '<div class="actions"><button class="secondary cancel">Cancel</button><button class="submit">Comment</button></div>';
     shadow.appendChild(composerEl);
     var ta = composerEl.querySelector('.body-input');
-    var nameInput = composerEl.querySelector('.name-input');
-    if (nameInput) nameInput.focus(); else ta.focus();
+    ta.focus();
     attachMentions(ta);
     composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
     composerEl.querySelector('.submit').addEventListener('click', function () {
       var body = ta.value.trim();
       if (!body) return;
-      var name = nameInput ? sanitizeName(nameInput.value) : '';
-      if (!state.user && !name && !state.guestName) {
-        nameInput.focus();
-        return;
-      }
-      if (name) {
-        state.guestName = name;
-        try { localStorage.setItem('protopen.guestName', name); } catch (e) {}
-      }
       postComment({
         body: body,
         pagePath: location.pathname,
@@ -435,17 +432,10 @@
   }
 
   function postComment(payload) {
-    if (!state.user) payload.guestName = state.guestName;
     return api('/api/sites/' + state.siteId + '/comments', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-  }
-
-  function sanitizeName(s) {
-    s = String(s || '').replace(/[\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (s.length > 60) s = s.slice(0, 60);
-    return s;
   }
 
   function escapeHTML(s) {

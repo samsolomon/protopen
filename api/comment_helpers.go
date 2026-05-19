@@ -4,8 +4,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"regexp"
 	"strings"
 
@@ -15,7 +13,6 @@ import (
 const (
 	notificationTypeCommentReply   = "comment_reply"
 	notificationTypeCommentMention = "comment_mention"
-	maxGuestNameLen                = 60
 )
 
 type siteMeta struct {
@@ -123,32 +120,6 @@ func resolveMentionUserIDs(ctx context.Context, tx pgx.Tx, orgID string, usernam
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
-}
-
-// sanitizeGuestName trims, collapses whitespace, and drops control characters
-// from a guest's display name. Enforces the length cap.
-func sanitizeGuestName(raw string) string {
-	cleaned := strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' {
-			return ' '
-		}
-		if r < 0x20 {
-			return -1
-		}
-		return r
-	}, raw)
-	cleaned = strings.Join(strings.Fields(cleaned), " ")
-	if len(cleaned) > maxGuestNameLen {
-		cleaned = cleaned[:maxGuestNameLen]
-	}
-	return cleaned
-}
-
-// guestFingerprint hashes IP+UA+siteID into a 16-char opaque token. Stored
-// per-comment so owners can correlate spam without learning the IP.
-func guestFingerprint(ip, ua, siteID string) string {
-	sum := sha256.Sum256([]byte(ip + "\x00" + ua + "\x00" + siteID))
-	return hex.EncodeToString(sum[:])[:16]
 }
 
 // upsertSiteSubscription auto-subscribes a user to all comments on a site.

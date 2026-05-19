@@ -44,7 +44,6 @@ type createCommentRequest struct {
 	PinY            *float64 `json:"pinY,omitempty"`
 	ParentID        *string  `json:"parentId,omitempty"`
 	Body            string   `json:"body"`
-	GuestName       string   `json:"guestName,omitempty"`
 	ElementSelector string   `json:"elementSelector,omitempty"`
 	ElementOffsetX  *float64 `json:"elementOffsetX,omitempty"`
 	ElementOffsetY  *float64 `json:"elementOffsetY,omitempty"`
@@ -212,10 +211,9 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 
 // createSiteCommentHandler: POST /api/sites/:siteID/comments
 //
-// Accepts both authenticated (org member) and guest (name-only) commenters.
-// Guests can only comment on public sites. Cross-origin requests carrying
-// credentials must include X-Protopen-Client: runtime — the custom header
-// forces a CORS preflight that a malicious cross-site form cannot satisfy.
+// Requires a signed-in org member. Cross-origin requests must include
+// X-Protopen-Client: runtime — the custom header forces a CORS preflight
+// that a malicious cross-site form cannot satisfy.
 func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -232,18 +230,10 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	meta, err := app.loadSiteMeta(r.Context(), siteID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "site not found"})
-		return
-	}
-
-	// CSRF defense: when the request comes from the content origin (where the
-	// injected runtime runs), require the custom X-Protopen-Client header. A
-	// custom header forces a CORS preflight that a malicious cross-site form
-	// cannot satisfy. The dashboard's frontendOrigin and the canonical
-	// appOrigin are trusted (under our control, protected by SameSite=Lax).
-	// Empty Origin (non-browser clients like the CLI) carries Bearer auth.
+	// The dashboard's frontendOrigin and the canonical appOrigin are trusted
+	// (under our control, protected by SameSite=Lax). Empty Origin (CLI/Bearer)
+	// is allowed through. Anything else (notably the content origin where the
+	// injected runtime runs) must send the custom header.
 	origin := r.Header.Get("Origin")
 	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
 	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
@@ -251,21 +241,15 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	user, sessErr := app.requireSessionUser(r)
-	isGuest := sessErr != nil
-	switch {
-	case isGuest && !meta.IsPublic:
+	user, err := app.requireSessionUser(r)
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
-	case !isGuest:
-		if _, _, err := app.requireSiteAccess(r.Context(), user, siteID); err != nil {
-			if !meta.IsPublic {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-				return
-			}
-			// Signed-in user without org access on a public site comments as a guest.
-			isGuest = true
-		}
+	}
+	orgID, _, err := app.requireSiteAccess(r.Context(), user, siteID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
 	}
 
 	var req createCommentRequest
@@ -281,15 +265,6 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	if len(body) > 8000 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body too long"})
 		return
-	}
-
-	guestName := ""
-	if isGuest {
-		guestName = sanitizeGuestName(req.GuestName)
-		if guestName == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "guestName required"})
-			return
-		}
 	}
 
 	tx, err := app.db.BeginTx(r.Context(), pgx.TxOptions{})
@@ -339,15 +314,6 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	commentID := generateID("cm")
 	now := time.Now().UTC()
 
-	var userIDArg, guestNameArg, guestFPArg *string
-	if isGuest {
-		guestNameArg = &guestName
-		fp := guestFingerprint(clientIP(r, app.trustedProxyHeader), r.UserAgent(), siteID)
-		guestFPArg = &fp
-	} else {
-		userIDArg = &user.ID
-	}
-
 	var elementSelectorArg *string
 	if s := strings.TrimSpace(req.ElementSelector); s != "" {
 		if len(s) > 200 {
@@ -360,14 +326,12 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		insert into comments (
 			id, site_id, deploy_id, user_id, page_path,
 			pin_x, pin_y, body, parent_id,
-			guest_name, guest_fingerprint,
 			element_selector, element_offset_x, element_offset_y,
 			created_at, updated_at
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
-	`, commentID, siteID, deployID, userIDArg, req.PagePath,
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+	`, commentID, siteID, deployID, user.ID, req.PagePath,
 		req.PinX, req.PinY, body, req.ParentID,
-		guestNameArg, guestFPArg,
 		elementSelectorArg, req.ElementOffsetX, req.ElementOffsetY,
 		now); err != nil {
 		log.Printf("insert comment: %v", err)
@@ -380,12 +344,8 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		subscriptionRoot = commentID
 	}
 
-	// Author auto-subscribes to the thread, but only when signed in (guests
-	// have no inbox to receive replies in).
-	if !isGuest {
-		if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
-			log.Printf("subscribe author: %v", err)
-		}
+	if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
+		log.Printf("subscribe author: %v", err)
 	}
 
 	// Fan-out: union of thread subscribers (replies only) and site
@@ -416,7 +376,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	}
 
 	if mentions := parseMentions(body); len(mentions) > 0 {
-		mentionedIDs, err := resolveMentionUserIDs(r.Context(), tx, meta.OrgID, mentions)
+		mentionedIDs, err := resolveMentionUserIDs(r.Context(), tx, orgID, mentions)
 		if err != nil {
 			log.Printf("resolve mentions: %v", err)
 		}
@@ -428,15 +388,9 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if !isGuest {
-		delete(recipients, user.ID)
-	}
+	delete(recipients, user.ID)
 
 	if len(recipients) > 0 {
-		var actorIDArg *string
-		if !isGuest {
-			actorIDArg = &user.ID
-		}
 		var (
 			args         []any
 			placeholders []string
@@ -444,7 +398,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		i := 1
 		for uid, ntype := range recipients {
 			placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
-			args = append(args, generateID("notif"), uid, actorIDArg, ntype, commentID, now)
+			args = append(args, generateID("notif"), uid, user.ID, ntype, commentID, now)
 			i += 6
 		}
 		query := "insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at) values " + strings.Join(placeholders, ", ")
@@ -460,28 +414,23 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	}
 
 	resp := comment{
-		ID:        commentID,
-		SiteID:    siteID,
-		DeployID:  deployID,
-		PagePath:  req.PagePath,
-		PinX:      req.PinX,
-		PinY:      req.PinY,
-		Body:      body,
-		ParentID:  req.ParentID,
-		CreatedAt: now.Format(time.RFC3339),
-	}
-	resp.ElementSelector = elementSelectorArg
-	resp.ElementOffsetX = req.ElementOffsetX
-	resp.ElementOffsetY = req.ElementOffsetY
-	if isGuest {
-		gn := guestName
-		resp.GuestName = &gn
-	} else {
-		resp.Author = &authorSummary{
+		ID:              commentID,
+		SiteID:          siteID,
+		DeployID:        deployID,
+		PagePath:        req.PagePath,
+		PinX:            req.PinX,
+		PinY:            req.PinY,
+		ElementSelector: elementSelectorArg,
+		ElementOffsetX:  req.ElementOffsetX,
+		ElementOffsetY:  req.ElementOffsetY,
+		Body:            body,
+		ParentID:        req.ParentID,
+		CreatedAt:       now.Format(time.RFC3339),
+		Author: &authorSummary{
 			ID:       user.ID,
 			Name:     user.Name,
 			Username: user.Username,
-		}
+		},
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"comment": resp})
 }
