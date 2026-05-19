@@ -80,6 +80,14 @@
     '.popover { position: absolute; pointer-events: auto; background: white; color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
     '.pop-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0 14px; }' +
     '.pop-header .seq { font-weight: 600; color: #71717a; font-size: 12px; }' +
+    '.pop-toolbar { display: flex; align-items: center; gap: 2px; position: relative; }' +
+    '.pop-toolbar button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #d4d4d8; padding: 0; transition: color .12s, background .12s; }' +
+    '.pop-toolbar button:hover { color: #71717a; background: rgba(0,0,0,.03); }' +
+    '.pop-toolbar button.on { color: #18181b; }' +
+    '.pop-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; background: #18181b; border-radius: 8px; padding: 4px 0; min-width: 160px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 4; }' +
+    '.pop-menu button { display: block; width: 100%; text-align: left; padding: 7px 14px; background: transparent; border: 0; color: white; font: 500 12px system-ui; cursor: pointer; border-radius: 0; }' +
+    '.pop-menu button:hover { background: rgba(255,255,255,.1); color: white; }' +
+    '.pop-menu .copied { color: #a3e635; }' +
     '.pop-body { padding: 12px 14px; max-height: 320px; overflow-y: auto; }' +
     '.msg { margin-bottom: 10px; }' +
     '.msg:last-child { margin-bottom: 0; }' +
@@ -188,7 +196,7 @@
   function loadComments() {
     if (!state.siteId) return Promise.resolve();
     var path = encodeURIComponent(location.pathname);
-    return api('/api/sites/' + state.siteId + '/comments?status=all&pagePath=' + path).then(function (resp) {
+    return api('/api/sites/' + state.siteId + '/comments?status=open&pagePath=' + path).then(function (resp) {
       state.comments = resp.comments || [];
       renderPins();
     }).catch(function () {});
@@ -380,6 +388,83 @@
     if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
     return Math.floor(delta / 86400) + 'd ago';
   }
+  var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  var DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
+
+  function buildToolbar(c) {
+    var bar = document.createElement('div');
+    bar.className = 'pop-toolbar';
+    if (state.user) {
+      var resolveBtn = document.createElement('button');
+      resolveBtn.type = 'button';
+      resolveBtn.className = c.resolvedAt ? 'on' : '';
+      resolveBtn.title = c.resolvedAt ? 'Mark unresolved' : 'Resolve thread';
+      resolveBtn.innerHTML = CHECK_SVG;
+      resolveBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        api('/api/comments/' + c.id + '/resolve', { method: 'POST' })
+          .then(function () { closeThread(); loadComments(); })
+          .catch(function (err) { alert('Failed: ' + err.message); });
+      });
+      bar.appendChild(resolveBtn);
+    }
+    var menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.title = 'More actions';
+    menuBtn.innerHTML = DOTS_SVG;
+    var menuEl = null;
+    function toggleMenu(e) {
+      e.stopPropagation();
+      if (menuEl) { menuEl.remove(); menuEl = null; return; }
+      menuEl = document.createElement('div');
+      menuEl.className = 'pop-menu';
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = 'Copy link';
+      copyBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var url = location.origin + location.pathname + '#protopen-comment=' + c.id;
+        var done = function () {
+          copyBtn.textContent = 'Copied';
+          copyBtn.classList.add('copied');
+          setTimeout(function () { if (menuEl) { menuEl.remove(); menuEl = null; } }, 800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(done);
+        } else {
+          done();
+        }
+      });
+      menuEl.appendChild(copyBtn);
+      if (canMutate(c)) {
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.textContent = 'Delete thread';
+        delBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (!confirm('Delete this comment thread? Replies will be removed too.')) return;
+          api('/api/comments/' + c.id, { method: 'DELETE' })
+            .then(function () { closeThread(); loadComments(); })
+            .catch(function (err) { alert('Failed: ' + err.message); });
+        });
+        menuEl.appendChild(delBtn);
+      }
+      bar.appendChild(menuEl);
+      // Close menu on next outside click.
+      setTimeout(function () {
+        document.addEventListener('click', function close(ev) {
+          if (menuEl && !menuEl.contains(ev.target) && ev.target !== menuBtn) {
+            menuEl.remove(); menuEl = null;
+            document.removeEventListener('click', close, true);
+          }
+        }, true);
+      }, 0);
+    }
+    menuBtn.addEventListener('click', toggleMenu);
+    bar.appendChild(menuBtn);
+    return bar;
+  }
+
   function messageNode(c, isReply) {
     var msg = document.createElement('div');
     msg.className = isReply ? 'reply-msg' : 'msg';
@@ -423,6 +508,7 @@
     seq.className = 'seq';
     seq.textContent = '#' + idx;
     header.appendChild(seq);
+    header.appendChild(buildToolbar(root));
     popoverEl.appendChild(header);
 
     var body = document.createElement('div');
