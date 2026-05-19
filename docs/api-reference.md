@@ -401,9 +401,9 @@ that element (`elementOffsetX`/`elementOffsetY` in `[0,1]`). When the
 selector can't be resolved at render time, the runtime falls back to
 the legacy document-relative `pinX`/`pinY` percentages.
 
-The `guestName` field will be `null` for any new comment, since posting
-now requires a session. Older rows posted before the sign-in-required
-change may have a non-null `guestName` with `author: null`.
+New comments always have `author` populated and `guestName: null`.
+Pre-existing rows from before sign-in was required can have a non-null
+`guestName` with `author: null`.
 
 ### `POST /api/sites/{siteID}/comments`
 
@@ -475,8 +475,9 @@ Auth required: signed-in org member. Guests get 401.
 ### `DELETE /api/comments/{commentID}`
 
 Auth required. Caller must be the comment author or an org admin.
-Older guest-authored comments can only be deleted by an admin (no user
-to match against). Hard-deletes the row; replies cascade via FK.
+Pre-existing guest-authored rows have no `user_id` to match against,
+so only admins can delete them. Hard-deletes the row; replies cascade
+via FK.
 
 **Status codes:** `200` ok, `403` forbidden, `404` not found.
 
