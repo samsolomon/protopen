@@ -128,6 +128,29 @@
   sidebarClose.addEventListener('click', function () { sidebar.classList.remove('open'); });
   setMode('browse');
 
+  // Figma-style shortcuts: C toggles Comment/Browse, Esc exits to Browse
+  // (closing the composer first if one is open). Suppressed while typing.
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if (e.composedPath && e.composedPath().some(function (n) { return n && n.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName); })) return;
+    if (e.key === 'c' || e.key === 'C') {
+      setMode(state.mode === 'comment' ? 'browse' : 'comment');
+      if (state.mode === 'browse') closeComposer();
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      if (composerEl) {
+        closeComposer();
+      } else if (state.mode === 'comment') {
+        setMode('browse');
+      } else {
+        return;
+      }
+      e.preventDefault();
+    }
+  });
+
   // ---------- API ----------
   function api(path, opts) {
     opts = opts || {};
