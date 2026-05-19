@@ -51,7 +51,8 @@
     '<style>' +
     ':host, * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }' +
     '.pin-layer { position: absolute; inset: 0; pointer-events: none; }' +
-    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: #ff8f52; color: white; font: 600 12px/28px system-ui, sans-serif; text-align: center; --pin-scale: 1; transform: translate(-14px, -28px) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.3); pointer-events: auto; cursor: pointer; transition: transform .15s; }' +
+    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: rgba(255,143,82,.92); color: white; font: 600 12px/28px system-ui, sans-serif; text-align: center; --pin-scale: 1; transform: translate(-14px, -28px) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid rgba(255,255,255,.6); -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4); pointer-events: auto; cursor: pointer; transition: transform .15s, filter .15s; }' +
+    '.pin:hover { filter: brightness(1.05); }' +
     '.pin:hover { --pin-scale: 1.1; }' +
     '.pin span { display: block; transform: rotate(45deg); }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
@@ -67,17 +68,16 @@
     '.topbar .toggle-btn .count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 6px; align-items: center; justify-content: center; background: rgba(255,255,255,.22); border-radius: 999px; font-size: 11px; }' +
     '.topbar .toggle-btn .count:empty { display: none; }' +
     '.topbar .shortcut { opacity: .55; font-size: 11px; margin-left: 4px; }' +
-    '.composer { position: fixed; background: white; color: #111; border: 1px solid #ddd; border-radius: 12px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.18); width: 320px; pointer-events: auto; z-index: 2; }' +
-    '.composer label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }' +
-    '.composer input, .composer textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font: 13px system-ui; }' +
-    '.composer textarea { min-height: 18px; margin-top: 8px; resize: none; overflow-y: auto; line-height: 1.4; }' +
-    '.composer .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }' +
-    '.composer button { background: #ff8f52; color: white; border: 0; padding: 6px 14px; border-radius: 6px; cursor: pointer; font: 500 13px system-ui; }' +
-    '.composer button.secondary { background: #eee; color: #333; }' +
-    '.composer .signin { font-size: 13px; color: #444; padding: 4px 0 8px; line-height: 1.4; }' +
+    '.composer { position: fixed; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: #18181b; border: 1px solid #e4e4e7; border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,.12); padding: 6px 6px 6px 14px; pointer-events: auto; z-index: 2; min-width: 260px; max-width: 360px; display: flex; align-items: flex-end; gap: 6px; }' +
+    '.composer textarea { flex: 1; border: 0; background: transparent; padding: 8px 0; font: 13px system-ui; resize: none; outline: none; min-height: 18px; max-height: 120px; overflow-y: auto; line-height: 1.4; }' +
+    '.composer .send { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #e4e4e7; color: #a1a1aa; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
+    '.composer .send.active { background: #ff8f52; color: white; }' +
+    '.composer .signin { flex: 1; font-size: 13px; color: #444; padding: 8px 0; line-height: 1.4; }' +
     '.composer .signin a { color: #ff8f52; font-weight: 600; text-decoration: none; }' +
     '.composer .signin a:hover { text-decoration: underline; }' +
-    '.popover { position: absolute; pointer-events: auto; background: white; color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
+    '.composer .close { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: #a1a1aa; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }' +
+    '.composer .close:hover { color: #71717a; background: rgba(0,0,0,.04); }' +
+    '.popover { position: absolute; pointer-events: auto; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
     '.pop-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0 14px; }' +
     '.pop-header .seq { font-weight: 600; color: #71717a; font-size: 12px; }' +
     '.pop-toolbar { display: flex; align-items: center; gap: 2px; position: relative; }' +
@@ -388,8 +388,10 @@
     if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
     return Math.floor(delta / 86400) + 'd ago';
   }
+  var SEND_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l14-7-7 14-2-5-5-2z"/></svg>';
   var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
   var DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
+  var CLOSE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
 
   function buildToolbar(c) {
     var bar = document.createElement('div');
@@ -532,7 +534,7 @@
       send.className = 'send';
       send.type = 'button';
       send.title = 'Reply';
-      send.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l14-7-7 14-2-5-5-2z"/></svg>';
+      send.innerHTML = SEND_SVG;
       function syncSend() { send.classList.toggle('active', ta.value.trim().length > 0); }
       ta.addEventListener('input', syncSend);
       function submitReply() {
@@ -611,17 +613,20 @@
       var signInURL = apiBase + '/';
       composerEl.innerHTML =
         '<div class="signin">Sign in to leave a comment. <a href="' + escapeHTML(signInURL) + '" target="_blank" rel="noopener">Open sign-in →</a></div>' +
-        '<div class="actions"><button class="secondary cancel">Close</button></div>';
+        '<button class="close" type="button" aria-label="Close">' + CLOSE_SVG + '</button>';
       shadow.appendChild(composerEl);
-      composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
+      composerEl.querySelector('.close').addEventListener('click', closeComposer);
       return;
     }
 
     composerEl.innerHTML =
-      '<textarea class="body-input" placeholder="Add a comment… use @ to mention"></textarea>' +
-      '<div class="actions"><button class="secondary cancel">Cancel</button><button class="submit">Comment</button></div>';
+      '<textarea class="body-input" placeholder="Add a comment… @ to mention"></textarea>' +
+      '<button class="send" type="button" title="Comment">' + SEND_SVG + '</button>';
     shadow.appendChild(composerEl);
     var ta = composerEl.querySelector('.body-input');
+    var sendBtn = composerEl.querySelector('.send');
+    function syncSend() { sendBtn.classList.toggle('active', ta.value.trim().length > 0); }
+    ta.addEventListener('input', syncSend);
     ta.focus();
     attachMentions(ta);
     attachAutoGrow(ta, 120);
@@ -644,7 +649,7 @@
       });
     }
     attachEnterToSubmit(ta, submitNew);
-    composerEl.querySelector('.cancel').addEventListener('click', closeComposer);
+    sendBtn.addEventListener('click', submitNew);
     composerEl.querySelector('.submit').addEventListener('click', submitNew);
   }
 
