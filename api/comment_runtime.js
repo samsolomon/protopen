@@ -56,6 +56,8 @@
     '.pin span { display: block; transform: rotate(45deg); }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
+    '.pin.draggable { cursor: grab; }' +
+    '.pin.dragging { opacity: .75; transform: translate(-14px, -28px) rotate(-45deg) scale(1.15) !important; cursor: grabbing; transition: none; z-index: 2147483646; }' +
     '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
     '.topbar .brand { display: flex; align-items: center; gap: 8px; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }' +
     '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
@@ -287,13 +289,81 @@
       var inner = document.createElement('span');
       inner.textContent = String(idx + 1);
       el.appendChild(inner);
-      el.addEventListener('click', function (e) {
-        e.stopPropagation();
-        openThread(c.id, el);
-      });
+      attachDrag(el, c);
       pinLayer.appendChild(el);
     });
     countBadge.textContent = roots.length ? String(roots.length) : '';
+  }
+
+  function canMutate(c) {
+    if (!state.user) return false;
+    if (c.author && c.author.id === state.user.id) return true;
+    var orgs = state.user.orgs || [];
+    for (var i = 0; i < orgs.length; i++) {
+      if (orgs[i].role === 'admin') return true;
+    }
+    return false;
+  }
+
+  var DRAG_THRESHOLD = 4;
+  function attachDrag(pinEl, c) {
+    var canDrag = canMutate(c);
+    if (canDrag) pinEl.classList.add('draggable');
+    pinEl.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      var startClientX = e.clientX;
+      var startClientY = e.clientY;
+      var startLeft = parseFloat(pinEl.style.left) || 0;
+      var startTop = parseFloat(pinEl.style.top) || 0;
+      var dragging = false;
+      e.preventDefault();
+      e.stopPropagation();
+      try { pinEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+      function onMove(ev) {
+        var dx = ev.clientX - startClientX;
+        var dy = ev.clientY - startClientY;
+        if (!dragging && (dx * dx + dy * dy) >= DRAG_THRESHOLD * DRAG_THRESHOLD) {
+          if (!canDrag) return;
+          dragging = true;
+          closeThread();
+          pinEl.classList.add('dragging');
+        }
+        if (dragging) {
+          pinEl.style.left = (startLeft + dx) + 'px';
+          pinEl.style.top = (startTop + dy) + 'px';
+        }
+      }
+      function onUp(ev) {
+        document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerup', onUp, true);
+        try { pinEl.releasePointerCapture(e.pointerId); } catch (err) {}
+        if (!dragging) {
+          openThread(c.id, pinEl);
+          return;
+        }
+        pinEl.classList.remove('dragging');
+        var newLeft = startLeft + (ev.clientX - startClientX);
+        var newTop = startTop + (ev.clientY - startClientY);
+        var w = Math.max(document.documentElement.scrollWidth, 1);
+        var h = Math.max(document.documentElement.scrollHeight, 1);
+        api('/api/comments/' + c.id, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            pinX: Math.max(0, Math.min(1, newLeft / w)),
+            pinY: Math.max(0, Math.min(1, newTop / h)),
+            elementSelector: null,
+            elementOffsetX: null,
+            elementOffsetY: null,
+          }),
+        }).then(loadComments).catch(function (err) {
+          alert('Failed to move pin: ' + err.message);
+          loadComments();
+        });
+      }
+      document.addEventListener('pointermove', onMove, true);
+      document.addEventListener('pointerup', onUp, true);
+    });
   }
 
   // ---------- thread popover ----------
