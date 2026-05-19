@@ -63,21 +63,6 @@
     '.topbar .toggle-btn .count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 6px; align-items: center; justify-content: center; background: rgba(255,255,255,.22); border-radius: 999px; font-size: 11px; }' +
     '.topbar .toggle-btn .count:empty { display: none; }' +
     '.topbar .shortcut { opacity: .55; font-size: 11px; margin-left: 4px; }' +
-    '.sidebar { position: fixed; top: 0; right: 0; width: 360px; max-width: 100vw; height: 100vh; background: white; color: #111; border-left: 1px solid #e5e5e5; box-shadow: -4px 0 24px rgba(0,0,0,.15); pointer-events: auto; transform: translateX(100%); transition: transform .2s ease-out; display: flex; flex-direction: column; }' +
-    '.sidebar.open { transform: translateX(0); }' +
-    '.sidebar header { padding: 16px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }' +
-    '.sidebar header strong { font-size: 14px; }' +
-    '.sidebar header button { background: none; border: 0; cursor: pointer; font-size: 18px; color: #666; padding: 4px 8px; }' +
-    '.threads { flex: 1; overflow-y: auto; padding: 8px; }' +
-    '.thread { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; }' +
-    '.thread.active { border-color: #0066ff; }' +
-    '.thread .meta { font-size: 12px; color: #888; margin-bottom: 4px; }' +
-    '.thread .body { font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }' +
-    '.thread .reply { font-size: 12px; color: #444; margin-top: 8px; padding-left: 8px; border-left: 2px solid #eee; }' +
-    '.reply-input { display: none; margin-top: 8px; }' +
-    '.thread.active .reply-input { display: block; }' +
-    '.reply-input textarea { width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font: 13px system-ui; resize: vertical; }' +
-    '.reply-input .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }' +
     '.composer { position: fixed; background: white; color: #111; border: 1px solid #ddd; border-radius: 12px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.18); width: 320px; pointer-events: auto; z-index: 2; }' +
     '.composer label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }' +
     '.composer input, .composer textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font: 13px system-ui; }' +
@@ -91,8 +76,6 @@
     '.mentions { position: absolute; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
     '.mentions div { padding: 6px 10px; cursor: pointer; font-size: 13px; }' +
     '.mentions div:hover, .mentions div.selected { background: #f0f7ff; }' +
-    '.author { font-weight: 600; color: #222; }' +
-    '.guest { color: #888; font-weight: 400; }' +
     '</style>' +
     '<div class="pin-layer"></div>' +
     '<div class="topbar">' +
@@ -102,19 +85,12 @@
         '<span class="count"></span>' +
         '<span class="shortcut">C</span>' +
       '</button>' +
-    '</div>' +
-    '<aside class="sidebar">' +
-      '<header><strong>Comments</strong><button class="sidebar-close" aria-label="Close">×</button></header>' +
-      '<div class="threads"></div>' +
-    '</aside>'
+    '</div>'
   );
 
   var pinLayer = shadow.querySelector('.pin-layer');
   var toggleBtn = shadow.querySelector('.toggle-btn');
   var countBadge = shadow.querySelector('.toggle-btn .count');
-  var sidebar = shadow.querySelector('.sidebar');
-  var sidebarClose = shadow.querySelector('.sidebar-close');
-  var threadsEl = shadow.querySelector('.threads');
 
   // Cursor style for the host page when in comment mode. Single <style> in
   // <head> is the only host-page mutation aside from #__protopen_host.
@@ -130,13 +106,11 @@
     toggleBtn.classList.toggle('active', on);
     toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
     cursorStyle.textContent = on ? 'body { cursor: crosshair !important; }' : '';
-    if (on) sidebar.classList.add('open');
-    else closeComposer();
+    if (!on) closeComposer();
   }
   toggleBtn.addEventListener('click', function () {
     setMode(state.mode === 'comment' ? 'browse' : 'comment');
   });
-  sidebarClose.addEventListener('click', function () { sidebar.classList.remove('open'); });
   setMode('browse');
 
   // Figma-style shortcuts: C toggles Comment/Browse, Esc exits to Browse
@@ -193,7 +167,6 @@
     api('/api/sites/' + state.siteId + '/comments?status=all&pagePath=' + path).then(function (resp) {
       state.comments = resp.comments || [];
       renderPins();
-      renderSidebar();
     }).catch(function () {});
   }
 
@@ -271,10 +244,6 @@
     return state.comments.filter(function (c) { return !c.parentId; });
   }
 
-  function repliesFor(id) {
-    return state.comments.filter(function (c) { return c.parentId === id; });
-  }
-
   function renderPins() {
     pinLayer.innerHTML = '';
     pinLayer.style.position = 'absolute';
@@ -298,83 +267,12 @@
       el.appendChild(inner);
       el.addEventListener('click', function (e) {
         e.stopPropagation();
-        openThread(c.id);
+        state.activeThreadId = c.id;
+        renderPins();
       });
       pinLayer.appendChild(el);
     });
     countBadge.textContent = roots.length ? String(roots.length) : '';
-  }
-
-  // ---------- sidebar ----------
-  function renderSidebar() {
-    threadsEl.innerHTML = '';
-    var roots = rootComments();
-    if (!roots.length) {
-      var empty = document.createElement('div');
-      empty.style.cssText = 'padding:24px;color:#888;font-size:13px;text-align:center;';
-      empty.textContent = state.mode === 'comment' ? 'Click anywhere on the page to leave a comment.' : 'No comments yet on this page.';
-      threadsEl.appendChild(empty);
-      return;
-    }
-    roots.forEach(function (c, idx) {
-      var thread = document.createElement('div');
-      thread.className = 'thread' + (c.id === state.activeThreadId ? ' active' : '');
-      thread.dataset.commentId = c.id;
-      thread.addEventListener('click', function () { openThread(c.id); });
-
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      var authorLabel = c.author ? '<span class="author">' + escapeHTML(c.author.name) + '</span>' : '<span class="guest">' + escapeHTML(c.guestName || 'Guest') + '</span>';
-      meta.innerHTML = '#' + (idx + 1) + ' &middot; ' + authorLabel + ' &middot; ' + relTime(c.createdAt);
-      thread.appendChild(meta);
-
-      var body = document.createElement('div');
-      body.className = 'body';
-      body.textContent = c.body;
-      thread.appendChild(body);
-
-      repliesFor(c.id).forEach(function (r) {
-        var rEl = document.createElement('div');
-        rEl.className = 'reply';
-        var rAuthor = r.author ? r.author.name : (r.guestName || 'Guest');
-        rEl.innerHTML = '<div class="meta">' + escapeHTML(rAuthor) + ' &middot; ' + relTime(r.createdAt) + '</div>' + '<div>' + escapeHTML(r.body) + '</div>';
-        thread.appendChild(rEl);
-      });
-
-      var replyBox = document.createElement('div');
-      replyBox.className = 'reply-input';
-      var ta = document.createElement('textarea');
-      ta.placeholder = 'Reply…';
-      replyBox.appendChild(ta);
-      attachMentions(ta);
-      var actions = document.createElement('div');
-      actions.className = 'actions';
-      var send = document.createElement('button');
-      send.textContent = 'Reply';
-      send.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var body = ta.value.trim();
-        if (!body) return;
-        postComment({ parentId: c.id, body: body, pagePath: location.pathname }).then(function () {
-          ta.value = '';
-          loadComments();
-        });
-      });
-      actions.appendChild(send);
-      replyBox.appendChild(actions);
-      thread.appendChild(replyBox);
-
-      threadsEl.appendChild(thread);
-    });
-  }
-
-  function openThread(id) {
-    state.activeThreadId = id;
-    sidebar.classList.add('open');
-    renderPins();
-    renderSidebar();
-    var active = threadsEl.querySelector('.thread.active');
-    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
   // ---------- composer ----------
@@ -442,15 +340,6 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
-  }
-
-  function relTime(iso) {
-    var t = Date.parse(iso); if (isNaN(t)) return '';
-    var delta = (Date.now() - t) / 1000;
-    if (delta < 60) return 'just now';
-    if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
-    if (delta < 86400) return Math.floor(delta / 3600) + 'h ago';
-    return Math.floor(delta / 86400) + 'd ago';
   }
 
   // ---------- click capture (Comment mode) ----------
@@ -590,18 +479,13 @@
   });
   window.addEventListener('popstate', maybeNavigate);
 
-  // Deep-link: open a specific comment by hash #protopen-comment=<id>.
+  // Deep-link: highlight a specific comment by hash #protopen-comment=<id>.
   function maybeFocusFromHash() {
     var m = location.hash.match(/protopen-comment=([a-zA-Z0-9_]+)/);
-    if (m) {
-      // Try once now and again after comments load.
-      var id = m[1];
-      state.activeThreadId = id;
-      sidebar.classList.add('open');
-    }
+    if (m) state.activeThreadId = m[1];
   }
   maybeFocusFromHash();
-  window.addEventListener('hashchange', function () { maybeFocusFromHash(); renderPins(); renderSidebar(); });
+  window.addEventListener('hashchange', function () { maybeFocusFromHash(); renderPins(); });
 
   bootstrap();
 })();
