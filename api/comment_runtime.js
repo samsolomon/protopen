@@ -276,8 +276,13 @@
 
   function loadComments() {
     if (!state.siteId) return Promise.resolve();
-    var path = encodeURIComponent(location.pathname);
-    return api('/api/sites/' + state.siteId + '/comments?status=open&pagePath=' + path).then(function (resp) {
+    // Skip pagePath filter when deep-linking to a specific comment. The
+    // notification carries the comment's pagePath, so the iframe URL is
+    // already right; but legacy data with mismatched pagePath would
+    // otherwise be filtered out and the popover would never open.
+    var qs = 'status=open';
+    if (!state.activeThreadId) qs += '&pagePath=' + encodeURIComponent(location.pathname);
+    return api('/api/sites/' + state.siteId + '/comments?' + qs).then(function (resp) {
       state.comments = resp.comments || [];
       renderPins();
     }).catch(function () {});
@@ -587,7 +592,6 @@
     var root = state.comments.find(function (c) { return c.id === rootId; });
     if (!root) return;
     if (!pinEl) pinEl = pinLayer.querySelector('[data-comment-id="' + rootId + '"]');
-    if (!pinEl) return;
     state.activeThreadId = rootId;
 
     popoverEl = document.createElement('div');
@@ -652,15 +656,23 @@
     }
   }
   function positionPopover(pop, pinEl) {
-    var pinRect = pinEl.getBoundingClientRect();
     var popW = pop.offsetWidth || 320;
     var popH = pop.offsetHeight || 200;
-    var left = pinRect.right + 12 + window.scrollX;
-    if (left + popW > window.scrollX + window.innerWidth - 8) {
-      left = pinRect.left - popW - 12 + window.scrollX;
+    var left, top;
+    if (pinEl) {
+      var pinRect = pinEl.getBoundingClientRect();
+      left = pinRect.right + 12 + window.scrollX;
+      if (left + popW > window.scrollX + window.innerWidth - 8) {
+        left = pinRect.left - popW - 12 + window.scrollX;
+      }
+      if (left < window.scrollX + 8) left = window.scrollX + 8;
+      top = pinRect.top + window.scrollY;
+    } else {
+      // Pinless comment (legacy / unanchored deep-link): anchor below the
+      // topbar on the right edge instead of next to a pin.
+      left = window.scrollX + window.innerWidth - popW - 16;
+      top = window.scrollY + TOPBAR_H + 12;
     }
-    if (left < window.scrollX + 8) left = window.scrollX + 8;
-    var top = pinRect.top + window.scrollY;
     var minTop = window.scrollY + TOPBAR_H + 4;
     var maxTop = window.scrollY + window.innerHeight - popH - 8;
     if (top < minTop) top = minTop;

@@ -12,15 +12,15 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { initialsFor } from './AuthorChip'
 import { timeAgo } from './lib/time'
+import { siteCommentURL } from './constants'
 
 type InboxFilter = 'all' | 'unread'
 
 type InboxPageProps = {
   onSessionExpired: () => void
-  onOpenComment: (orgSlug: string, siteSlug: string, commentId: string, pagePath: string) => void
 }
 
-export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
+export function InboxPage({ onSessionExpired }: InboxPageProps) {
   const [filter, setFilter] = useState<InboxFilter>('all')
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -60,7 +60,8 @@ export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
       }
     }
     if (n.comment) {
-      onOpenComment(n.comment.orgSlug, n.comment.siteSlug, n.comment.id, n.comment.pagePath)
+      const url = siteCommentURL(n.comment.orgSlug, n.comment.siteSlug, n.comment.pagePath, n.comment.id)
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
   }
 

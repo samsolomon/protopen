@@ -365,10 +365,7 @@ export function Dashboard({
         ) : null}
 
         {view === 'inbox' ? (
-          <InboxPage
-            onSessionExpired={onSessionExpired}
-            onOpenComment={(_orgSlug, siteSlug, commentId, pagePath) => openComments(siteSlug, commentId, pagePath)}
-          />
+          <InboxPage onSessionExpired={onSessionExpired} />
         ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
