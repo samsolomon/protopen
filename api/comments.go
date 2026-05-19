@@ -563,9 +563,98 @@ func (app *application) commentByIDHandler(w http.ResponseWriter, r *http.Reques
 	switch r.Method {
 	case http.MethodDelete:
 		app.deleteCommentHandler(w, r, commentID)
+	case http.MethodPatch:
+		app.updateCommentHandler(w, r, commentID)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+type updateCommentRequest struct {
+	PinX            *float64 `json:"pinX"`
+	PinY            *float64 `json:"pinY"`
+	ElementSelector *string  `json:"elementSelector"`
+	ElementOffsetX  *float64 `json:"elementOffsetX"`
+	ElementOffsetY  *float64 `json:"elementOffsetY"`
+}
+
+// updateCommentHandler: PATCH /api/comments/{commentID}
+// Updates pin position / anchor fields. Author or org admin only.
+func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Request, commentID string) {
+	// CSRF defense: match the pattern in createSiteCommentHandler. Cross-origin
+	// requests from the runtime must send the custom header; trusted origins
+	// (app + frontend) and empty-Origin clients (CLI) are exempt.
+	origin := r.Header.Get("Origin")
+	trusted := origin == "" || origin == app.appOrigin || origin == app.frontendOrigin
+	if !trusted && r.Header.Get("X-Protopen-Client") == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing client header"})
+		return
+	}
+
+	user, err := app.requireSessionUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var (
+		authorID sql.NullString
+		siteID   string
+	)
+	if err := app.db.QueryRow(r.Context(), `select user_id, site_id from comments where id = $1`, commentID).Scan(&authorID, &siteID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "comment not found"})
+			return
+		}
+		log.Printf("lookup comment for update: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update comment"})
+		return
+	}
+
+	_, role, err := app.requireSiteAccess(r.Context(), user, siteID)
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	isAuthor := authorID.Valid && authorID.String == user.ID
+	if !isAuthor && role != roleAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the comment author or an org admin can update this"})
+		return
+	}
+
+	var req updateCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+
+	// Clamp the selector length to match createSiteCommentHandler's policy.
+	var selectorArg *string
+	if req.ElementSelector != nil {
+		s := strings.TrimSpace(*req.ElementSelector)
+		if s == "" {
+			selectorArg = nil
+		} else {
+			if len(s) > 200 {
+				s = s[:200]
+			}
+			selectorArg = &s
+		}
+	}
+
+	if _, err := app.db.Exec(r.Context(), `
+		update comments
+		set pin_x = $2, pin_y = $3,
+		    element_selector = $4, element_offset_x = $5, element_offset_y = $6,
+		    updated_at = now()
+		where id = $1
+	`, commentID, req.PinX, req.PinY, selectorArg, req.ElementOffsetX, req.ElementOffsetY); err != nil {
+		log.Printf("update comment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update comment"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (app *application) deleteCommentHandler(w http.ResponseWriter, r *http.Request, commentID string) {

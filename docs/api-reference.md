@@ -472,6 +472,36 @@ Auth required: signed-in org member. Guests get 401.
 }
 ```
 
+### `PATCH /api/comments/{commentID}`
+
+Auth required. Caller must be the comment author or an org admin. Used
+by the runtime to commit a pin drag.
+
+**Request:** (all fields optional; nulls clear the column)
+```json
+{
+  "pinX": 0.5,
+  "pinY": 0.4,
+  "elementSelector": null,
+  "elementOffsetX": null,
+  "elementOffsetY": null
+}
+```
+
+When the runtime drops a dragged pin, it sends new `pinX`/`pinY` and
+explicitly nulls the element anchor — the pin becomes "unanchored"
+(rendered with a dashed outline) until a new comment is created on a
+specific element.
+
+**Header:** `X-Protopen-Client: runtime` is required on cross-origin
+PATCHes, matching the POST policy.
+
+**Response (200):** `{ "ok": true }`
+
+**Status codes:** `200` ok, `400` invalid body, `401` unauthenticated,
+`403` not author and not admin (or cross-origin without the runtime
+header), `404` not found.
+
 ### `DELETE /api/comments/{commentID}`
 
 Auth required. Caller must be the comment author or an org admin.
