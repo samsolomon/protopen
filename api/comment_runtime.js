@@ -125,7 +125,7 @@
     '</style>' +
     '<div class="pin-layer"></div>' +
     '<div class="topbar">' +
-      '<a class="brand" href="' + escapeHTML(apiBase || '/') + '" target="_blank" rel="noopener">Protopen</a>' +
+      '<a class="brand" href="' + escapeHTML(apiBase || '/') + '">Protopen</a>' +
       '<div class="topbar-right">' +
         '<button class="toggle-btn" aria-pressed="false">' +
           '<span class="label">Comments</span>' +

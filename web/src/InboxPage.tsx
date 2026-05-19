@@ -48,21 +48,28 @@ export function InboxPage({ onSessionExpired }: InboxPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
-  const handleClick = async (n: Notification) => {
-    if (!n.readAt) {
-      try {
-        await markNotificationRead(n.id)
-      } catch (err) {
-        if (err instanceof SessionExpiredError) {
-          onSessionExpired()
-          return
+  // Plain click: mark read then navigate same-tab. Modifier-clicks
+  // (Cmd/Ctrl/Shift/middle) skip preventDefault so the browser handles the
+  // anchor's href as new tab / new window — exactly what users expect from
+  // a link.
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, n: Notification) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+    e.preventDefault()
+    void (async () => {
+      if (!n.readAt) {
+        try {
+          await markNotificationRead(n.id)
+        } catch (err) {
+          if (err instanceof SessionExpiredError) {
+            onSessionExpired()
+            return
+          }
         }
       }
-    }
-    if (n.comment) {
-      const url = siteCommentURL(n.comment.orgSlug, n.comment.siteSlug, n.comment.pagePath, n.comment.id)
-      window.open(url, '_blank', 'noopener,noreferrer')
-    }
+      if (n.comment) {
+        window.location.href = siteCommentURL(n.comment.orgSlug, n.comment.siteSlug, n.comment.pagePath, n.comment.id)
+      }
+    })()
   }
 
   const handleMarkAllRead = async () => {
@@ -114,11 +121,11 @@ export function InboxPage({ onSessionExpired }: InboxPageProps) {
             const actor = n.actor?.name ?? 'Someone'
             const isUnread = !n.readAt
             return (
-              <button
+              <a
                 key={n.id}
-                type="button"
-                onClick={() => void handleClick(n)}
-                className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 ${
+                href={c ? siteCommentURL(c.orgSlug, c.siteSlug, c.pagePath, c.id) : '#'}
+                onClick={(e) => handleClick(e, n)}
+                className={`flex w-full items-start gap-3 px-4 py-3 text-left no-underline text-inherit transition-colors hover:bg-muted/40 ${
                   i < notifications.length - 1 ? 'border-b' : ''
                 }`}
               >
@@ -144,7 +151,7 @@ export function InboxPage({ onSessionExpired }: InboxPageProps) {
                 {isUnread ? (
                   <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-label="unread" />
                 ) : null}
-              </button>
+              </a>
             )
           })}
         </div>

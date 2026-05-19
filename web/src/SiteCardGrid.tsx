@@ -72,8 +72,6 @@ export function SiteCardGrid({
             <Card key={site.id} className="relative pt-0">
               <a
                 href={site.liveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 aria-label={`Open ${site.name}`}
                 className="absolute inset-0 z-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               />
