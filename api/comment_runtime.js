@@ -51,10 +51,9 @@
     '<style>' +
     ':host, * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }' +
     '.pin-layer { position: absolute; inset: 0; pointer-events: none; }' +
-    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: rgba(255,143,82,.92); color: white; font: 600 12px/28px system-ui, sans-serif; text-align: center; --pin-scale: 1; transform: translate(-14px, -28px) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid rgba(255,255,255,.6); -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4); pointer-events: auto; cursor: pointer; transition: transform .15s, filter .15s; }' +
-    '.pin:hover { filter: brightness(1.05); }' +
-    '.pin:hover { --pin-scale: 1.1; }' +
-    '.pin span { display: block; transform: rotate(45deg); }' +
+    '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: rgba(255,143,82,.92); color: white; font: 600 12px system-ui, sans-serif; --pin-scale: 1; transform-origin: 0% 100%; transform: translate(0, -100%) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid rgba(255,255,255,.6); -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4); pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: transform .15s, filter .15s; }' +
+    '.pin:hover { --pin-scale: 1.1; filter: brightness(1.05); }' +
+    '.pin > span { transform: rotate(45deg); line-height: 1; }' +
     '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
     '.pin.draggable { cursor: grab; }' +
