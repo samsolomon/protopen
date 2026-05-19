@@ -393,6 +393,11 @@
   var DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
   var CLOSE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
 
+  // Set by buildToolbar when the kebab menu opens; cleared on close or when
+  // the popover is dismissed. Keeps the outside-click handler from leaking
+  // past a popover close (Esc with menu open, click outside the popover).
+  var menuCleanup = null;
+
   function buildToolbar(c) {
     var bar = document.createElement('div');
     bar.className = 'pop-toolbar';
@@ -405,7 +410,7 @@
       resolveBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         api('/api/comments/' + c.id + '/resolve', { method: 'POST' })
-          .then(function () { closeThread(); loadComments(); })
+          .then(function () { closeThread({ skipRender: true }); loadComments(); })
           .catch(function (err) { alert('Failed: ' + err.message); });
       });
       bar.appendChild(resolveBtn);
@@ -415,9 +420,14 @@
     menuBtn.title = 'More actions';
     menuBtn.innerHTML = DOTS_SVG;
     var menuEl = null;
+    function closeMenu() {
+      if (menuEl) menuEl.remove();
+      menuEl = null;
+      if (menuCleanup) { menuCleanup(); menuCleanup = null; }
+    }
     function toggleMenu(e) {
       e.stopPropagation();
-      if (menuEl) { menuEl.remove(); menuEl = null; return; }
+      if (menuEl) { closeMenu(); return; }
       menuEl = document.createElement('div');
       menuEl.className = 'pop-menu';
       var copyBtn = document.createElement('button');
@@ -429,7 +439,7 @@
         var done = function () {
           copyBtn.textContent = 'Copied';
           copyBtn.classList.add('copied');
-          setTimeout(function () { if (menuEl) { menuEl.remove(); menuEl = null; } }, 800);
+          setTimeout(closeMenu, 800);
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(url).then(done).catch(done);
@@ -446,20 +456,18 @@
           ev.stopPropagation();
           if (!confirm('Delete this comment thread? Replies will be removed too.')) return;
           api('/api/comments/' + c.id, { method: 'DELETE' })
-            .then(function () { closeThread(); loadComments(); })
+            .then(function () { closeThread({ skipRender: true }); loadComments(); })
             .catch(function (err) { alert('Failed: ' + err.message); });
         });
         menuEl.appendChild(delBtn);
       }
       bar.appendChild(menuEl);
-      // Close menu on next outside click.
       setTimeout(function () {
-        document.addEventListener('click', function close(ev) {
-          if (menuEl && !menuEl.contains(ev.target) && ev.target !== menuBtn) {
-            menuEl.remove(); menuEl = null;
-            document.removeEventListener('click', close, true);
-          }
-        }, true);
+        function onOutside(ev) {
+          if (menuEl && !menuEl.contains(ev.target) && ev.target !== menuBtn) closeMenu();
+        }
+        document.addEventListener('click', onOutside, true);
+        menuCleanup = function () { document.removeEventListener('click', onOutside, true); };
       }, 0);
     }
     menuBtn.addEventListener('click', toggleMenu);
@@ -534,17 +542,14 @@
       send.className = 'send';
       send.type = 'button';
       send.title = 'Reply';
-      send.innerHTML = SEND_SVG;
-      function syncSend() { send.classList.toggle('active', ta.value.trim().length > 0); }
-      ta.addEventListener('input', syncSend);
       function submitReply() {
         var text = ta.value.trim();
         if (!text) return;
         postComment({ parentId: rootId, body: text, pagePath: location.pathname })
-          .then(function () { ta.value = ''; syncSend(); loadComments().then(function () { openThread(rootId, null); }); })
+          .then(function () { loadComments().then(function () { openThread(rootId, null); }); })
           .catch(function (e) { alert('Failed: ' + e.message); });
       }
-      send.addEventListener('click', submitReply);
+      attachSendButton(ta, send, submitReply);
       attachMentions(ta);
       attachAutoGrow(ta, 80);
       attachEnterToSubmit(ta, submitReply);
@@ -560,12 +565,13 @@
     positionPopover(popoverEl, pinEl);
     renderPins();
   }
-  function closeThread() {
+  function closeThread(opts) {
+    if (menuCleanup) { menuCleanup(); menuCleanup = null; }
     if (popoverEl && popoverEl.parentNode) popoverEl.parentNode.removeChild(popoverEl);
     popoverEl = null;
     if (state.activeThreadId) {
       state.activeThreadId = null;
-      renderPins();
+      if (!opts || !opts.skipRender) renderPins();
     }
   }
   function positionPopover(pop, pinEl) {
@@ -604,8 +610,8 @@
     closeComposer();
     composerEl = document.createElement('div');
     composerEl.className = 'composer';
-    var maxLeft = window.innerWidth - 340;
-    var maxTop = window.innerHeight - 220;
+    var maxLeft = window.innerWidth - 380;
+    var maxTop = window.innerHeight - 160;
     composerEl.style.left = Math.max(8, Math.min(maxLeft, pin.viewportX + 16)) + 'px';
     composerEl.style.top = Math.max(8, Math.min(maxTop, pin.viewportY + 16)) + 'px';
 
@@ -621,12 +627,10 @@
 
     composerEl.innerHTML =
       '<textarea class="body-input" placeholder="Add a comment… @ to mention"></textarea>' +
-      '<button class="send" type="button" title="Comment">' + SEND_SVG + '</button>';
+      '<button class="send" type="button" title="Comment"></button>';
     shadow.appendChild(composerEl);
     var ta = composerEl.querySelector('.body-input');
     var sendBtn = composerEl.querySelector('.send');
-    function syncSend() { sendBtn.classList.toggle('active', ta.value.trim().length > 0); }
-    ta.addEventListener('input', syncSend);
     ta.focus();
     attachMentions(ta);
     attachAutoGrow(ta, 120);
@@ -648,9 +652,8 @@
         alert('Failed: ' + e.message);
       });
     }
+    attachSendButton(ta, sendBtn, submitNew);
     attachEnterToSubmit(ta, submitNew);
-    sendBtn.addEventListener('click', submitNew);
-    composerEl.querySelector('.submit').addEventListener('click', submitNew);
   }
 
   function closeComposer() {
@@ -696,6 +699,17 @@
   }, true);
 
   // ---------- textarea ergonomics ----------
+  // attachSendButton wires the textarea + send-button pair used by both the
+  // popover reply row and the new-comment composer: the button stays gray
+  // until the textarea has non-empty content, then lights up orange.
+  function attachSendButton(textarea, btn, submit) {
+    btn.innerHTML = SEND_SVG;
+    function sync() { btn.classList.toggle('active', textarea.value.trim().length > 0); }
+    textarea.addEventListener('input', sync);
+    btn.addEventListener('click', submit);
+    sync();
+  }
+
   function attachAutoGrow(textarea, maxH) {
     function grow() {
       textarea.style.height = 'auto';
