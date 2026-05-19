@@ -77,8 +77,7 @@
     '.composer .close { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: #a1a1aa; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }' +
     '.composer .close:hover { color: #71717a; background: rgba(0,0,0,.04); }' +
     '.popover { position: absolute; pointer-events: auto; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: #18181b; border: 1px solid #e4e4e7; border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.1); width: 320px; font-size: 13px; overflow: hidden; z-index: 2; }' +
-    '.pop-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0 14px; }' +
-    '.pop-header .seq { font-weight: 600; color: #71717a; font-size: 12px; }' +
+    '.pop-header { display: flex; align-items: center; justify-content: flex-end; padding: 6px 8px 0 8px; }' +
     '.pop-toolbar { display: flex; align-items: center; gap: 2px; position: relative; }' +
     '.pop-toolbar button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #d4d4d8; padding: 0; transition: color .12s, background .12s; }' +
     '.pop-toolbar button:hover { color: #71717a; background: rgba(0,0,0,.03); }' +
@@ -505,7 +504,6 @@
     if (!root) return;
     if (!pinEl) pinEl = pinLayer.querySelector('[data-comment-id="' + rootId + '"]');
     if (!pinEl) return;
-    var idx = rootComments().indexOf(root) + 1;
     state.activeThreadId = rootId;
 
     popoverEl = document.createElement('div');
@@ -513,10 +511,6 @@
 
     var header = document.createElement('div');
     header.className = 'pop-header';
-    var seq = document.createElement('span');
-    seq.className = 'seq';
-    seq.textContent = '#' + idx;
-    header.appendChild(seq);
     header.appendChild(buildToolbar(root));
     popoverEl.appendChild(header);
 
