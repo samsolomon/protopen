@@ -17,7 +17,7 @@ type InboxFilter = 'all' | 'unread'
 
 type InboxPageProps = {
   onSessionExpired: () => void
-  onOpenComment: (orgSlug: string, siteSlug: string, commentId: string) => void
+  onOpenComment: (orgSlug: string, siteSlug: string, commentId: string, pagePath: string) => void
 }
 
 export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
@@ -60,7 +60,7 @@ export function InboxPage({ onSessionExpired, onOpenComment }: InboxPageProps) {
       }
     }
     if (n.comment) {
-      onOpenComment(n.comment.orgSlug, n.comment.siteSlug, n.comment.id)
+      onOpenComment(n.comment.orgSlug, n.comment.siteSlug, n.comment.id, n.comment.pagePath)
     }
   }
 

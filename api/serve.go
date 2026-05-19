@@ -45,7 +45,10 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 
 	if r.URL.Path == "/__protopen/comment-runtime.js" {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=300")
+		// no-cache (not no-store) lets the browser keep the file but always
+		// revalidate, so a server restart with new JS is picked up on the
+		// next page load without stale-for-5-min hangover.
+		w.Header().Set("Cache-Control", "no-cache")
 		w.Write([]byte(commentRuntimeJS))
 		return
 	}

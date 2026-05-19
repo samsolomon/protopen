@@ -199,13 +199,14 @@ export function Dashboard({
     window.scrollTo(0, 0)
   }
 
-  const openComments = (siteSlug: string, focusCommentID?: string) => {
+  const openComments = (siteSlug: string, focusCommentID?: string, pagePath?: string) => {
     setCommentsSlug(siteSlug)
     setView('comments')
-    const url = focusCommentID
-      ? `/sites/${siteSlug}/comments?focus=${encodeURIComponent(focusCommentID)}`
-      : `/sites/${siteSlug}/comments`
-    navigateTo(url)
+    const params = new URLSearchParams()
+    if (focusCommentID) params.set('focus', focusCommentID)
+    if (pagePath && pagePath !== '/') params.set('page', pagePath)
+    const query = params.toString()
+    navigateTo(`/sites/${siteSlug}/comments${query ? `?${query}` : ''}`)
     window.scrollTo(0, 0)
   }
 
@@ -251,12 +252,14 @@ export function Dashboard({
     }
     const params = new URLSearchParams(window.location.search)
     const focus = params.get('focus')
+    const page = params.get('page')
     return (
       <CommentsOverlay
         orgSlug={target.orgSlug}
         siteSlug={target.slug}
         siteName={target.name}
         focusCommentID={focus}
+        pagePath={page}
       />
     )
   }
@@ -364,7 +367,7 @@ export function Dashboard({
         {view === 'inbox' ? (
           <InboxPage
             onSessionExpired={onSessionExpired}
-            onOpenComment={(_orgSlug, siteSlug, commentId) => openComments(siteSlug, commentId)}
+            onOpenComment={(_orgSlug, siteSlug, commentId, pagePath) => openComments(siteSlug, commentId, pagePath)}
           />
         ) : view === 'settings' ? (
           <Tabs value={settingsTab} onValueChange={switchSettingsTab} orientation="vertical" className="gap-8">

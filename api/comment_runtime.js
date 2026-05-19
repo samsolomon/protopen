@@ -205,12 +205,20 @@
       state.deployId = ctx.deployId;
       state.isPublic = ctx.isPublic;
       state.siteName = ctx.siteName;
-      loadComments();
+      loadComments().then(focusHashThread);
       loadDeploys();
     }).catch(function (err) {
       console.warn('protopen: bootstrap failed', err);
     });
     api('/api/session').then(function (s) { if (s && s.user) state.user = s.user; }).catch(function () {});
+  }
+
+  // Open the popover for the comment named in the URL hash, if any. Called
+  // once after the first comment load and again on hashchange. Silently
+  // no-ops if the comment isn't on this page (no pin rendered).
+  function focusHashThread() {
+    if (!state.activeThreadId) return;
+    openThread(state.activeThreadId, null);
   }
 
   // Pull deploys list and render the version selector. Silently no-ops for
@@ -917,7 +925,7 @@
     if (m) state.activeThreadId = m[1];
   }
   maybeFocusFromHash();
-  window.addEventListener('hashchange', function () { maybeFocusFromHash(); renderPins(); });
+  window.addEventListener('hashchange', function () { maybeFocusFromHash(); renderPins(); focusHashThread(); });
 
   bootstrap();
 })();
