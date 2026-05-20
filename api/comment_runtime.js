@@ -385,9 +385,8 @@
     countBadge.textContent = roots.length ? String(roots.length) : '';
   }
 
-  // Toggle the .active class on a single pin without rebuilding the layer.
-  // attachDrag re-binds pointerdown on every renderPins(), so popover
-  // open/close used to thrash drag handlers across every pin.
+  // Toggle .active in place; renderPins() would re-bind every pin's
+  // pointerdown drag handler.
   function setActivePin(id) {
     var prev = pinLayer.querySelector('.pin.active');
     if (prev) prev.classList.remove('active');
