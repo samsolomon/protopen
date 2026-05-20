@@ -26,10 +26,12 @@ import (
 //go:embed comment_runtime.js
 var commentRuntimeJS string
 
+const commentRuntimePath = "/__protopen/comment-runtime.js"
+
 // commentRuntimeScriptTag is injected before </body> on every deployed-site
 // HTML response (by default). The runtime is served separately so it can be
 // cached and inspected as a normal JS file in DevTools.
-const commentRuntimeScriptTag = `<script src="/__protopen/comment-runtime.js" defer data-site-org="%s" data-site-slug="%s" data-api-base="%s" data-deploy-id="%s"></script>`
+const commentRuntimeScriptTag = `<script src="` + commentRuntimePath + `" defer data-site-org="%s" data-site-slug="%s" data-api-base="%s" data-deploy-id="%s"></script>`
 
 const privateSiteHTML = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Private Site</title></head>
@@ -43,7 +45,7 @@ func (app *application) serveSiteHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if r.URL.Path == "/__protopen/comment-runtime.js" {
+	if r.URL.Path == commentRuntimePath {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		// no-cache (not no-store) lets the browser keep the file but always
 		// revalidate, so a server restart with new JS is picked up on the

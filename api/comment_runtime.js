@@ -385,6 +385,17 @@
     countBadge.textContent = roots.length ? String(roots.length) : '';
   }
 
+  // Toggle the .active class on a single pin without rebuilding the layer.
+  // attachDrag re-binds pointerdown on every renderPins(), so popover
+  // open/close used to thrash drag handlers across every pin.
+  function setActivePin(id) {
+    var prev = pinLayer.querySelector('.pin.active');
+    if (prev) prev.classList.remove('active');
+    if (!id) return;
+    var next = pinLayer.querySelector('[data-comment-id="' + id + '"]');
+    if (next) next.classList.add('active');
+  }
+
   function canMutate(c) {
     if (!state.user) return false;
     if (c.author && c.author.id === state.user.id) return true;
@@ -492,7 +503,7 @@
       resolveBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         api('/api/comments/' + c.id + '/resolve', { method: 'POST' })
-          .then(function () { closeThread({ skipRender: true }); loadComments(); })
+          .then(function () { closeThread(); loadComments(); })
           .catch(function (err) { alert('Failed: ' + err.message); });
       });
       bar.appendChild(resolveBtn);
@@ -538,7 +549,7 @@
           ev.stopPropagation();
           if (!confirm('Delete this comment thread? Replies will be removed too.')) return;
           api('/api/comments/' + c.id, { method: 'DELETE' })
-            .then(function () { closeThread({ skipRender: true }); loadComments(); })
+            .then(function () { closeThread(); loadComments(); })
             .catch(function (err) { alert('Failed: ' + err.message); });
         });
         menuEl.appendChild(delBtn);
@@ -635,10 +646,7 @@
           .then(function () { loadComments().then(function () { openThread(rootId, null); }); })
           .catch(function (e) { alert('Failed: ' + e.message); });
       }
-      attachSendButton(ta, send, submitReply);
-      attachMentions(ta);
-      attachAutoGrow(ta, 80);
-      attachEnterToSubmit(ta, submitReply);
+      wireCommentTextarea(ta, send, submitReply, 80);
       compose.appendChild(ta);
       compose.appendChild(send);
       popoverEl.appendChild(compose);
@@ -650,15 +658,15 @@
     shadow.appendChild(popoverEl);
     positionPopover(popoverEl, pinEl);
     popoverEl.style.visibility = '';
-    renderPins();
+    setActivePin(state.activeThreadId);
   }
-  function closeThread(opts) {
+  function closeThread() {
     if (menuCleanup) { menuCleanup(); menuCleanup = null; }
     if (popoverEl && popoverEl.parentNode) popoverEl.parentNode.removeChild(popoverEl);
     popoverEl = null;
     if (state.activeThreadId) {
       state.activeThreadId = null;
-      if (!opts || !opts.skipRender) renderPins();
+      setActivePin(null);
     }
   }
   function positionPopover(pop, pinEl) {
@@ -727,8 +735,6 @@
     var ta = composerEl.querySelector('.body-input');
     var sendBtn = composerEl.querySelector('.send');
     ta.focus();
-    attachMentions(ta);
-    attachAutoGrow(ta, 120);
     function submitNew() {
       var text = ta.value.trim();
       if (!text) return;
@@ -747,8 +753,7 @@
         alert('Failed: ' + e.message);
       });
     }
-    attachSendButton(ta, sendBtn, submitNew);
-    attachEnterToSubmit(ta, submitNew);
+    wireCommentTextarea(ta, sendBtn, submitNew, 120);
   }
 
   function closeComposer() {
@@ -816,6 +821,13 @@
       e.preventDefault();
       submit();
     });
+  }
+
+  function wireCommentTextarea(textarea, sendBtn, submit, maxH) {
+    attachSendButton(textarea, sendBtn, submit);
+    attachMentions(textarea);
+    attachAutoGrow(textarea, maxH);
+    attachEnterToSubmit(textarea, submit);
   }
 
   // ---------- mention autocomplete (signed-in only) ----------

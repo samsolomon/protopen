@@ -19,7 +19,7 @@ import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { AdminUsersPanel } from './AdminUsersPanel'
 import { AdminSettings } from './AdminSettings'
 import { InboxPage } from './InboxPage'
-import { CommentsOverlay } from './CommentsOverlay'
+import { siteCommentURL } from './constants'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -90,7 +90,7 @@ function writeScopeToURL(scope: SiteScope) {
   window.history.replaceState(null, '', buildScopeURL(window.location.href, scope))
 }
 
-type DashboardView = 'dashboard' | 'settings' | 'inbox' | 'comments'
+type DashboardView = 'dashboard' | 'settings' | 'inbox'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
@@ -99,14 +99,10 @@ function settingsTabFromPath(path: string, isAdmin: boolean): string {
   return 'profile'
 }
 
-const COMMENTS_PATH_RE = /^\/sites\/([^/]+)\/comments\/?$/
-
-function viewFromPath(path: string): { view: DashboardView; commentsSlug?: string } {
-  if (path.startsWith('/settings')) return { view: 'settings' }
-  if (path === '/inbox') return { view: 'inbox' }
-  const match = COMMENTS_PATH_RE.exec(path)
-  if (match) return { view: 'comments', commentsSlug: match[1] }
-  return { view: 'dashboard' }
+function viewFromPath(path: string): DashboardView {
+  if (path.startsWith('/settings')) return 'settings'
+  if (path === '/inbox') return 'inbox'
+  return 'dashboard'
 }
 
 type DashboardProps = {
@@ -138,9 +134,7 @@ export function Dashboard({
   onSitesChanged,
   onSessionExpired,
 }: DashboardProps) {
-  const initialRoute = viewFromPath(window.location.pathname)
-  const [view, setView] = useState<DashboardView>(initialRoute.view)
-  const [commentsSlug, setCommentsSlug] = useState<string | null>(initialRoute.commentsSlug ?? null)
+  const [view, setView] = useState<DashboardView>(() => viewFromPath(window.location.pathname))
   const [settingsTab, setSettingsTab] = useState(() =>
     settingsTabFromPath(window.location.pathname, !!user.isAdmin)
   )
@@ -192,21 +186,10 @@ export function Dashboard({
       navigateTo('/settings')
     } else if (next === 'inbox') {
       navigateTo('/inbox')
-    } else if (next !== 'comments') {
+    } else {
       navigateTo('/')
     }
     setView(next)
-    window.scrollTo(0, 0)
-  }
-
-  const openComments = (siteSlug: string, focusCommentID?: string, pagePath?: string) => {
-    setCommentsSlug(siteSlug)
-    setView('comments')
-    const params = new URLSearchParams()
-    if (focusCommentID) params.set('focus', focusCommentID)
-    if (pagePath && pagePath !== '/') params.set('page', pagePath)
-    const query = params.toString()
-    navigateTo(`/sites/${siteSlug}/comments${query ? `?${query}` : ''}`)
     window.scrollTo(0, 0)
   }
 
@@ -218,15 +201,10 @@ export function Dashboard({
   useEffect(() => {
     const onPopState = () => {
       const path = window.location.pathname
-      const route = viewFromPath(path)
-      setView(route.view)
-      if (route.view === 'settings') {
+      const next = viewFromPath(path)
+      setView(next)
+      if (next === 'settings') {
         setSettingsTab(settingsTabFromPath(path, !!user.isAdmin))
-      }
-      if (route.view === 'comments') {
-        setCommentsSlug(route.commentsSlug ?? null)
-      } else {
-        setCommentsSlug(null)
       }
     }
     window.addEventListener('popstate', onPopState)
@@ -238,30 +216,9 @@ export function Dashboard({
     if (!open) setPendingFiles(null)
   }
 
-  if (view === 'comments' && commentsSlug) {
-    const target = sites.find((s) => s.slug === commentsSlug)
-    if (!target) {
-      // The site list hasn't loaded yet (or doesn't include this slug). Render a
-      // minimal placeholder rather than the dashboard chrome — keeps the URL
-      // honest while waiting.
-      return (
-        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-          Loading site...
-        </div>
-      )
-    }
-    const params = new URLSearchParams(window.location.search)
-    const focus = params.get('focus')
-    const page = params.get('page')
-    return (
-      <CommentsOverlay
-        orgSlug={target.orgSlug}
-        siteSlug={target.slug}
-        siteName={target.name}
-        focusCommentID={focus}
-        pagePath={page}
-      />
-    )
+  const openSiteComments = (slug: string) => {
+    const s = sites.find((x) => x.slug === slug)
+    if (s) window.location.href = siteCommentURL(s.orgSlug, slug, null, null)
   }
 
   return (
@@ -486,7 +443,7 @@ export function Dashboard({
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onDuplicate={handleDuplicate}
-                    onOpenComments={(slug) => openComments(slug)}
+                    onOpenComments={openSiteComments}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />
@@ -500,7 +457,7 @@ export function Dashboard({
                     onDelete={onDeleteSite}
                     onVisibilityToggle={onVisibilityToggle}
                     onDuplicate={handleDuplicate}
-                    onOpenComments={(slug) => openComments(slug)}
+                    onOpenComments={openSiteComments}
                     onSitesChanged={onSitesChanged}
                     onSessionExpired={onSessionExpired}
                   />
