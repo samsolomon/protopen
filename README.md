@@ -27,26 +27,18 @@ Output is intentionally minimal so commands compose cleanly into pipelines: the 
 
 Config lives at `~/.protopen/config.json`. Resolution order: `--flag` > `PROTOPEN_TOKEN` / `PROTOPEN_URL` / `PROTOPEN_ORG` env > config file > defaults.
 
-## Use with agents
+## MCP server
 
-Give your agent the CLI in its toolbox. Any agent that can run a shell command can deploy.
+For agents that speak the [Model Context Protocol](https://modelcontextprotocol.io) (Claude Desktop, MCP-aware editors), `protopen mcp` runs an MCP server over stdio. It's the same actions as the CLI, exposed as MCP tools, sharing `~/.protopen/config.json` — so `protopen login` is the only setup step for either surface.
 
-Example agent instruction:
-
-> When the user asks to share, preview, or publish what we just built, run `protopen deploy <path>` and return the URL it prints.
-
-Or a one-shot bash snippet you can hand off:
-
-```bash
-URL=$(protopen deploy ./dist --json | jq -r .liveUrl)
-echo "Preview at: $URL"
-```
-
-Works with anything that can call a binary — Claude Code, Cursor, Codex, in-house scripts, post-commit hooks. The CLI is the universal interface; the API is documented at [docs/api-reference.md](docs/api-reference.md) if you'd rather talk HTTP directly.
-
-### MCP server
-
-For agents that speak the [Model Context Protocol](https://modelcontextprotocol.io) (Claude Desktop, MCP-aware editors), `protopen mcp` runs an MCP server over stdio. It exposes the same actions as the CLI — `deploy`, `list_sites`, `list_deploys`, `rollback`, `list_comments` — and reuses the existing `~/.protopen/config.json`, so `protopen login` is the only setup step.
+| Action         | CLI                                  | MCP tool        |
+| -------------- | ------------------------------------ | --------------- |
+| Deploy         | `protopen deploy <path>`             | `deploy`        |
+| List sites     | `protopen list`                      | `list_sites`    |
+| List deploys   | `protopen deploys <name>`            | `list_deploys`  |
+| Rollback       | `protopen rollback <name> <id>`      | `rollback`      |
+| Read comments  | `protopen comments <name>`           | `list_comments` |
+| Set visibility | `protopen visibility <name> <vis>`   | —               |
 
 Example Claude Desktop config (`claude_desktop_config.json`):
 
@@ -62,6 +54,23 @@ Example Claude Desktop config (`claude_desktop_config.json`):
 ```
 
 The `deploy` tool requires absolute paths because stdio MCP has no shared working directory with the agent.
+
+## Use with agents
+
+Any agent that can run a shell command can deploy via the CLI — Claude Code, Cursor, Codex, in-house scripts, post-commit hooks.
+
+Example agent instruction:
+
+> When the user asks to share, preview, or publish what we just built, run `protopen deploy <path>` and return the URL it prints.
+
+Or a one-shot bash snippet you can hand off:
+
+```bash
+URL=$(protopen deploy ./dist --json | jq -r .liveUrl)
+echo "Preview at: $URL"
+```
+
+For agents that speak MCP natively, point them at `protopen mcp` (above). For everything else, the HTTP API is documented at [docs/api-reference.md](docs/api-reference.md).
 
 ## Quickstart (local dev)
 
