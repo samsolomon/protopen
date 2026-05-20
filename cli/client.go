@@ -63,25 +63,25 @@ func newClient(token string, baseURL string) *client {
 	}
 }
 
-func (c *client) deployDirectory(dirPath string, name string, label string, org string, git *gitMeta) (deployResult, error) {
+func (c *client) deployDirectory(dirPath string, name string, label string, org string, git *gitMeta, isPublic *bool) (deployResult, error) {
 	zipData, err := zipDirectory(dirPath)
 	if err != nil {
 		return deployResult{}, fmt.Errorf("create zip: %w", err)
 	}
 
-	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label, org, git)
+	return c.upload(name, "zip", filepath.Base(dirPath)+".zip", zipData, label, org, git, isPublic)
 }
 
-func (c *client) deployZip(zipPath string, name string, label string, org string, git *gitMeta) (deployResult, error) {
+func (c *client) deployZip(zipPath string, name string, label string, org string, git *gitMeta, isPublic *bool) (deployResult, error) {
 	data, err := os.ReadFile(zipPath)
 	if err != nil {
 		return deployResult{}, err
 	}
 
-	return c.upload(name, "zip", filepath.Base(zipPath), data, label, org, git)
+	return c.upload(name, "zip", filepath.Base(zipPath), data, label, org, git, isPublic)
 }
 
-func (c *client) upload(name string, mode string, filename string, data []byte, label string, org string, git *gitMeta) (deployResult, error) {
+func (c *client) upload(name string, mode string, filename string, data []byte, label string, org string, git *gitMeta, isPublic *bool) (deployResult, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -89,6 +89,15 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 	writer.WriteField("mode", mode)
 	if label != "" {
 		writer.WriteField("label", label)
+	}
+	// Absent is_public field = inherit the instance default_site_private
+	// setting. Only set when the caller passed --public/--private.
+	if isPublic != nil {
+		if *isPublic {
+			writer.WriteField("is_public", "true")
+		} else {
+			writer.WriteField("is_public", "false")
+		}
 	}
 	if git != nil {
 		writer.WriteField("git_commit_hash", git.CommitHash)

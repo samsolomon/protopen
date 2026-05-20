@@ -109,6 +109,10 @@ type uploadRequest struct {
 	GitDirty         *bool      `json:"gitDirty,omitempty"`
 	GitAuthor        string     `json:"gitAuthor,omitempty"`
 	GitRemoteURL     string     `json:"gitRemoteURL,omitempty"`
+	// IsPublic is an optional override; nil means apply the instance default
+	// (default_site_private). Only consulted on first deploy of a new site —
+	// re-uploads to an existing site preserve its current visibility.
+	IsPublic *bool `json:"isPublic,omitempty"`
 }
 
 type fileMeta struct {
@@ -131,8 +135,11 @@ type siteRecord struct {
 	OrgSlug   string
 	Deploys   int
 	CreatedBy *string
+	IsPublic  bool
 }
 
+// liveDeploy is the cached resolution of orgSlug+siteSlug → live deploy used
+// by the content server to serve requests without re-querying on every hit.
 type liveDeploy struct {
 	siteID   string
 	deployID string
@@ -242,6 +249,10 @@ func main() {
 
 	if err := app.initEmailState(ctx); err != nil {
 		log.Fatalf("init email state: %v", err)
+	}
+
+	if err := app.initVisibilityState(ctx); err != nil {
+		log.Fatalf("init visibility state: %v", err)
 	}
 
 	app.authLimiter.startCleanup(ctx)

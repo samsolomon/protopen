@@ -142,8 +142,14 @@ func (app *application) updateSiteHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// made_public_at tracks the clock for the auto-private sweeper. Invariant:
+	// made_public_at IS NOT NULL ⇔ is_public = true. Re-publishing resets the
+	// clock; going private clears it.
 	commandTag, err := app.db.Exec(r.Context(), `
-		update sites set is_public = $1, updated_at = now()
+		update sites
+		set is_public = $1,
+		    updated_at = now(),
+		    made_public_at = case when $1 then now() else null end
 		where id = $2 and deleted_at is null and org_id = $3
 	`, *payload.IsPublic, siteID, orgID)
 	if err != nil {

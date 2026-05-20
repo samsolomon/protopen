@@ -215,6 +215,10 @@ admin of the owning org (see [Site ownership](#site-ownership)).
 {"ok": true, "isPublic": true}
 ```
 
+Side-effect: setting `isPublic: true` resets the site's `made_public_at`
+clock, which determines when the auto-private sweeper (if enabled) reverts
+the site. Setting `isPublic: false` clears the clock.
+
 ### `POST /api/sites/{siteID}/duplicate`
 
 Auth required. Clones a site within the same org and attributes the new copy
@@ -651,6 +655,7 @@ creator or an org admin can replace its contents. Other org members get
 | `git_dirty` | string | no | `"true"` or `"false"` |
 | `git_author` | string | no | Git author |
 | `git_remote_url` | string | no | Git remote URL |
+| `is_public` | string | no | `"true"` or `"false"`. Overrides the instance `defaultSitePrivate` setting on first deploy of a new site (ignored for re-uploads to an existing site, which preserve its current visibility). |
 
 **Response (202):**
 ```json
@@ -911,7 +916,7 @@ admin, `404` user not found.
 
 ### `GET /api/admin/settings`
 
-Returns instance-wide settings: the deploy-thumbnail capture toggle and the email-provider configuration.
+Returns instance-wide settings: the deploy-thumbnail capture toggle, the email-provider configuration, and the site-visibility policy.
 
 **Response (200):**
 ```json
@@ -932,6 +937,12 @@ Returns instance-wide settings: the deploy-thumbnail capture toggle and the emai
     "smtpTLS": false,
     "inboundDomain": "reply.example.com",
     "inboundSecretSet": true
+  },
+  "visibility": {
+    "defaultSitePrivate": false,
+    "autoPrivateEnabled": false,
+    "autoPrivateAfterDays": 30,
+    "eligibleForRevertCount": 0
   }
 }
 ```
@@ -942,6 +953,10 @@ Returns instance-wide settings: the deploy-thumbnail capture toggle and the emai
 - `email.provider` — `none`, `resend`, or `smtp`.
 - `email.resendKeySet` / `email.smtpPassSet` / `email.inboundSecretSet` — whether a secret is stored. **Secret values are never returned.**
 - `email.inboundDomain` — the reply-by-email domain; reply-from-email is active when both `inboundDomain` and the inbound secret are set.
+- `visibility.defaultSitePrivate` — when `true`, new sites are created private unless the upload request explicitly sets `isPublic`.
+- `visibility.autoPrivateEnabled` — when `true`, a background sweep (every 15 min) flips public sites back to private once their `made_public_at` timestamp is older than `autoPrivateAfterDays`. Each reverted site is recorded in `audit_log` with `action = "auto_private_revert"`, `actor_user_id = NULL`, `actor_email = "system:auto-private"`. The sweep is capped at 500 sites per tick.
+- `visibility.autoPrivateAfterDays` — integer, 1–3650.
+- `visibility.eligibleForRevertCount` — a live count of public sites currently older than `autoPrivateAfterDays`; useful as a preview before enabling auto-revert.
 
 ### `PATCH /api/admin/settings`
 
@@ -961,6 +976,11 @@ Update one or more settings.
     "smtpTLS": false,
     "inboundDomain": "reply.example.com",
     "inboundSecret": "webhook-signing-secret"
+  },
+  "visibility": {
+    "defaultSitePrivate": true,
+    "autoPrivateEnabled": true,
+    "autoPrivateAfterDays": 30
   }
 }
 ```
@@ -970,9 +990,11 @@ Update one or more settings.
 - All keys are optional; only supplied fields change.
 - `email.resendKey` / `email.smtpPass` / `email.inboundSecret` are write-only: omit them or send `""` to keep the stored secret; send a non-empty value to replace it.
 - Saving email settings rebuilds the mailer immediately — no restart.
+- Returns **400** if `visibility.autoPrivateAfterDays` is outside the 1–3650 range.
 - Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
 - Returns **403** if the caller is not admin.
 - Thumbnail toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+- Visibility changes take effect on the next deploy (default) and the next 15-min cleanup tick (sweeper).
 
 ### `POST /api/admin/settings/email-test`
 
@@ -1073,6 +1095,9 @@ are intentionally narrow:
 | Mention `@username` pattern | `[a-zA-Z0-9_-]{2,32}` |
 | Element selector max | 200 characters |
 | Comment POST rate limit | 20/minute per IP |
+| Auto-private sweep cadence | every 15 minutes |
+| Auto-private sweep batch cap | 500 sites per tick |
+| `autoPrivateAfterDays` range | 1–3650 days |
 
 ## Miscellaneous
 

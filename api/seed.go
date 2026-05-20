@@ -356,9 +356,11 @@ var seedDeployAccents = []string{"#ff8f52", "#0fb381", "#5ba8ff", "#f4b942"}
 func insertSeedSite(ctx context.Context, tx pgx.Tx, ingestRoot string, orgID string, orgSlug string, name string, slug string, createdByUserID string, deployCount int, commits []seedCommit) error {
 	siteID := generateID("site")
 	now := time.Now().UTC().Add(-time.Duration(deployCount) * time.Hour)
+	// Seed sites are public by column default; set made_public_at to created_at
+	// so the auto-private sweeper sees a valid clock for them.
 	if _, err := tx.Exec(ctx, `
-		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
-		values ($1, $2, $3, $4, $5, $5, $6)
+		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by, made_public_at)
+		values ($1, $2, $3, $4, $5, $5, $6, $5)
 	`, siteID, orgID, slug, name, now, createdByUserID); err != nil {
 		return err
 	}

@@ -130,6 +130,12 @@ func (app *application) prepareMultipartUpload(w http.ResponseWriter, r *http.Re
 		dirty := dirtyStr == "true"
 		payload.GitDirty = &dirty
 	}
+	// Only set IsPublic when the form field is present, so absent = "apply
+	// instance default" (rather than "force public=false").
+	if visStr := strings.TrimSpace(r.FormValue("is_public")); visStr != "" {
+		visible := visStr == "true"
+		payload.IsPublic = &visible
+	}
 
 	paths := []string{}
 	if rawPaths := strings.TrimSpace(r.FormValue("paths")); rawPaths != "" {

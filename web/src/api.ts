@@ -504,6 +504,16 @@ export type AdminEmailSettings = {
   inboundSecretSet: boolean
 }
 
+export type AdminVisibilitySettings = {
+  defaultSitePrivate: boolean
+  autoPrivateEnabled: boolean
+  autoPrivateAfterDays: number
+  // Server-side preview: how many public sites are currently older than
+  // `autoPrivateAfterDays`. Shown next to the toggle so admins know what
+  // enabling the policy will affect.
+  eligibleForRevertCount: number
+}
+
 export type AdminSettings = {
   thumbnails: {
     available: boolean
@@ -511,6 +521,13 @@ export type AdminSettings = {
     reason?: string
   }
   email: AdminEmailSettings
+  visibility: AdminVisibilitySettings
+}
+
+export type AdminVisibilityPatch = {
+  defaultSitePrivate?: boolean
+  autoPrivateEnabled?: boolean
+  autoPrivateAfterDays?: number
 }
 
 // Secret fields (resendKey, smtpPass) are write-only: omit or send '' to keep
@@ -541,7 +558,7 @@ export async function fetchAdminSettings(): Promise<AdminSettings> {
 }
 
 export async function updateAdminSettings(
-  patch: { thumbnailsEnabled?: boolean; email?: AdminEmailPatch },
+  patch: { thumbnailsEnabled?: boolean; email?: AdminEmailPatch; visibility?: AdminVisibilityPatch },
 ): Promise<AdminSettings> {
   const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
     method: 'PATCH',

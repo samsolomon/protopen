@@ -248,9 +248,12 @@ func (app *application) duplicateSite(ctx context.Context, sourceSiteID string, 
 
 	now := time.Now().UTC()
 	newSiteID := generateID("site")
+	// Duplicates inherit the column default (is_public=true) for now; the
+	// invariant made_public_at IS NOT NULL ⇔ is_public=true must still hold,
+	// so we set the clock to now() too.
 	if _, err := tx.Exec(ctx, `
-		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
-		values ($1, $2, $3, $4, $5, $5, $6)
+		insert into sites (id, org_id, slug, name, created_at, updated_at, created_by, made_public_at)
+		values ($1, $2, $3, $4, $5, $5, $6, $5)
 	`, newSiteID, sourceOrgID, newSlug, newName, now, callerUserID); err != nil {
 		return site{}, err
 	}
@@ -364,6 +367,7 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 			Slug:    slug,
 			OrgSlug: orgSlug,
 		}
+		// IsPublic gets filled in by the visibility block below before INSERT.
 
 		// created_by remains stable for the lifetime of the row; the upload's
 		// caller becomes the canonical creator. Slug-match re-uploads above
@@ -372,10 +376,26 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 		if callerUserID != "" {
 			creator = &callerUserID
 		}
+
+		// Visibility precedence on first deploy of a new site:
+		//   1. explicit payload.IsPublic (CLI --public/--private)
+		//   2. instance default_site_private setting
+		// made_public_at tracks the clock for the auto-private sweeper, and we
+		// stash the resolved value on entry so the caller doesn't need to
+		// re-SELECT after commit (exactNameMatches hydrates the re-upload path).
+		if payload.IsPublic != nil {
+			entry.IsPublic = *payload.IsPublic
+		} else {
+			entry.IsPublic = !app.currentVisibilityPolicy(ctx).defaultSitePrivate
+		}
+		var madePublicAt *time.Time
+		if entry.IsPublic {
+			madePublicAt = &now
+		}
 		if _, err := tx.Exec(ctx, `
-			insert into sites (id, org_id, slug, name, created_at, updated_at, created_by)
-			values ($1, $2, $3, $4, $5, $5, $6)
-		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now, creator); err != nil {
+			insert into sites (id, org_id, slug, name, created_at, updated_at, created_by, is_public, made_public_at)
+			values ($1, $2, $3, $4, $5, $5, $6, $7, $8)
+		`, entry.ID, entry.OrgID, entry.Slug, entry.Name, now, creator, entry.IsPublic, madePublicAt); err != nil {
 			return site{}, err
 		}
 		if creator != nil {
@@ -420,9 +440,9 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 		return site{}, err
 	}
 
-	var isPublic bool
-	app.db.QueryRow(ctx, `select is_public from sites where id = $1`, entry.ID).Scan(&isPublic)
-
+	// entry.IsPublic was set on insert (new-site branch) or hydrated by
+	// exactNameMatches (re-upload branch, which preserves the existing value
+	// because the UPDATE above only touches updated_at).
 	liveURL := app.buildLiveURL(orgSlug, entry.Slug)
 
 	if app.thumbnailer.Load() != nil {
@@ -436,7 +456,7 @@ func (app *application) upsertSiteFromUpload(ctx context.Context, orgID string, 
 		UpdatedAt:   relativeTime(now),
 		DeployCount: countForMatch(matches),
 		LiveURL:     liveURL,
-		IsPublic:    isPublic,
+		IsPublic:    entry.IsPublic,
 	}, nil
 }
 
@@ -446,7 +466,7 @@ func (app *application) buildLiveURL(orgSlug, siteSlug string) string {
 
 func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string) ([]siteRecord, error) {
 	rows, err := tx.Query(ctx, `
-		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count, p.created_by
+		select p.id, p.org_id, p.name, p.slug, o.slug, coalesce(count(d.id), 0) as deploy_count, p.created_by, p.is_public
 		from sites p
 		join organizations o on o.id = p.org_id
 		left join deploys d on d.site_id = p.id
@@ -463,7 +483,7 @@ func exactNameMatches(ctx context.Context, tx pgx.Tx, orgID string, name string)
 	for rows.Next() {
 		var entry siteRecord
 		var deployCount int64
-		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount, &entry.CreatedBy); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.OrgID, &entry.Name, &entry.Slug, &entry.OrgSlug, &deployCount, &entry.CreatedBy, &entry.IsPublic); err != nil {
 			return nil, err
 		}
 		entry.Deploys = int(deployCount)

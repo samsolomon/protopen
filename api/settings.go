@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,17 +16,27 @@ import (
 )
 
 const (
-	settingThumbnailsEnabled  = "thumbnails_enabled"
-	settingEmailProvider      = "email_provider"
-	settingEmailFrom          = "email_from"
-	settingEmailResendKey     = "email_resend_key"
-	settingEmailSMTPHost      = "email_smtp_host"
-	settingEmailSMTPPort      = "email_smtp_port"
-	settingEmailSMTPUser      = "email_smtp_user"
-	settingEmailSMTPPass      = "email_smtp_pass"
-	settingEmailSMTPTLS       = "email_smtp_tls"
-	settingEmailInboundDomain = "email_inbound_domain"
-	settingEmailInboundSecret = "email_inbound_secret"
+	settingThumbnailsEnabled    = "thumbnails_enabled"
+	settingEmailProvider        = "email_provider"
+	settingEmailFrom            = "email_from"
+	settingEmailResendKey       = "email_resend_key"
+	settingEmailSMTPHost        = "email_smtp_host"
+	settingEmailSMTPPort        = "email_smtp_port"
+	settingEmailSMTPUser        = "email_smtp_user"
+	settingEmailSMTPPass        = "email_smtp_pass"
+	settingEmailSMTPTLS         = "email_smtp_tls"
+	settingEmailInboundDomain   = "email_inbound_domain"
+	settingEmailInboundSecret   = "email_inbound_secret"
+	settingDefaultSitePrivate   = "default_site_private"
+	settingAutoPrivateEnabled   = "auto_private_enabled"
+	settingAutoPrivateAfterDays = "auto_private_after_days"
+)
+
+// Defaults applied when the corresponding instance_settings row is absent.
+const (
+	defaultAutoPrivateAfterDays = 30
+	minAutoPrivateAfterDays     = 1
+	maxAutoPrivateAfterDays     = 3650
 )
 
 // Email provider values stored under settingEmailProvider.
@@ -111,14 +122,72 @@ func (app *application) disableThumbnails() {
 }
 
 type adminSettingsResponse struct {
-	Thumbnails adminThumbnailSettings `json:"thumbnails"`
-	Email      adminEmailSettings     `json:"email"`
+	Thumbnails adminThumbnailSettings  `json:"thumbnails"`
+	Email      adminEmailSettings      `json:"email"`
+	Visibility adminVisibilitySettings `json:"visibility"`
 }
 
 type adminThumbnailSettings struct {
 	Available bool   `json:"available"`
 	Enabled   bool   `json:"enabled"`
 	Reason    string `json:"reason,omitempty"`
+}
+
+// adminVisibilitySettings carries the three site-visibility settings plus a
+// preview count of sites currently eligible for the auto-private sweeper. The
+// count is rendered in the admin UI next to the toggle so an operator can see
+// how many sites would flip before enabling the policy.
+type adminVisibilitySettings struct {
+	DefaultSitePrivate      bool `json:"defaultSitePrivate"`
+	AutoPrivateEnabled      bool `json:"autoPrivateEnabled"`
+	AutoPrivateAfterDays    int  `json:"autoPrivateAfterDays"`
+	EligibleForRevertCount  int  `json:"eligibleForRevertCount"`
+}
+
+// visibilityPolicy is the in-process view of the three visibility settings,
+// read on demand from instance_settings. Kept tiny so callers can take a
+// fresh snapshot per request/tick without coordination.
+type visibilityPolicy struct {
+	defaultSitePrivate   bool
+	autoPrivateEnabled   bool
+	autoPrivateAfterDays int
+}
+
+func (app *application) currentVisibilityPolicy(ctx context.Context) visibilityPolicy {
+	s := app.getInstanceSettings(ctx,
+		settingDefaultSitePrivate, settingAutoPrivateEnabled, settingAutoPrivateAfterDays)
+	days := defaultAutoPrivateAfterDays
+	if raw := s[settingAutoPrivateAfterDays]; raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= minAutoPrivateAfterDays && parsed <= maxAutoPrivateAfterDays {
+			days = parsed
+		}
+	}
+	return visibilityPolicy{
+		defaultSitePrivate:   s[settingDefaultSitePrivate] == "true",
+		autoPrivateEnabled:   s[settingAutoPrivateEnabled] == "true",
+		autoPrivateAfterDays: days,
+	}
+}
+
+// countSitesEligibleForRevert mirrors the sweeper's WHERE clause so the admin
+// UI can preview how many sites would be flipped. Cheap thanks to the partial
+// index added in migration 023, and skipped entirely when the policy is
+// disabled (the count is never rendered in that case).
+func (app *application) countSitesEligibleForRevert(ctx context.Context, enabled bool, days int) int {
+	if !enabled {
+		return 0
+	}
+	var n int
+	err := app.db.QueryRow(ctx, `
+		select count(*) from sites
+		where is_public = true and deleted_at is null and made_public_at is not null
+		  and made_public_at < now() - make_interval(days => $1)
+	`, days).Scan(&n)
+	if err != nil {
+		log.Printf("count sites eligible for revert: %v", err)
+		return 0
+	}
+	return n
 }
 
 // adminEmailSettings is the client-facing view of the email config. Secrets
@@ -173,6 +242,47 @@ func (app *application) rebuildMailer(ctx context.Context) {
 	log.Printf("email sending enabled via %s", provider)
 }
 
+// initVisibilityState seeds the three site-visibility settings from env on
+// first boot. Once a row exists, env vars are ignored — the admin UI is the
+// source of truth thereafter. Mirrors initEmailState's "seed-once" pattern.
+//
+// Env vars:
+//
+//	DEFAULT_VISIBILITY      = "private" | "public"  (default: "public")
+//	AUTO_PRIVATE_AFTER_DAYS = integer, clamped to [1, 3650]
+func (app *application) initVisibilityState(ctx context.Context) error {
+	_, exists, err := app.getInstanceSetting(ctx, settingDefaultSitePrivate)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	defaultPrivate := strings.EqualFold(getenv("DEFAULT_VISIBILITY", "public"), "private")
+	if err := app.setInstanceSetting(ctx, settingDefaultSitePrivate, strconv.FormatBool(defaultPrivate), "boot"); err != nil {
+		return err
+	}
+
+	autoEnabled := false
+	days := defaultAutoPrivateAfterDays
+	if raw := strings.TrimSpace(getenv("AUTO_PRIVATE_AFTER_DAYS", "")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= minAutoPrivateAfterDays && parsed <= maxAutoPrivateAfterDays {
+			days = parsed
+			autoEnabled = true
+		} else {
+			log.Printf("AUTO_PRIVATE_AFTER_DAYS=%q ignored (must be %d-%d)", raw, minAutoPrivateAfterDays, maxAutoPrivateAfterDays)
+		}
+	}
+	if err := app.setInstanceSetting(ctx, settingAutoPrivateEnabled, strconv.FormatBool(autoEnabled), "boot"); err != nil {
+		return err
+	}
+	if err := app.setInstanceSetting(ctx, settingAutoPrivateAfterDays, strconv.Itoa(days), "boot"); err != nil {
+		return err
+	}
+	return nil
+}
+
 // initEmailState seeds the email config from env on first boot (so existing
 // RESEND_API_KEY deploys keep working), then builds the mailer. After the
 // first boot the DB is authoritative and env changes are ignored.
@@ -224,6 +334,7 @@ func (app *application) currentSettings(ctx context.Context) adminSettingsRespon
 	if provider == "" {
 		provider = emailProviderNone
 	}
+	policy := app.currentVisibilityPolicy(ctx)
 	return adminSettingsResponse{
 		Thumbnails: adminThumbnailSettings{
 			Available: app.thumbnailEnv.available,
@@ -241,6 +352,12 @@ func (app *application) currentSettings(ctx context.Context) adminSettingsRespon
 			SMTPTLS:          s[settingEmailSMTPTLS] == "true",
 			InboundDomain:    s[settingEmailInboundDomain],
 			InboundSecretSet: s[settingEmailInboundSecret] != "",
+		},
+		Visibility: adminVisibilitySettings{
+			DefaultSitePrivate:     policy.defaultSitePrivate,
+			AutoPrivateEnabled:     policy.autoPrivateEnabled,
+			AutoPrivateAfterDays:   policy.autoPrivateAfterDays,
+			EligibleForRevertCount: app.countSitesEligibleForRevert(ctx, policy.autoPrivateEnabled, policy.autoPrivateAfterDays),
 		},
 	}
 }
@@ -265,10 +382,44 @@ func (app *application) patchInstanceSettings(w http.ResponseWriter, r *http.Req
 			InboundDomain *string `json:"inboundDomain"`
 			InboundSecret *string `json:"inboundSecret"`
 		} `json:"email"`
+		Visibility *struct {
+			DefaultSitePrivate   *bool `json:"defaultSitePrivate"`
+			AutoPrivateEnabled   *bool `json:"autoPrivateEnabled"`
+			AutoPrivateAfterDays *int  `json:"autoPrivateAfterDays"`
+		} `json:"visibility"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
+	}
+
+	if v := payload.Visibility; v != nil {
+		if v.AutoPrivateAfterDays != nil {
+			d := *v.AutoPrivateAfterDays
+			if d < minAutoPrivateAfterDays || d > maxAutoPrivateAfterDays {
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error": fmt.Sprintf("autoPrivateAfterDays must be between %d and %d", minAutoPrivateAfterDays, maxAutoPrivateAfterDays),
+				})
+				return
+			}
+		}
+		setVis := func(key, val string) bool {
+			if err := app.setInstanceSetting(r.Context(), key, val, user.Email); err != nil {
+				log.Printf("set instance setting %s: %v", key, err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save settings"})
+				return false
+			}
+			return true
+		}
+		if v.DefaultSitePrivate != nil && !setVis(settingDefaultSitePrivate, strconv.FormatBool(*v.DefaultSitePrivate)) {
+			return
+		}
+		if v.AutoPrivateEnabled != nil && !setVis(settingAutoPrivateEnabled, strconv.FormatBool(*v.AutoPrivateEnabled)) {
+			return
+		}
+		if v.AutoPrivateAfterDays != nil && !setVis(settingAutoPrivateAfterDays, strconv.Itoa(*v.AutoPrivateAfterDays)) {
+			return
+		}
 	}
 
 	if payload.ThumbnailsEnabled != nil {

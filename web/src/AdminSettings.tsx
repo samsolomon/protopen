@@ -5,6 +5,7 @@ import {
   sendTestEmail,
   SessionExpiredError,
   type AdminSettings as AdminSettingsType,
+  type AdminVisibilityPatch,
 } from './api'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -51,6 +52,9 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
   const [email, setEmail] = useState<EmailForm | null>(null)
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)
+  // daysInput tracks the raw value of the days field so typing isn't fighting
+  // an async PATCH. Pushed to the server on blur/Enter once parsed + valid.
+  const [daysInput, setDaysInput] = useState('')
 
   useEffect(() => {
     void load()
@@ -63,12 +67,49 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
       const data = await fetchAdminSettings()
       setSettings(data)
       setEmail(emailFormFrom(data))
+      setDaysInput(String(data.visibility.autoPrivateAfterDays))
     } catch (err) {
       if (err instanceof SessionExpiredError) { onSessionExpired(); return }
       toast.error(err instanceof Error ? err.message : 'Could not load settings')
     } finally {
       setLoading(false)
     }
+  }
+
+  // patchVisibility submits one or more fields with optimistic state. On
+  // failure we restore the prior settings snapshot so the UI doesn't lie about
+  // server state.
+  const patchVisibility = async (patch: AdminVisibilityPatch, optimistic?: Partial<AdminSettingsType['visibility']>) => {
+    if (!settings) return
+    const previous = settings
+    if (optimistic) {
+      setSettings({ ...settings, visibility: { ...settings.visibility, ...optimistic } })
+    }
+    setSaving(true)
+    try {
+      const updated = await updateAdminSettings({ visibility: patch })
+      setSettings(updated)
+      setDaysInput(String(updated.visibility.autoPrivateAfterDays))
+    } catch (err) {
+      setSettings(previous)
+      setDaysInput(String(previous.visibility.autoPrivateAfterDays))
+      if (err instanceof SessionExpiredError) { onSessionExpired(); return }
+      toast.error(err instanceof Error ? err.message : 'Could not save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const commitDays = () => {
+    if (!settings) return
+    const parsed = parseInt(daysInput, 10)
+    if (Number.isNaN(parsed) || parsed < 1 || parsed > 3650) {
+      // Reset to the last server-confirmed value rather than nag with an error.
+      setDaysInput(String(settings.visibility.autoPrivateAfterDays))
+      return
+    }
+    if (parsed === settings.visibility.autoPrivateAfterDays) return
+    void patchVisibility({ autoPrivateAfterDays: parsed })
   }
 
   const handleThumbnailsToggle = async (next: boolean) => {
@@ -272,6 +313,77 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
                   Send test
                 </Button>
               </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-card">
+        <div className="flex flex-col gap-4 px-4 py-4">
+          <div className="flex flex-col gap-1">
+            <Label className="text-sm font-medium">Site visibility</Label>
+            <p className="text-sm text-muted-foreground">
+              Control the default visibility of newly deployed sites and whether public
+              sites automatically revert to private. Private sites are only viewable by
+              members of the site's workspace.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="default-private-toggle" className="text-sm font-normal">Default new sites to private</Label>
+              <p className="text-sm text-muted-foreground">
+                Site creators can still flip individual sites to public after deploy.
+              </p>
+            </div>
+            <Switch
+              id="default-private-toggle"
+              checked={settings.visibility.defaultSitePrivate}
+              disabled={saving}
+              onCheckedChange={(value) => void patchVisibility({ defaultSitePrivate: value }, { defaultSitePrivate: value })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-6 border-t pt-4">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="auto-private-toggle" className="text-sm font-normal">Automatically revert public sites</Label>
+              <p className="text-sm text-muted-foreground">
+                Public sites become private again once they've been public for the
+                configured number of days. Owners are not notified.
+              </p>
+            </div>
+            <Switch
+              id="auto-private-toggle"
+              checked={settings.visibility.autoPrivateEnabled}
+              disabled={saving}
+              onCheckedChange={(value) => void patchVisibility({ autoPrivateEnabled: value }, { autoPrivateEnabled: value })}
+            />
+          </div>
+
+          {settings.visibility.autoPrivateEnabled ? (
+            <div className="flex flex-col gap-2 sm:max-w-sm">
+              <Label htmlFor="auto-private-days" className="text-xs font-normal text-muted-foreground">
+                Revert after (days)
+              </Label>
+              <Input
+                id="auto-private-days"
+                type="number"
+                min={1}
+                max={3650}
+                value={daysInput}
+                disabled={saving}
+                onChange={(e) => setDaysInput(e.target.value)}
+                onBlur={commitDays}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+                className="w-32"
+              />
+              {settings.visibility.eligibleForRevertCount > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {settings.visibility.eligibleForRevertCount} public {settings.visibility.eligibleForRevertCount === 1 ? 'site is' : 'sites are'} older
+                  than {settings.visibility.autoPrivateAfterDays} {settings.visibility.autoPrivateAfterDays === 1 ? 'day' : 'days'} and will be reverted
+                  on the next sweep.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

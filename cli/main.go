@@ -61,7 +61,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: protopen <command> [options]
 
 Commands:
-  deploy <path>                Deploy a folder or zip to Protopen
+  deploy <path>                Deploy a folder or zip to Protopen (--public/--private overrides the instance default; omit both to inherit)
   list                         List your sites
   deploys <name>               Show deploy history for a site
   rollback <name> <deploy-id>  Roll back to a previous deploy
@@ -82,7 +82,8 @@ func cmdDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	name := fs.String("name", "", "Site name (defaults to directory/zip name)")
 	label := fs.String("label", "", "Deploy label (e.g. 'v2 with new header')")
-	private := fs.Bool("private", false, "Make the site private after deploy")
+	private := fs.Bool("private", false, "Create the site as private (overrides instance default)")
+	public := fs.Bool("public", false, "Create the site as public (overrides instance default)")
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
@@ -90,8 +91,23 @@ func cmdDeploy(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: protopen deploy <path> [--name NAME] [--private] [--token TOKEN] [--url URL] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: protopen deploy <path> [--name NAME] [--label LABEL] [--public|--private] [--org SLUG] [--token TOKEN] [--url URL] [--json]")
 		os.Exit(1)
+	}
+
+	if *public && *private {
+		fmt.Fprintln(os.Stderr, "error: --public and --private are mutually exclusive")
+		os.Exit(1)
+	}
+	// Send isPublic only when the user explicitly chose. Absence = inherit
+	// the instance default_site_private setting on the server.
+	var isPublic *bool
+	if *public {
+		t := true
+		isPublic = &t
+	} else if *private {
+		f := false
+		isPublic = &f
 	}
 
 	path := fs.Arg(0)
@@ -116,19 +132,13 @@ func cmdDeploy(args []string) {
 
 	var result deployResult
 	if info.IsDir() {
-		result, err = client.deployDirectory(path, siteName, *label, resolvedOrg, git)
+		result, err = client.deployDirectory(path, siteName, *label, resolvedOrg, git, isPublic)
 	} else {
-		result, err = client.deployZip(path, siteName, *label, resolvedOrg, git)
+		result, err = client.deployZip(path, siteName, *label, resolvedOrg, git, isPublic)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
-	}
-
-	if *private {
-		if err := client.updateVisibility(result.siteID, false); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: deployed but could not set private: %v\n", err)
-		}
 	}
 
 	if *jsonOutput {
