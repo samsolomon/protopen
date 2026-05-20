@@ -17,8 +17,10 @@ cd cli && make build                        # build the binary
 ./protopen deploy ./my-site                 # → live URL on stdout
 ./protopen deploy ./dist --json             # → structured JSON
 ./protopen list                             # your sites
+./protopen deploys <site-name>              # deploy history for a site
 ./protopen rollback <site-name> <deploy-id> # revert
 ./protopen visibility <name> public|private
+./protopen comments <name>                  # comments left on a site
 ./protopen version                          # print CLI version
 ./protopen help                             # full command list
 ```
