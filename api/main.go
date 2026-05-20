@@ -38,7 +38,7 @@ type application struct {
 	contentOrigin  string
 	cookieDomain   string
 
-	mailer *emailClient
+	mailer atomic.Pointer[emailClient]
 
 	authLimiter        *rateLimiter
 	commentLimiter     *rateLimiter
@@ -190,14 +190,6 @@ func main() {
 
 	cookieDomain := getenv("COOKIE_DOMAIN", "")
 
-	var mailer *emailClient
-	if apiKey := getenv("RESEND_API_KEY", ""); apiKey != "" {
-		mailer = newEmailClient(apiKey, getenv("RESEND_FROM_ADDRESS", ""))
-		log.Printf("email sending enabled via Resend")
-	} else {
-		log.Printf("email sending disabled (no RESEND_API_KEY)")
-	}
-
 	var adminEmails []string
 	if raw := getenv("ADMIN_EMAILS", ""); raw != "" {
 		for _, e := range strings.Split(raw, ",") {
@@ -218,7 +210,6 @@ func main() {
 		appOrigin:          appOrigin,
 		contentOrigin:      contentOrigin,
 		cookieDomain:       cookieDomain,
-		mailer:             mailer,
 		adminEmails:        adminEmails,
 		trustedProxyHeader: trustedProxyHeader,
 	}
@@ -249,6 +240,10 @@ func main() {
 		log.Fatalf("init thumbnail state: %v", err)
 	}
 
+	if err := app.initEmailState(ctx); err != nil {
+		log.Fatalf("init email state: %v", err)
+	}
+
 	app.authLimiter.startCleanup(ctx)
 	app.commentLimiter.startCleanup(ctx)
 	app.startCleanupLoop(ctx)
@@ -276,7 +271,10 @@ func main() {
 	appMux.HandleFunc("/api/admin/users", app.adminUsersHandler)
 	appMux.HandleFunc("/api/admin/users/", app.adminUserByIDHandler)
 	appMux.HandleFunc("/api/admin/settings", app.instanceSettingsHandler)
+	appMux.HandleFunc("/api/admin/settings/email-test", app.emailTestHandler)
 	appMux.HandleFunc("/api/comments/", app.commentByIDHandler)
+	appMux.HandleFunc("/api/notification-preferences", app.notificationPrefsHandler)
+	appMux.HandleFunc("/api/email/inbound", app.emailInboundHandler)
 	appMux.HandleFunc("/api/notifications", app.notificationsHandler)
 	appMux.HandleFunc("/api/notifications/", app.notificationByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))

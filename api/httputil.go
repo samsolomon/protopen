@@ -196,7 +196,9 @@ func limitJSONBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodDelete && r.Method != http.MethodOptions {
 			ct := r.Header.Get("Content-Type")
-			if !strings.HasPrefix(ct, "multipart/form-data") {
+			// The inbound-email webhook sets its own (larger) cap — forwarded
+			// emails with quoted history exceed the JSON limit.
+			if !strings.HasPrefix(ct, "multipart/form-data") && r.URL.Path != "/api/email/inbound" {
 				r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 			}
 		}

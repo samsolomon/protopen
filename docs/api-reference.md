@@ -530,6 +530,37 @@ replies to a thread you're subscribed to, when a comment lands on a site
 you own (via `site_subscriptions`), or when you're `@mentioned` in a
 comment body.
 
+When an email provider is configured, each notification also sends an email
+to recipients who have a verified address and haven't opted out of that
+notification type (see `/api/notification-preferences`). Email is dispatched
+off the request path, so creating a comment is unaffected by mail latency.
+
+### `GET /api/notification-preferences`
+
+Auth required (session, not bearer token). Returns the signed-in user's email
+notification preferences. An absent row yields the opted-in defaults.
+
+**Response (200):**
+```json
+{"emailOnReply": true, "emailOnMention": true}
+```
+
+### `PATCH /api/notification-preferences`
+
+Auth required (session, not bearer token). Updates the signed-in user's
+preferences. Both fields optional; only supplied fields change.
+
+**Request:**
+```json
+{"emailOnReply": false}
+```
+
+**Response (200):** same shape as `GET`.
+
+- `emailOnReply` — email when someone replies on a thread the user is subscribed to.
+- `emailOnMention` — email when the user is `@mentioned`.
+- In-app inbox notifications are unaffected by these toggles; they govern the email channel only.
+
 ### `GET /api/notifications`
 
 Auth required.
@@ -868,7 +899,7 @@ Lists every account on the instance with its organization memberships.
 
 ### `GET /api/admin/settings`
 
-Returns instance-wide settings. Currently exposes the deploy-thumbnail capture toggle.
+Returns instance-wide settings: the deploy-thumbnail capture toggle and the email-provider configuration.
 
 **Response (200):**
 ```json
@@ -877,13 +908,28 @@ Returns instance-wide settings. Currently exposes the deploy-thumbnail capture t
     "available": true,
     "enabled": true,
     "reason": ""
+  },
+  "email": {
+    "provider": "smtp",
+    "from": "Protopen <noreply@example.com>",
+    "resendKeySet": false,
+    "smtpHost": "smtp.example.com",
+    "smtpPort": "587",
+    "smtpUser": "apikey",
+    "smtpPassSet": true,
+    "smtpTLS": false,
+    "inboundDomain": "reply.example.com",
+    "inboundSecretSet": true
   }
 }
 ```
 
-- `available` — whether this server has the capability (env `THUMBNAILS_ENABLED` set and a Chromium binary resolved).
-- `enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
-- `reason` — populated only when `available` is `false`, explaining why.
+- `thumbnails.available` — whether this server has the capability (env `THUMBNAILS_ENABLED` set and a Chromium binary resolved).
+- `thumbnails.enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
+- `thumbnails.reason` — populated only when `available` is `false`, explaining why.
+- `email.provider` — `none`, `resend`, or `smtp`.
+- `email.resendKeySet` / `email.smtpPassSet` / `email.inboundSecretSet` — whether a secret is stored. **Secret values are never returned.**
+- `email.inboundDomain` — the reply-by-email domain; reply-from-email is active when both `inboundDomain` and the inbound secret are set.
 
 ### `PATCH /api/admin/settings`
 
@@ -891,14 +937,77 @@ Update one or more settings.
 
 **Request:**
 ```json
-{"thumbnailsEnabled": true}
+{
+  "thumbnailsEnabled": true,
+  "email": {
+    "provider": "smtp",
+    "from": "Protopen <noreply@example.com>",
+    "smtpHost": "smtp.example.com",
+    "smtpPort": "587",
+    "smtpUser": "apikey",
+    "smtpPass": "secret",
+    "smtpTLS": false,
+    "inboundDomain": "reply.example.com",
+    "inboundSecret": "webhook-signing-secret"
+  }
+}
 ```
 
 **Response (200):** same shape as `GET /api/admin/settings`.
 
+- All keys are optional; only supplied fields change.
+- `email.resendKey` / `email.smtpPass` / `email.inboundSecret` are write-only: omit them or send `""` to keep the stored secret; send a non-empty value to replace it.
+- Saving email settings rebuilds the mailer immediately — no restart.
 - Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
 - Returns **403** if the caller is not admin.
-- Toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+- Thumbnail toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+
+### `POST /api/admin/settings/email-test`
+
+Sends a one-off test message through the currently configured mailer so an admin can confirm the provider works.
+
+**Request:**
+```json
+{"to": "you@example.com"}
+```
+
+**Response (200):** `{"ok": true}`
+
+- Returns **400** if `to` is missing.
+- Returns **409** if no email provider is configured.
+- Returns **502** with the transport error in `error` if the send fails.
+- Returns **403** if the caller is not admin.
+
+### `POST /api/email/inbound`
+
+Webhook for reply-by-email. An email provider with inbound parsing (Postmark,
+Mailgun, SendGrid Inbound Parse, Cloudflare Email Workers, etc.) forwards a
+parsed reply here; the body is posted onto the thread the reply token points at.
+
+No session auth — gated instead by the webhook signature, the reply token, and
+a From-address match. Exempt from the 1 MiB JSON body cap (own 10 MiB limit).
+
+**Headers:**
+- `X-Protopen-Signature` — hex HMAC-SHA256 of the raw request body, keyed with
+  the configured inbound secret.
+
+**Request:**
+```json
+{
+  "to": "reply+<token>@reply.example.com",
+  "from": "Jane Chen <jane@example.com>",
+  "text": "the full reply including quoted history",
+  "strippedText": "just the new text (optional; used when present)"
+}
+```
+
+**Response (200):** `{"ok": true}` — also returned (as a no-op) when the reply
+body is empty after quote-stripping, so the provider doesn't retry.
+
+- **404** — inbound email is not configured on this instance.
+- **403** — bad signature, unknown/expired reply token, or the `from` address
+  doesn't match the token's user.
+- **410** — the thread the token points at no longer exists.
 
 ---
 

@@ -5,10 +5,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"embed"
 	"fmt"
 	"html/template"
 	"log"
+	"mime"
+	"net/smtp"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/resend/resend-go/v2"
@@ -22,27 +26,134 @@ const (
 //go:embed email_templates/*.html
 var emailTemplatesFS embed.FS
 
-type emailClient struct {
-	client *resend.Client
-	from   string
-	tmpls  *template.Template
+// emailTransport is the wire layer: it knows how to put a built message on
+// the network. emailClient sits above it and owns templates + subject lines.
+// replyTo is optional ("" omits the header).
+type emailTransport interface {
+	send(from string, to []string, replyTo, subject, html, text string) error
 }
 
-func newEmailClient(apiKey string, from string) *emailClient {
+type emailClient struct {
+	transport emailTransport
+	from      string
+	tmpls     *template.Template
+}
+
+func newEmailClient(transport emailTransport, from string) *emailClient {
 	tmpls := template.Must(template.ParseFS(emailTemplatesFS, "email_templates/*.html"))
 	return &emailClient{
-		client: resend.NewClient(apiKey),
-		from:   from,
-		tmpls:  tmpls,
+		transport: transport,
+		from:      from,
+		tmpls:     tmpls,
 	}
 }
 
-func (app *application) trySendEmail(desc string, to string, fn func() error) {
-	if app.mailer == nil {
+// resendTransport sends through the Resend HTTP API.
+type resendTransport struct {
+	client *resend.Client
+}
+
+func newResendTransport(apiKey string) emailTransport {
+	return &resendTransport{client: resend.NewClient(apiKey)}
+}
+
+func (rt *resendTransport) send(from string, to []string, replyTo, subject, html, text string) error {
+	req := &resend.SendEmailRequest{
+		From:    from,
+		To:      to,
+		Subject: subject,
+		Html:    html,
+		Text:    text,
+	}
+	if replyTo != "" {
+		req.ReplyTo = replyTo
+	}
+	_, err := rt.client.Emails.Send(req)
+	return err
+}
+
+// smtpTransport sends through any SMTP server. useTLS selects implicit TLS
+// (port 465); otherwise SendMail negotiates STARTTLS opportunistically.
+type smtpTransport struct {
+	host, port, username, password string
+	useTLS                         bool
+}
+
+func (st *smtpTransport) send(from string, to []string, replyTo, subject, html, text string) error {
+	addr := st.host + ":" + st.port
+	msg := buildMIME(from, to, replyTo, subject, html, text)
+	var auth smtp.Auth
+	if st.username != "" {
+		auth = smtp.PlainAuth("", st.username, st.password, st.host)
+	}
+	if !st.useTLS {
+		return smtp.SendMail(addr, auth, from, to, msg)
+	}
+	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: st.host})
+	if err != nil {
+		return err
+	}
+	client, err := smtp.NewClient(conn, st.host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, rcpt := range to {
+		if err := client.Rcpt(rcpt); err != nil {
+			return err
+		}
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
+}
+
+// buildMIME assembles a multipart/alternative message with CRLF line endings.
+// Subjects are RFC 2047 encoded so non-ASCII author names survive.
+func buildMIME(from string, to []string, replyTo, subject, html, text string) []byte {
+	const boundary = "protopen-mime-boundary"
+	var b strings.Builder
+	b.WriteString("From: " + from + "\r\n")
+	b.WriteString("To: " + strings.Join(to, ", ") + "\r\n")
+	if replyTo != "" {
+		b.WriteString("Reply-To: " + replyTo + "\r\n")
+	}
+	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n")
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n\r\n")
+	b.WriteString("--" + boundary + "\r\n")
+	b.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n\r\n")
+	b.WriteString(text + "\r\n")
+	b.WriteString("--" + boundary + "\r\n")
+	b.WriteString("Content-Type: text/html; charset=\"utf-8\"\r\n\r\n")
+	b.WriteString(html + "\r\n")
+	b.WriteString("--" + boundary + "--\r\n")
+	return []byte(b.String())
+}
+
+func (app *application) trySendEmail(desc string, to string, fn func(*emailClient) error) {
+	m := app.mailer.Load()
+	if m == nil {
 		log.Printf("email skipped (%s) to=%s", desc, to)
 		return
 	}
-	if err := fn(); err != nil {
+	if err := fn(m); err != nil {
 		log.Printf("email failed (%s) to=%s: %v", desc, to, err)
 	}
 }
@@ -65,14 +176,8 @@ func (ec *emailClient) sendVerifyEmail(to string, name string, verifyURL string)
 		return err
 	}
 
-	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
-		From:    ec.from,
-		To:      []string{to},
-		Subject: "Verify your Protopen account",
-		Html:    html,
-		Text:    fmt.Sprintf("Hi %s,\n\nVerify your email to get started with Protopen:\n%s\n\nThis link expires in 24 hours.", name, verifyURL),
-	})
-	return err
+	return ec.transport.send(ec.from, []string{to}, "", "Verify your Protopen account", html,
+		fmt.Sprintf("Hi %s,\n\nVerify your email to get started with Protopen:\n%s\n\nThis link expires in 24 hours.", name, verifyURL))
 }
 
 // sendOrgInvite sends an invitation to join an organization.
@@ -86,14 +191,9 @@ func (ec *emailClient) sendOrgInvite(to string, orgName string, inviterName stri
 		return err
 	}
 
-	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
-		From:    ec.from,
-		To:      []string{to},
-		Subject: fmt.Sprintf("%s invited you to %s on Protopen", inviterName, orgName),
-		Html:    html,
-		Text:    fmt.Sprintf("%s invited you to %s on Protopen.\n\nSign up to join:\n%s", inviterName, orgName, signupURL),
-	})
-	return err
+	return ec.transport.send(ec.from, []string{to}, "",
+		fmt.Sprintf("%s invited you to %s on Protopen", inviterName, orgName), html,
+		fmt.Sprintf("%s invited you to %s on Protopen.\n\nSign up to join:\n%s", inviterName, orgName, signupURL))
 }
 
 func createEmailToken(ctx context.Context, db *pgxpool.Pool, userID string, tokenType string, interval string) (string, error) {
@@ -128,12 +228,38 @@ func (ec *emailClient) sendPasswordReset(to string, resetURL string) error {
 		return err
 	}
 
-	_, err = ec.client.Emails.Send(&resend.SendEmailRequest{
-		From:    ec.from,
-		To:      []string{to},
-		Subject: "Reset your Protopen password",
-		Html:    html,
-		Text:    fmt.Sprintf("You requested a password reset for your Protopen account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL),
+	return ec.transport.send(ec.from, []string{to}, "", "Reset your Protopen password", html,
+		fmt.Sprintf("You requested a password reset for your Protopen account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL))
+}
+
+// sendCommentNotification tells a thread participant about new comment
+// activity. isMention switches the copy between a reply and an @mention.
+// replyTo, when set, is the per-recipient reply-by-email address.
+func (ec *emailClient) sendCommentNotification(to, replyTo, actorName, siteName, snippet, threadURL string, isMention bool) error {
+	html, err := ec.render("comment_notification.html", map[string]any{
+		"ActorName": actorName,
+		"SiteName":  siteName,
+		"Snippet":   snippet,
+		"ThreadURL": threadURL,
+		"IsMention": isMention,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	subject := fmt.Sprintf("%s replied on %s", actorName, siteName)
+	verb := "replied on a thread you're following on"
+	if isMention {
+		subject = fmt.Sprintf("%s mentioned you on %s", actorName, siteName)
+		verb = "mentioned you in a comment on"
+	}
+	text := fmt.Sprintf("%s %s %s.\n\n%s\n\nView the thread:\n%s", actorName, verb, siteName, snippet, threadURL)
+	return ec.transport.send(ec.from, []string{to}, replyTo, subject, html, text)
+}
+
+// sendTestEmail delivers a plain confirmation message so an admin can verify
+// the configured provider works.
+func (ec *emailClient) sendTestEmail(to string) error {
+	const msg = "This is a test email from Protopen. Your email provider is configured correctly."
+	html := "<p>" + msg + "</p>"
+	return ec.transport.send(ec.from, []string{to}, "", "Protopen email test", html, msg)
 }

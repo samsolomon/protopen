@@ -15,6 +15,7 @@ import { SitesTable } from './SitesTable'
 import { ProfilePanel } from './ProfilePanel'
 import { PasswordPanel } from './PasswordPanel'
 import { AppearancePanel } from './AppearancePanel'
+import { NotificationsPanel } from './NotificationsPanel'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { AdminUsersPanel } from './AdminUsersPanel'
 import { AdminSettings } from './AdminSettings'
@@ -94,6 +95,7 @@ type DashboardView = 'dashboard' | 'settings' | 'inbox'
 
 function settingsTabFromPath(path: string, isAdmin: boolean): string {
   if (path === '/settings/appearance') return 'appearance'
+  if (path === '/settings/notifications') return 'notifications'
   if (path === '/settings/users') return isAdmin ? 'users' : 'profile'
   if (path === '/settings/instance') return isAdmin ? 'instance' : 'profile'
   return 'profile'
@@ -328,6 +330,7 @@ export function Dashboard({
             <TabsList variant="line" className="w-full sm:w-48 flex-shrink-0">
               <TabsTrigger value="profile">Profile</TabsTrigger>
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
               {user.isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
               {user.isAdmin && <TabsTrigger value="instance">Instance</TabsTrigger>}
             </TabsList>
@@ -347,6 +350,9 @@ export function Dashboard({
             </TabsContent>
             <TabsContent value="appearance" className="max-w-2xl">
               <AppearancePanel />
+            </TabsContent>
+            <TabsContent value="notifications" className="max-w-2xl">
+              <NotificationsPanel onSessionExpired={onSessionExpired} />
             </TabsContent>
             {user.isAdmin && (
               <>

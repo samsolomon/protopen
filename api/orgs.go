@@ -268,8 +268,8 @@ func (app *application) addOrgMemberHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	signupURL := app.appOrigin + "/sign-up?email=" + url.QueryEscape(email)
-	app.trySendEmail("org invite", email, func() error {
-		return app.mailer.sendOrgInvite(email, orgName, user.Name, signupURL)
+	app.trySendEmail("org invite", email, func(m *emailClient) error {
+		return m.sendOrgInvite(email, orgName, user.Name, signupURL)
 	})
 
 	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "status": "invited"})

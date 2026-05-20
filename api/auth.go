@@ -367,8 +367,8 @@ func (app *application) sendVerificationEmail(ctx context.Context, userID string
 	}
 
 	verifyURL := app.appOrigin + "/?verify-token=" + token
-	app.trySendEmail("verify email", email, func() error {
-		return app.mailer.sendVerifyEmail(email, name, verifyURL)
+	app.trySendEmail("verify email", email, func(m *emailClient) error {
+		return m.sendVerifyEmail(email, name, verifyURL)
 	})
 }
 

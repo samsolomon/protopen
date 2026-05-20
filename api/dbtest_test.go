@@ -112,4 +112,13 @@ func seedSite(t *testing.T, pool *pgxpool.Pool, id, orgID, slug, name string, cr
 		insert into sites (id, org_id, slug, name, created_by)
 		values ($1, $2, $3, $4, $5)
 	`, id, orgID, slug, name, createdBy)
+	// Mirror the real site-create path (storage.go, seed.go), which
+	// auto-subscribes the creator to the site so comment fan-out reaches them.
+	if createdBy != nil {
+		mustExec(t, pool, `
+			insert into site_subscriptions (id, site_id, user_id, created_at)
+			values ($1, $2, $3, now())
+			on conflict (site_id, user_id) do nothing
+		`, "ssub_"+id+"_"+*createdBy, id, *createdBy)
+	}
 }
