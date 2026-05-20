@@ -530,6 +530,32 @@ replies to a thread you're subscribed to, when a comment lands on a site
 you own (via `site_subscriptions`), or when you're `@mentioned` in a
 comment body.
 
+### `GET /api/notification-preferences`
+
+Auth required (session, not bearer token). Returns the signed-in user's email
+notification preferences. An absent row yields the opted-in defaults.
+
+**Response (200):**
+```json
+{"emailOnReply": true, "emailOnMention": true}
+```
+
+### `PATCH /api/notification-preferences`
+
+Auth required (session, not bearer token). Updates the signed-in user's
+preferences. Both fields optional; only supplied fields change.
+
+**Request:**
+```json
+{"emailOnReply": false}
+```
+
+**Response (200):** same shape as `GET`.
+
+- `emailOnReply` — email when someone replies on a thread the user is subscribed to.
+- `emailOnMention` — email when the user is `@mentioned`.
+- In-app inbox notifications are unaffected by these toggles; they govern the email channel only.
+
 ### `GET /api/notifications`
 
 Auth required.

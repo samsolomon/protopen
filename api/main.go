@@ -273,6 +273,7 @@ func main() {
 	appMux.HandleFunc("/api/admin/settings", app.instanceSettingsHandler)
 	appMux.HandleFunc("/api/admin/settings/email-test", app.emailTestHandler)
 	appMux.HandleFunc("/api/comments/", app.commentByIDHandler)
+	appMux.HandleFunc("/api/notification-preferences", app.notificationPrefsHandler)
 	appMux.HandleFunc("/api/notifications", app.notificationsHandler)
 	appMux.HandleFunc("/api/notifications/", app.notificationByIDHandler)
 	appMux.HandleFunc("/api/auth/device", app.rateLimit(app.authLimiter, app.deviceCodeHandler))

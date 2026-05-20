@@ -555,6 +555,41 @@ export async function updateAdminSettings(
   return (await response.json()) as AdminSettings
 }
 
+export type NotificationPreferences = {
+  emailOnReply: boolean
+  emailOnMention: boolean
+}
+
+export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
+  const response = await fetch(`${API_BASE_URL}/api/notification-preferences`, {
+    credentials: 'include',
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) throw new Error('Could not load notification preferences')
+
+  return (await response.json()) as NotificationPreferences
+}
+
+export async function updateNotificationPreferences(
+  patch: Partial<NotificationPreferences>,
+): Promise<NotificationPreferences> {
+  const response = await fetch(`${API_BASE_URL}/api/notification-preferences`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not update notification preferences')
+  }
+
+  return (await response.json()) as NotificationPreferences
+}
+
 export async function sendTestEmail(to: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/admin/settings/email-test`, {
     method: 'POST',
