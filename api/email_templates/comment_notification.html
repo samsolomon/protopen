@@ -1,0 +1,8 @@
+{{define "title"}}{{if .IsMention}}{{.ActorName}} mentioned you on {{.SiteName}}{{else}}{{.ActorName}} replied on {{.SiteName}}{{end}}{{end}}
+{{template "base" .}}
+{{define "content"}}
+<p style="margin:0 0 16px;font-size:15px;color:#18181b;line-height:1.5;">{{if .IsMention}}<strong>{{.ActorName}}</strong> mentioned you in a comment on <strong>{{.SiteName}}</strong>.{{else}}<strong>{{.ActorName}}</strong> replied on a thread you're following on <strong>{{.SiteName}}</strong>.{{end}}</p>
+<p style="margin:0 0 24px;padding:12px 16px;background-color:#f4f4f5;border-radius:8px;font-size:15px;color:#3f3f46;line-height:1.5;white-space:pre-wrap;">{{.Snippet}}</p>
+<a href="{{.ThreadURL}}" style="display:inline-block;padding:10px 24px;background-color:#18181b;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">View thread</a>
+<p style="margin:24px 0 0;font-size:13px;color:#a1a1aa;line-height:1.5;">Manage these emails in your Protopen notification settings.</p>
+{{end}}

@@ -224,6 +224,29 @@ func (ec *emailClient) sendPasswordReset(to string, resetURL string) error {
 		fmt.Sprintf("You requested a password reset for your Protopen account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL))
 }
 
+// sendCommentNotification tells a thread participant about new comment
+// activity. isMention switches the copy between a reply and an @mention.
+func (ec *emailClient) sendCommentNotification(to, actorName, siteName, snippet, threadURL string, isMention bool) error {
+	html, err := ec.render("comment_notification.html", map[string]any{
+		"ActorName": actorName,
+		"SiteName":  siteName,
+		"Snippet":   snippet,
+		"ThreadURL": threadURL,
+		"IsMention": isMention,
+	})
+	if err != nil {
+		return err
+	}
+	subject := fmt.Sprintf("%s replied on %s", actorName, siteName)
+	verb := "replied on a thread you're following on"
+	if isMention {
+		subject = fmt.Sprintf("%s mentioned you on %s", actorName, siteName)
+		verb = "mentioned you in a comment on"
+	}
+	text := fmt.Sprintf("%s %s %s.\n\n%s\n\nView the thread:\n%s", actorName, verb, siteName, snippet, threadURL)
+	return ec.transport.send(ec.from, []string{to}, subject, html, text)
+}
+
 // sendTestEmail delivers a plain confirmation message so an admin can verify
 // the configured provider works.
 func (ec *emailClient) sendTestEmail(to string) error {

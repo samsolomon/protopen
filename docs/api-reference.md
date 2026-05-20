@@ -530,6 +530,11 @@ replies to a thread you're subscribed to, when a comment lands on a site
 you own (via `site_subscriptions`), or when you're `@mentioned` in a
 comment body.
 
+When an email provider is configured, each notification also sends an email
+to recipients who have a verified address and haven't opted out of that
+notification type (see `/api/notification-preferences`). Email is dispatched
+off the request path, so creating a comment is unaffected by mail latency.
+
 ### `GET /api/notification-preferences`
 
 Auth required (session, not bearer token). Returns the signed-in user's email

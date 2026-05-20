@@ -400,6 +400,9 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Email the recipients off the request path so the POST stays fast.
+	go app.fanOutCommentEmails(recipients, user.Name, siteID, req.PagePath, commentID, body)
+
 	resp := comment{
 		ID:              commentID,
 		SiteID:          siteID,
@@ -420,6 +423,69 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		},
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"comment": resp})
+}
+
+// fanOutCommentEmails sends a notification email to each recipient who has a
+// verified address and hasn't opted out of that notification type. Runs off
+// the request path (own context) so it never slows the comment POST.
+func (app *application) fanOutCommentEmails(recipients map[string]string, actorName, siteID, pagePath, commentID, body string) {
+	m := app.mailer.Load()
+	if m == nil || len(recipients) == 0 {
+		return
+	}
+	ctx := context.Background()
+
+	ids := make([]string, 0, len(recipients))
+	for id := range recipients {
+		ids = append(ids, id)
+	}
+
+	var siteName string
+	if err := app.db.QueryRow(ctx, `select name from sites where id = $1`, siteID).Scan(&siteName); err != nil {
+		log.Printf("comment email: load site name: %v", err)
+		return
+	}
+
+	rows, err := app.db.Query(ctx, `
+		select u.id, u.email,
+		       coalesce(p.email_on_reply, true), coalesce(p.email_on_mention, true)
+		from users u
+		left join user_notification_prefs p on p.user_id = u.id
+		where u.id = any($1) and u.email_verified_at is not null
+	`, ids)
+	if err != nil {
+		log.Printf("comment email: load recipients: %v", err)
+		return
+	}
+	type target struct {
+		email     string
+		isMention bool
+	}
+	var targets []target
+	for rows.Next() {
+		var id, email string
+		var onReply, onMention bool
+		if err := rows.Scan(&id, &email, &onReply, &onMention); err != nil {
+			continue
+		}
+		isMention := recipients[id] == notificationTypeCommentMention
+		if (isMention && !onMention) || (!isMention && !onReply) {
+			continue
+		}
+		targets = append(targets, target{email: email, isMention: isMention})
+	}
+	rows.Close()
+
+	snippet := body
+	if len(snippet) > 280 {
+		snippet = snippet[:280] + "…"
+	}
+	threadURL := app.contentBaseURL + pagePath + "#" + "protopen-comment=" + commentID
+	for _, t := range targets {
+		if err := m.sendCommentNotification(t.email, actorName, siteName, snippet, threadURL, t.isMention); err != nil {
+			log.Printf("comment notification email to %s: %v", t.email, err)
+		}
+	}
 }
 
 // commentContextHandler: GET /api/sites/by-slug/:org/:slug/comment-context
