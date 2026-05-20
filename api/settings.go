@@ -15,24 +15,31 @@ import (
 )
 
 const (
-	settingThumbnailsEnabled = "thumbnails_enabled"
-	settingEmailProvider     = "email_provider"
-	settingEmailFrom         = "email_from"
-	settingEmailResendKey    = "email_resend_key"
-	settingEmailSMTPHost     = "email_smtp_host"
-	settingEmailSMTPPort     = "email_smtp_port"
-	settingEmailSMTPUser     = "email_smtp_user"
-	settingEmailSMTPPass     = "email_smtp_pass"
-	settingEmailSMTPTLS      = "email_smtp_tls"
+	settingThumbnailsEnabled  = "thumbnails_enabled"
+	settingEmailProvider      = "email_provider"
+	settingEmailFrom          = "email_from"
+	settingEmailResendKey     = "email_resend_key"
+	settingEmailSMTPHost      = "email_smtp_host"
+	settingEmailSMTPPort      = "email_smtp_port"
+	settingEmailSMTPUser      = "email_smtp_user"
+	settingEmailSMTPPass      = "email_smtp_pass"
+	settingEmailSMTPTLS       = "email_smtp_tls"
 	settingEmailInboundDomain = "email_inbound_domain"
 	settingEmailInboundSecret = "email_inbound_secret"
+)
+
+// Email provider values stored under settingEmailProvider.
+const (
+	emailProviderNone   = "none"
+	emailProviderResend = "resend"
+	emailProviderSMTP   = "smtp"
 )
 
 // emailInboundConfig reports the reply-by-email settings. enabled is true only
 // when both the inbound domain and the webhook secret are configured.
 func (app *application) emailInboundConfig(ctx context.Context) (domain, secret string, enabled bool) {
-	domain, _, _ = app.getInstanceSetting(ctx, settingEmailInboundDomain)
-	secret, _, _ = app.getInstanceSetting(ctx, settingEmailInboundSecret)
+	s := app.getInstanceSettings(ctx, settingEmailInboundDomain, settingEmailInboundSecret)
+	domain, secret = s[settingEmailInboundDomain], s[settingEmailInboundSecret]
 	return domain, secret, domain != "" && secret != ""
 }
 
@@ -46,6 +53,26 @@ func (app *application) getInstanceSetting(ctx context.Context, key string) (str
 		return "", false, err
 	}
 	return value, true, nil
+}
+
+// getInstanceSettings fetches several settings in one query. Missing keys are
+// simply absent from the map (callers treat that as the empty string).
+func (app *application) getInstanceSettings(ctx context.Context, keys ...string) map[string]string {
+	out := make(map[string]string, len(keys))
+	rows, err := app.db.Query(ctx, `select key, value from instance_settings where key = any($1)`, keys)
+	if err != nil {
+		log.Printf("load instance settings: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 func (app *application) setInstanceSetting(ctx context.Context, key, value, updatedBy string) error {
@@ -113,22 +140,28 @@ type adminEmailSettings struct {
 // swaps app.mailer. Stores nil (sending disabled) when the provider is none
 // or its required fields are missing.
 func (app *application) rebuildMailer(ctx context.Context) {
-	provider, _, _ := app.getInstanceSetting(ctx, settingEmailProvider)
-	from, _, _ := app.getInstanceSetting(ctx, settingEmailFrom)
+	s := app.getInstanceSettings(ctx,
+		settingEmailProvider, settingEmailFrom, settingEmailResendKey,
+		settingEmailSMTPHost, settingEmailSMTPPort, settingEmailSMTPUser,
+		settingEmailSMTPPass, settingEmailSMTPTLS)
+	provider := s[settingEmailProvider]
+	from := s[settingEmailFrom]
 	var transport emailTransport
 	switch provider {
-	case "resend":
-		if key, _, _ := app.getInstanceSetting(ctx, settingEmailResendKey); key != "" {
+	case emailProviderResend:
+		if key := s[settingEmailResendKey]; key != "" {
 			transport = newResendTransport(key)
 		}
-	case "smtp":
-		host, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPHost)
-		port, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPPort)
+	case emailProviderSMTP:
+		host, port := s[settingEmailSMTPHost], s[settingEmailSMTPPort]
 		if host != "" && port != "" {
-			user, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPUser)
-			pass, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPPass)
-			tls, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPTLS)
-			transport = &smtpTransport{host: host, port: port, username: user, password: pass, useTLS: tls == "true"}
+			transport = &smtpTransport{
+				host:     host,
+				port:     port,
+				username: s[settingEmailSMTPUser],
+				password: s[settingEmailSMTPPass],
+				useTLS:   s[settingEmailSMTPTLS] == "true",
+			}
 		}
 	}
 	if transport == nil {
@@ -149,9 +182,9 @@ func (app *application) initEmailState(ctx context.Context) error {
 		return err
 	}
 	if !exists {
-		provider := "none"
+		provider := emailProviderNone
 		if key := getenv("RESEND_API_KEY", ""); key != "" {
-			provider = "resend"
+			provider = emailProviderResend
 			if err := app.setInstanceSetting(ctx, settingEmailResendKey, key, "boot"); err != nil {
 				return err
 			}
@@ -182,19 +215,15 @@ func (app *application) instanceSettingsHandler(w http.ResponseWriter, r *http.R
 }
 
 func (app *application) currentSettings(ctx context.Context) adminSettingsResponse {
-	provider, _, _ := app.getInstanceSetting(ctx, settingEmailProvider)
+	s := app.getInstanceSettings(ctx,
+		settingEmailProvider, settingEmailFrom, settingEmailResendKey,
+		settingEmailSMTPHost, settingEmailSMTPPort, settingEmailSMTPUser,
+		settingEmailSMTPPass, settingEmailSMTPTLS,
+		settingEmailInboundDomain, settingEmailInboundSecret)
+	provider := s[settingEmailProvider]
 	if provider == "" {
-		provider = "none"
+		provider = emailProviderNone
 	}
-	from, _, _ := app.getInstanceSetting(ctx, settingEmailFrom)
-	resendKey, _, _ := app.getInstanceSetting(ctx, settingEmailResendKey)
-	smtpHost, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPHost)
-	smtpPort, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPPort)
-	smtpUser, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPUser)
-	smtpPass, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPPass)
-	smtpTLS, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPTLS)
-	inboundDomain, _, _ := app.getInstanceSetting(ctx, settingEmailInboundDomain)
-	inboundSecret, _, _ := app.getInstanceSetting(ctx, settingEmailInboundSecret)
 	return adminSettingsResponse{
 		Thumbnails: adminThumbnailSettings{
 			Available: app.thumbnailEnv.available,
@@ -203,15 +232,15 @@ func (app *application) currentSettings(ctx context.Context) adminSettingsRespon
 		},
 		Email: adminEmailSettings{
 			Provider:         provider,
-			From:             from,
-			ResendKeySet:     resendKey != "",
-			SMTPHost:         smtpHost,
-			SMTPPort:         smtpPort,
-			SMTPUser:         smtpUser,
-			SMTPPassSet:      smtpPass != "",
-			SMTPTLS:          smtpTLS == "true",
-			InboundDomain:    inboundDomain,
-			InboundSecretSet: inboundSecret != "",
+			From:             s[settingEmailFrom],
+			ResendKeySet:     s[settingEmailResendKey] != "",
+			SMTPHost:         s[settingEmailSMTPHost],
+			SMTPPort:         s[settingEmailSMTPPort],
+			SMTPUser:         s[settingEmailSMTPUser],
+			SMTPPassSet:      s[settingEmailSMTPPass] != "",
+			SMTPTLS:          s[settingEmailSMTPTLS] == "true",
+			InboundDomain:    s[settingEmailInboundDomain],
+			InboundSecretSet: s[settingEmailInboundSecret] != "",
 		},
 	}
 }
@@ -272,36 +301,21 @@ func (app *application) patchInstanceSettings(w http.ResponseWriter, r *http.Req
 			}
 			return true
 		}
-		ok := true
-		if e.Provider != nil {
-			ok = ok && set(settingEmailProvider, *e.Provider)
-		}
-		if ok && e.From != nil {
-			ok = ok && set(settingEmailFrom, *e.From)
-		}
-		if ok && e.SMTPHost != nil {
-			ok = ok && set(settingEmailSMTPHost, *e.SMTPHost)
-		}
-		if ok && e.SMTPPort != nil {
-			ok = ok && set(settingEmailSMTPPort, *e.SMTPPort)
-		}
-		if ok && e.SMTPUser != nil {
-			ok = ok && set(settingEmailSMTPUser, *e.SMTPUser)
-		}
+		// plain overwrites on any non-nil value; secret only overwrites on a
+		// non-empty value, so a blank field keeps the stored secret.
+		plain := func(key string, val *string) bool { return val == nil || set(key, *val) }
+		secret := func(key string, val *string) bool { return val == nil || *val == "" || set(key, *val) }
+		ok := plain(settingEmailProvider, e.Provider) &&
+			plain(settingEmailFrom, e.From) &&
+			plain(settingEmailSMTPHost, e.SMTPHost) &&
+			plain(settingEmailSMTPPort, e.SMTPPort) &&
+			plain(settingEmailSMTPUser, e.SMTPUser) &&
+			plain(settingEmailInboundDomain, e.InboundDomain) &&
+			secret(settingEmailResendKey, e.ResendKey) &&
+			secret(settingEmailSMTPPass, e.SMTPPass) &&
+			secret(settingEmailInboundSecret, e.InboundSecret)
 		if ok && e.SMTPTLS != nil {
-			ok = ok && set(settingEmailSMTPTLS, strconv.FormatBool(*e.SMTPTLS))
-		}
-		if ok && e.InboundDomain != nil {
-			ok = ok && set(settingEmailInboundDomain, *e.InboundDomain)
-		}
-		if ok && e.ResendKey != nil && *e.ResendKey != "" {
-			ok = ok && set(settingEmailResendKey, *e.ResendKey)
-		}
-		if ok && e.SMTPPass != nil && *e.SMTPPass != "" {
-			ok = ok && set(settingEmailSMTPPass, *e.SMTPPass)
-		}
-		if ok && e.InboundSecret != nil && *e.InboundSecret != "" {
-			ok = ok && set(settingEmailInboundSecret, *e.InboundSecret)
+			ok = set(settingEmailSMTPTLS, strconv.FormatBool(*e.SMTPTLS))
 		}
 		if !ok {
 			return

@@ -535,12 +535,18 @@ func (app *application) fanOutCommentEmails(recipients map[string]string, actorN
 	threadURL := app.contentBaseURL + pagePath + "#protopen-comment=" + commentID
 
 	inboundDomain, _, inboundEnabled := app.emailInboundConfig(ctx)
+	var tokens map[string]string
+	if inboundEnabled {
+		userIDs := make([]string, len(targets))
+		for i, t := range targets {
+			userIDs[i] = t.userID
+		}
+		tokens = app.mintReplyTokens(ctx, rootID, userIDs)
+	}
 	for _, t := range targets {
 		replyTo := ""
-		if inboundEnabled {
-			if token := app.mintReplyToken(ctx, rootID, t.userID); token != "" {
-				replyTo = "reply+" + token + "@" + inboundDomain
-			}
+		if tok := tokens[t.userID]; tok != "" {
+			replyTo = replyAddrPrefix + tok + "@" + inboundDomain
 		}
 		if err := m.sendCommentNotification(t.email, replyTo, actorName, siteName, snippet, threadURL, t.isMention); err != nil {
 			log.Printf("comment notification email to %s: %v", t.email, err)
@@ -548,18 +554,32 @@ func (app *application) fanOutCommentEmails(recipients map[string]string, actorN
 	}
 }
 
-// mintReplyToken stores a reply-by-email token for (rootComment, user) and
-// returns it. Returns "" on failure so the caller falls back to no Reply-To.
-func (app *application) mintReplyToken(ctx context.Context, rootCommentID, userID string) string {
-	token := generateToken(16)
-	if _, err := app.db.Exec(ctx, `
-		insert into comment_reply_tokens (token, root_comment_id, user_id, expires_at)
-		values ($1, $2, $3, now() + interval '30 days')
-	`, token, rootCommentID, userID); err != nil {
-		log.Printf("mint reply token: %v", err)
-		return ""
+// mintReplyTokens stores a reply-by-email token per user for the given thread
+// root in a single insert and returns user id -> raw token. The DB stores the
+// hash (hashToken); the raw token only travels in the email Reply-To.
+func (app *application) mintReplyTokens(ctx context.Context, rootCommentID string, userIDs []string) map[string]string {
+	if len(userIDs) == 0 {
+		return nil
 	}
-	return token
+	out := make(map[string]string, len(userIDs))
+	var (
+		args         []any
+		placeholders []string
+	)
+	i := 1
+	for _, uid := range userIDs {
+		raw := generateToken(16)
+		out[uid] = raw
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, now() + interval '30 days')", i, i+1, i+2))
+		args = append(args, hashToken(raw), rootCommentID, uid)
+		i += 3
+	}
+	query := "insert into comment_reply_tokens (token, root_comment_id, user_id, expires_at) values " + strings.Join(placeholders, ", ")
+	if _, err := app.db.Exec(ctx, query, args...); err != nil {
+		log.Printf("mint reply tokens: %v", err)
+		return nil
+	}
+	return out
 }
 
 // commentContextHandler: GET /api/sites/by-slug/:org/:slug/comment-context

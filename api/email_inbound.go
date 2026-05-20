@@ -21,6 +21,11 @@ import (
 // quoted history run larger than the global 1 MiB JSON limit.
 const maxInboundBodyBytes = 10 << 20
 
+// replyAddrPrefix is the local-part prefix of a reply-by-email address:
+// reply+<token>@<inbound-domain>. Shared by the address builder (comments.go)
+// and the parser below.
+const replyAddrPrefix = "reply+"
+
 var quoteHeaderRe = regexp.MustCompile(`(?i)^On .+ wrote:$`)
 
 // stripQuotedReply trims the quoted original from an email reply, keeping only
@@ -50,11 +55,10 @@ func extractReplyToken(to, domain string) string {
 		return ""
 	}
 	local := address[:len(address)-len(suffix)]
-	const prefix = "reply+"
-	if !strings.HasPrefix(local, prefix) {
+	if !strings.HasPrefix(local, replyAddrPrefix) {
 		return ""
 	}
-	return local[len(prefix):]
+	return local[len(replyAddrPrefix):]
 }
 
 // emailInboundHandler: POST /api/email/inbound — receives a parsed inbound
@@ -111,7 +115,7 @@ func (app *application) emailInboundHandler(w http.ResponseWriter, r *http.Reque
 	err = app.db.QueryRow(ctx, `
 		select root_comment_id, user_id from comment_reply_tokens
 		where token = $1 and expires_at > now()
-	`, token).Scan(&rootID, &tokenUserID)
+	`, hashToken(token)).Scan(&rootID, &tokenUserID)
 	if err != nil {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid or expired reply token"})
 		return
