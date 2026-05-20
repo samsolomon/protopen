@@ -447,6 +447,8 @@ list response.
   to the thread.
 - Every notification recipient gets one row in a single multi-row
   insert. The author never notifies themselves.
+- When email is configured, recipients are also emailed off the request
+  path — see [Notifications](#notifications).
 
 **Status codes:** `201` created, `400` invalid (missing body, parent
 belongs to a different site, deploy not on this site), `401`
