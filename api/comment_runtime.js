@@ -67,8 +67,8 @@
     // Light defaults. Dark overrides flip the surfaces that float over the
     // host page; the topbar and orange chrome read against both modes and
     // stay constant.
-    ':host { --surface: rgba(255,255,255,.92); --text: #18181b; --text-muted: #71717a; --text-faint: #a1a1aa; --text-secondary: #444; --border: #e4e4e7; --border-faint: #f4f4f5; --hover-bg: rgba(0,0,0,.05); --send-bg: #e4e4e7; --mentions-bg: #fff; --mentions-border: #ddd; --mentions-hover: #f0f7ff; }' +
-    '@media (prefers-color-scheme: dark) { :host { --surface: rgba(24,24,27,.92); --text: #fafafa; --text-muted: #a1a1aa; --text-faint: #71717a; --text-secondary: #d4d4d8; --border: #3f3f46; --border-faint: #27272a; --hover-bg: rgba(255,255,255,.06); --send-bg: #3f3f46; --mentions-bg: #18181b; --mentions-border: #3f3f46; --mentions-hover: #27272a; } }' +
+    ':host { --surface: rgba(255,255,255,.92); --text: #18181b; --text-muted: #71717a; --text-faint: #a1a1aa; --text-secondary: #444; --border: #e4e4e7; --border-faint: #f4f4f5; --hover-bg: rgba(0,0,0,.05); --mentions-bg: #fff; --mentions-hover: #f0f7ff; }' +
+    '@media (prefers-color-scheme: dark) { :host { --surface: rgba(24,24,27,.92); --text: #fafafa; --text-muted: #a1a1aa; --text-faint: #71717a; --text-secondary: #d4d4d8; --border: #3f3f46; --border-faint: #27272a; --hover-bg: rgba(255,255,255,.06); --mentions-bg: #18181b; --mentions-hover: #27272a; } }' +
     '.pin-layer { position: absolute; inset: 0; pointer-events: none; }' +
     '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: rgba(255,143,82,.92); color: white; font: 600 12px system-ui, sans-serif; --pin-scale: 1; transform-origin: 0% 100%; transform: translate(0, -100%) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid rgba(255,255,255,.6); -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4); pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: transform .15s, filter .15s; }' +
     '.pin:hover { --pin-scale: 1.1; filter: brightness(1.05); }' +
@@ -92,8 +92,10 @@
     '.topbar .versions:hover { border-color: rgba(255,255,255,.4); }' +
     '.topbar .versions option { background: #111; color: white; }' +
     '.composer { position: fixed; background: var(--surface); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: var(--text); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,.12); padding: 6px 6px 6px 14px; pointer-events: auto; z-index: 2; min-width: 260px; max-width: 360px; display: flex; align-items: flex-end; gap: 6px; }' +
-    '.composer textarea { flex: 1; border: 0; background: transparent; color: inherit; padding: 8px 0; font: 13px system-ui; resize: none; outline: none; min-height: 18px; max-height: 120px; overflow-y: auto; line-height: 1.4; }' +
-    '.composer .send { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--send-bg); color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
+    '.composer textarea, .pop-compose textarea { color: inherit; }' +
+    '.composer textarea::placeholder, .pop-compose textarea::placeholder { color: var(--text-faint); }' +
+    '.composer textarea { flex: 1; border: 0; background: transparent; padding: 8px 0; font: 13px system-ui; resize: none; outline: none; min-height: 18px; max-height: 120px; overflow-y: auto; line-height: 1.4; }' +
+    '.composer .send { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--border); color: var(--text-faint); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
     '.composer .send.active { background: #ff8f52; color: white; }' +
     '.composer .signin { flex: 1; font-size: 13px; color: var(--text-secondary); padding: 8px 0; line-height: 1.4; }' +
     '.composer .signin a { color: #ff8f52; font-weight: 600; text-decoration: none; }' +
@@ -121,10 +123,10 @@
     '.reply-msg { margin-bottom: 8px; padding-left: 10px; border-left: 2px solid var(--border); }' +
     '.reply-msg:last-child { margin-bottom: 0; }' +
     '.pop-compose { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 6px; }' +
-    '.pop-compose textarea { flex: 1; border: 0; background: transparent; color: inherit; padding: 6px 0; font-family: inherit; font-size: 12px; resize: none; outline: none; min-height: 28px; max-height: 80px; overflow-y: auto; line-height: 16px; box-sizing: border-box; }' +
-    '.pop-compose .send { width: 28px; height: 28px; border-radius: 50%; background: var(--send-bg); color: var(--text-faint); border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
+    '.pop-compose textarea { flex: 1; border: 0; background: transparent; padding: 6px 0; font-family: inherit; font-size: 12px; resize: none; outline: none; min-height: 28px; max-height: 80px; overflow-y: auto; line-height: 16px; box-sizing: border-box; }' +
+    '.pop-compose .send { width: 28px; height: 28px; border-radius: 50%; background: var(--border); color: var(--text-faint); border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }' +
     '.pop-compose .send.active { background: #ff8f52; color: white; }' +
-    '.mentions { position: absolute; background: var(--mentions-bg); color: var(--text); border: 1px solid var(--mentions-border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
+    '.mentions { position: absolute; background: var(--mentions-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 2px; max-height: 200px; overflow-y: auto; min-width: 200px; z-index: 3; }' +
     '.mentions div { padding: 6px 10px; cursor: pointer; font-size: 13px; }' +
     '.mentions div:hover, .mentions div.selected { background: var(--mentions-hover); }' +
     '</style>' +
