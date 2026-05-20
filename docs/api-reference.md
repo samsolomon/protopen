@@ -899,6 +899,16 @@ Lists every account on the instance with its organization memberships.
 }
 ```
 
+### `DELETE /api/admin/users/{userID}`
+
+Deletes an account. The user's personal organizations are removed along
+with it; the action is recorded in the audit log.
+
+**Response (200):** `{ "ok": true }`
+
+**Status codes:** `200` ok, `400` missing user ID, `403` caller not
+admin, `404` user not found.
+
 ### `GET /api/admin/settings`
 
 Returns instance-wide settings: the deploy-thumbnail capture toggle and the email-provider configuration.
