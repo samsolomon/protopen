@@ -1,12 +1,12 @@
 # Protopen
 
-A self-hostable playpen for static prototypes. Deploy a folder, get a live URL, and keep it public or gated behind a login. Built for product teams using CLI and agent workflows.
+A self-hostable playpen for static prototypes. Deploy a folder, get a live URL, and gather feedback through comments. Make it public to test designs with customers, or keep it private for you and your team. Protopen is built for product teams working with agents.
 
 **License:** [AGPL-3.0](LICENSE) &middot; **Self-hosting:** [docs/self-hosting.md](docs/self-hosting.md) &middot; **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Why
 
-Coding agents (Claude Code, Cursor, custom scripts) generate static sites and prototypes constantly. Protopen exists to be the deploy step at the end of that loop: any process that can shell out gets a live URL in one call. The web dashboard is for managing what you've already shipped — the CLI is the primary interface.
+Coding agents—Claude Code, Codex, Cursor—can rapidly turn out static sites and prototypes. Protopen gives you a way to share them and gather feedback. It's the final step: deploy your prototype and get a live URL in seconds, then manage what you've shipped from the web dashboard.
 
 ## CLI
 
