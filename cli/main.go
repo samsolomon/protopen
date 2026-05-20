@@ -76,9 +76,39 @@ Commands:
   mcp                          Run the Model Context Protocol server over stdio (for AI agents)
   version                      Print the CLI version
 
+Flags:
+  --json   Machine-readable output (deploy, list, deploys, rollback, visibility, comments, token)
+
 Configuration:
   Config file: ~/.protopen/config.json
   Priority:    --flag > PROTOPEN_TOKEN/PROTOPEN_URL > config file > default`)
+}
+
+// parseArgs parses fs while tolerating flags placed after positional
+// arguments. Go's flag package stops at the first non-flag token, so
+// `cmd <name> --json` would otherwise silently ignore --json. It returns
+// the positional arguments in order.
+func parseArgs(fs *flag.FlagSet, args []string) []string {
+	var positionals []string
+	for {
+		fs.Parse(args)
+		if fs.NArg() == 0 {
+			break
+		}
+		positionals = append(positionals, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+	return positionals
+}
+
+// writeJSON encodes v to stdout as indented JSON, exiting non-zero on failure.
+func writeJSON(v any) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdDeploy(args []string) {
@@ -91,9 +121,9 @@ func cmdDeploy(args []string) {
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	jsonOutput := fs.Bool("json", false, "Output JSON response")
-	fs.Parse(args)
+	pos := parseArgs(fs, args)
 
-	if fs.NArg() == 0 {
+	if len(pos) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: protopen deploy <path> [--name NAME] [--label LABEL] [--public|--private] [--org SLUG] [--token TOKEN] [--url URL] [--json]")
 		os.Exit(1)
 	}
@@ -113,7 +143,7 @@ func cmdDeploy(args []string) {
 		isPublic = &f
 	}
 
-	path := fs.Arg(0)
+	path := pos[0]
 	client := newClient(requireToken(*token), resolveURL(*url))
 
 	info, err := os.Stat(path)
@@ -167,6 +197,7 @@ func cmdList(args []string) {
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
 	fs.Parse(args)
 
 	client := newClient(requireToken(*token), resolveURL(*url))
@@ -174,6 +205,14 @@ func cmdList(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *jsonOutput {
+		if sites == nil {
+			sites = []siteInfo{}
+		}
+		writeJSON(listSitesOutput{Sites: sites})
+		return
 	}
 
 	if len(sites) == 0 {
@@ -195,15 +234,16 @@ func cmdDeploys(args []string) {
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
-	fs.Parse(args)
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
+	pos := parseArgs(fs, args)
 
-	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: protopen deploys <site-name>")
+	if len(pos) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: protopen deploys <site-name> [--json]")
 		os.Exit(1)
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
+	proj, err := client.findSite(pos[0], resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -213,6 +253,14 @@ func cmdDeploys(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *jsonOutput {
+		if deploys == nil {
+			deploys = []deployInfo{}
+		}
+		writeJSON(listDeploysOutput{Deploys: deploys})
+		return
 	}
 
 	if len(deploys) == 0 {
@@ -254,16 +302,16 @@ func cmdComments(args []string) {
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
 	deploy := fs.String("deploy", "", "Deploy ID to scope comments to (defaults to current)")
 	status := fs.String("status", "open", "Filter: open | resolved | all")
-	asJSON := fs.Bool("json", false, "Print raw JSON")
-	fs.Parse(args)
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
+	pos := parseArgs(fs, args)
 
-	if fs.NArg() == 0 {
+	if len(pos) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: protopen comments <site-name> [--status open|resolved|all] [--deploy <id>] [--json]")
 		os.Exit(1)
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
+	proj, err := client.findSite(pos[0], resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -275,10 +323,11 @@ func cmdComments(args []string) {
 		os.Exit(1)
 	}
 
-	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(map[string]any{"site": proj.Slug, "comments": comments})
+	if *jsonOutput {
+		if comments == nil {
+			comments = []commentInfo{}
+		}
+		writeJSON(map[string]any{"site": proj.Slug, "comments": comments})
 		return
 	}
 
@@ -360,33 +409,46 @@ func cmdRollback(args []string) {
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
-	fs.Parse(args)
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
+	pos := parseArgs(fs, args)
 
-	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: protopen rollback <site-name> <deploy-id>")
+	if len(pos) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: protopen rollback <site-name> <deploy-id> [--json]")
 		os.Exit(1)
 	}
 
 	client := newClient(requireToken(*token), resolveURL(*url))
-	proj, err := client.findSite(fs.Arg(0), resolveOrg(*org))
+	proj, err := client.findSite(pos[0], resolveOrg(*org))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = client.rollback(proj.ID, fs.Arg(1))
+	err = client.rollback(proj.ID, pos[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Rolled back %s to %s\n", proj.Name, fs.Arg(1))
+	if *jsonOutput {
+		writeJSON(rollbackOutput{OK: true})
+		return
+	}
+
+	fmt.Printf("Rolled back %s to %s\n", proj.Name, pos[1])
+}
+
+type tokenOutput struct {
+	Token string   `json:"token"`
+	User  userInfo `json:"user"`
+	API   string   `json:"api"`
 }
 
 func cmdToken(args []string) {
 	fs := flag.NewFlagSet("token", flag.ExitOnError)
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
 	fs.Parse(args)
 
 	t := requireToken(*token)
@@ -396,6 +458,11 @@ func cmdToken(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *jsonOutput {
+		writeJSON(tokenOutput{Token: maskToken(t), User: user, API: apiURL})
+		return
 	}
 
 	fmt.Printf("Token:    %s\n", maskToken(t))
@@ -465,15 +532,16 @@ func cmdVisibility(args []string) {
 	org := fs.String("org", "", "Organization slug (defaults to personal org)")
 	token := fs.String("token", "", "API token (overrides PROTOPEN_TOKEN)")
 	url := fs.String("url", "", "API base URL (overrides PROTOPEN_URL)")
-	fs.Parse(args)
+	jsonOutput := fs.Bool("json", false, "Output JSON response")
+	pos := parseArgs(fs, args)
 
-	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: protopen visibility <site-name> <public|private>")
+	if len(pos) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: protopen visibility <site-name> <public|private> [--json]")
 		os.Exit(1)
 	}
 
-	siteName := fs.Arg(0)
-	visibility := fs.Arg(1)
+	siteName := pos[0]
+	visibility := pos[1]
 
 	var isPublic bool
 	switch visibility {
@@ -496,6 +564,11 @@ func cmdVisibility(args []string) {
 	if err := client.updateVisibility(proj.ID, isPublic); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *jsonOutput {
+		writeJSON(setVisibilityOutput{OK: true})
+		return
 	}
 
 	fmt.Printf("%s is now %s\n", proj.Name, visibility)

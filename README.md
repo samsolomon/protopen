@@ -23,7 +23,7 @@ cd cli && make build                        # build the binary
 ./protopen help                             # full command list
 ```
 
-Output is intentionally minimal so commands compose cleanly into pipelines: the live URL on stdout, git/branch metadata on stderr. Every command takes `--json` for machine-readable output.
+Output is intentionally minimal so commands compose cleanly into pipelines: the live URL on stdout, git/branch metadata on stderr. Every data command — `deploy`, `list`, `deploys`, `rollback`, `visibility`, `comments`, `token` — takes `--json` for machine-readable output.
 
 Config lives at `~/.protopen/config.json`. Resolution order: `--flag` > `PROTOPEN_TOKEN` / `PROTOPEN_URL` / `PROTOPEN_ORG` env > config file > defaults.
 
@@ -117,7 +117,7 @@ See [CONTRIBUTING.md#running-tests](CONTRIBUTING.md#running-tests).
 
 ## Production / self-hosting
 
-See [docs/self-hosting.md](docs/self-hosting.md) — Cloudflare R2, wildcard DNS, Resend, and deploy targets (Fly, Railway, bare VM, Docker).
+See [docs/self-hosting.md](docs/self-hosting.md) — Cloudflare R2, DNS setup, email (Resend or SMTP), and deploy targets (Fly, Railway, bare VM, Docker).
 
 ## License
 

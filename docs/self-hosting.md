@@ -32,6 +32,8 @@ Protopen serves site content from URLs like `https://sites.example.com/~{org}/{s
 - `app.example.com` (or your apex) → your protopen API host
 - `sites.example.com` → your content host (R2 custom domain or content origin)
 
+Every org and site is addressed by path (`/~{org}/{site}`), not by subdomain, so a single static record for the content host covers all of them — no wildcard DNS needed. Versioned deploys are served from `/~{org}/{site}/_v/{deploy-id}`.
+
 If you want both behind one domain (single-server production mode), set `PORT` and protopen will serve both on the same port. Otherwise use split mode: API on `APP_LISTEN_ADDR`, content on `CONTENT_LISTEN_ADDR`.
 
 ### Tenant isolation (important)
@@ -45,19 +47,26 @@ Two safe topologies:
 
 The unsafe topology is `app.example.com` + `sites.example.com` with `COOKIE_DOMAIN=.example.com`.
 
-## 4. Resend (transactional email)
+## 4. Email (transactional)
 
-Email is **optional**. With `RESEND_API_KEY` empty, protopen still works — auth is password-based, not magic-link. The only difference is that email-verification sends are skipped (verification is non-blocking) and password-reset emails won't go out.
+Email is **optional**. With no provider configured, protopen still works — auth is password-based, not magic-link. The only difference is that email-verification sends are skipped (verification is non-blocking) and password-reset emails won't go out.
 
-To enable email:
+The active provider — `none`, `resend`, or `smtp` — is stored in the database (`instance_settings`) and managed in the dashboard under **Admin → Settings**. The env vars below only seed the **Resend** path on the very first boot; after that the DB is authoritative and env changes are ignored.
+
+### Resend
 
 1. Create a [Resend](https://resend.com) account and verify a sending domain (e.g. `example.com`).
 2. Create an API key with **Sending access**.
-3. Set the env vars:
+3. Either set the env vars before first boot:
    ```
    RESEND_API_KEY=re_...
    RESEND_FROM_ADDRESS=Protopen <noreply@example.com>
    ```
+   or, on an already-running instance, enter the key and from-address under **Admin → Settings → Email**.
+
+### SMTP
+
+SMTP has no env-var path — configure it under **Admin → Settings → Email**: choose the SMTP provider and supply host, port, username, password, TLS toggle, and the from-address. This is the route for self-hosters using their own mail server or a non-Resend relay.
 
 ## 5. Database
 
