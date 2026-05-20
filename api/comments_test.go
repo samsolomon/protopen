@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -647,5 +648,406 @@ func TestMarkAllNotificationsRead(t *testing.T) {
 func TestCommentRuntimeNotEmpty(t *testing.T) {
 	if !strings.Contains(commentRuntimeJS, "__protopenCommentsLoaded") {
 		t.Fatalf("comment runtime missing sentinel")
+	}
+}
+
+// seedComment posts a comment as the given user and returns its ID, failing
+// the test on any non-201 response.
+func seedComment(t *testing.T, f commentsFixture, body, asUserID string) string {
+	t.Helper()
+	req := authedRequest(t, f.app, "POST", "/api/sites/"+f.siteID+"/comments", body, asUserID)
+	rec := httptest.NewRecorder()
+	f.app.createSiteCommentHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("seed comment: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct{ Comment comment }
+	decodeJSON(t, rec, &out)
+	return out.Comment.ID
+}
+
+// --- B. PATCH /api/comments/:id (updateCommentHandler) ---
+
+func TestUpdateComment_AuthorUpdatesPin(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.2,"body":"pin"}`, f.other)
+
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.9,"pinY":0.8}`, f.other)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var x, y sql.NullFloat64
+	if err := f.app.db.QueryRow(context.Background(),
+		`select pin_x, pin_y from comments where id = $1`, id).Scan(&x, &y); err != nil {
+		t.Fatalf("read pin: %v", err)
+	}
+	if !x.Valid || x.Float64 != 0.9 || !y.Valid || y.Float64 != 0.8 {
+		t.Fatalf("expected pin (0.9, 0.8), got (%v, %v)", x, y)
+	}
+}
+
+func TestUpdateComment_PartialUpdatePreservesOmitted(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.2,"body":"pin"}`, f.other)
+
+	// Send only pinX; pinY must be preserved via COALESCE.
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.5}`, f.other)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var x, y sql.NullFloat64
+	if err := f.app.db.QueryRow(context.Background(),
+		`select pin_x, pin_y from comments where id = $1`, id).Scan(&x, &y); err != nil {
+		t.Fatalf("read pin: %v", err)
+	}
+	if !x.Valid || x.Float64 != 0.5 {
+		t.Fatalf("expected pinX updated to 0.5, got %v", x)
+	}
+	if !y.Valid || y.Float64 != 0.2 {
+		t.Fatalf("expected pinY preserved at 0.2, got %v", y)
+	}
+}
+
+func TestUpdateComment_ClearAnchor(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f,
+		`{"pagePath":"/","body":"anchored","elementSelector":".target","elementOffsetX":0.25,"elementOffsetY":0.5}`,
+		f.other)
+
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"clearAnchor":true}`, f.other)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clearAnchor: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var sel sql.NullString
+	var ox, oy sql.NullFloat64
+	if err := f.app.db.QueryRow(context.Background(),
+		`select element_selector, element_offset_x, element_offset_y from comments where id = $1`, id).
+		Scan(&sel, &ox, &oy); err != nil {
+		t.Fatalf("read anchor: %v", err)
+	}
+	if sel.Valid || ox.Valid || oy.Valid {
+		t.Fatalf("expected anchor fields cleared, got sel=%v ox=%v oy=%v", sel, ox, oy)
+	}
+}
+
+func TestUpdateComment_StoresClampedSelector(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","body":"x"}`, f.other)
+
+	longSel := strings.Repeat("a", 250)
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id,
+		`{"elementSelector":"`+longSel+`"}`, f.other)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var sel string
+	if err := f.app.db.QueryRow(context.Background(),
+		`select element_selector from comments where id = $1`, id).Scan(&sel); err != nil {
+		t.Fatalf("read selector: %v", err)
+	}
+	if len(sel) != 200 {
+		t.Fatalf("expected selector clamped to 200 chars, got %d", len(sel))
+	}
+}
+
+func TestUpdateComment_AdminAllowed(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.1,"body":"others"}`, f.other)
+
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.4}`, f.admin)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin update: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateComment_NonAuthorNonAdminForbidden(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.1,"body":"others"}`, f.other)
+
+	// owner is a plain member, not the author.
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.4}`, f.owner)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-author non-admin: expected 403, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateComment_CrossOriginWithoutHeaderForbidden(t *testing.T) {
+	f := seedCommentsFixture(t)
+	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.1,"body":"x"}`, f.other)
+
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.4}`, f.other)
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin without client header: expected 403, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Same request with the runtime header set is allowed through.
+	req = authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.4}`, f.other)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("X-Protopen-Client", "runtime")
+	rec = httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cross-origin with client header: expected 200, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateComment_UnknownIDNotFound(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/cm_missing", `{"pinX":0.4}`, f.other)
+	rec := httptest.NewRecorder()
+	f.app.commentByIDHandler(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown comment: expected 404, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- C. @mention pipeline ---
+
+func TestCreateComment_MentionNotifiesMember(t *testing.T) {
+	f := seedCommentsFixture(t)
+	ctx := context.Background()
+	id := seedComment(t, f, `{"pagePath":"/","body":"hey @admin look at this"}`, f.other)
+
+	var ntype string
+	if err := f.app.db.QueryRow(ctx,
+		`select type from notifications where comment_id = $1 and recipient_id = $2`,
+		id, f.admin).Scan(&ntype); err != nil {
+		t.Fatalf("expected a notification for mentioned admin: %v", err)
+	}
+	if ntype != notificationTypeCommentMention {
+		t.Fatalf("expected type comment_mention, got %q", ntype)
+	}
+
+	// Mentioned user is auto-subscribed to the thread root.
+	var subs int
+	if err := f.app.db.QueryRow(ctx,
+		`select count(*) from comment_subscriptions where comment_id = $1 and user_id = $2`,
+		id, f.admin).Scan(&subs); err != nil || subs != 1 {
+		t.Fatalf("expected mentioned user subscribed, got count=%d err=%v", subs, err)
+	}
+}
+
+func TestCreateComment_MentionOfNonMemberDropped(t *testing.T) {
+	f := seedCommentsFixture(t)
+	ctx := context.Background()
+	// "outsider" is a valid username but not a member of this org.
+	id := seedComment(t, f, `{"pagePath":"/","body":"ping @outsider please"}`, f.other)
+
+	var notifs int
+	if err := f.app.db.QueryRow(ctx,
+		`select count(*) from notifications where comment_id = $1 and recipient_id = $2`,
+		id, f.outsider).Scan(&notifs); err != nil || notifs != 0 {
+		t.Fatalf("expected no notification for non-member mention, got count=%d err=%v", notifs, err)
+	}
+}
+
+func TestCreateComment_MentionAndSubscriberDeduped(t *testing.T) {
+	f := seedCommentsFixture(t)
+	ctx := context.Background()
+	// owner is the site owner (a site subscriber) and is also @mentioned.
+	id := seedComment(t, f, `{"pagePath":"/","body":"@owner take a look"}`, f.other)
+
+	var n int
+	var ntype string
+	if err := f.app.db.QueryRow(ctx,
+		`select count(*), max(type) from notifications where comment_id = $1 and recipient_id = $2`,
+		id, f.owner).Scan(&n, &ntype); err != nil {
+		t.Fatalf("query owner notification: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected exactly 1 notification for owner, got %d", n)
+	}
+	if ntype != notificationTypeCommentMention {
+		t.Fatalf("expected mention to win the notification type, got %q", ntype)
+	}
+}
+
+// --- D. mentionCandidatesHandler ---
+
+func TestMentionCandidates_PrefixMatch(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/mention-candidates?q=ad", "", f.owner)
+	rec := httptest.NewRecorder()
+	f.app.mentionCandidatesHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("candidates: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Candidates []authorSummary `json:"candidates"`
+	}
+	decodeJSON(t, rec, &out)
+	if len(out.Candidates) != 1 || out.Candidates[0].Username != "admin" {
+		t.Fatalf("expected only 'admin', got %+v", out.Candidates)
+	}
+}
+
+func TestMentionCandidates_CaseInsensitive(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/mention-candidates?q=AD", "", f.owner)
+	rec := httptest.NewRecorder()
+	f.app.mentionCandidatesHandler(rec, req, f.siteID)
+	var out struct {
+		Candidates []authorSummary `json:"candidates"`
+	}
+	decodeJSON(t, rec, &out)
+	if len(out.Candidates) != 1 || out.Candidates[0].Username != "admin" {
+		t.Fatalf("expected case-insensitive match on 'admin', got %+v", out.Candidates)
+	}
+}
+
+func TestMentionCandidates_EmptyQueryReturnsAllMembers(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/mention-candidates", "", f.owner)
+	rec := httptest.NewRecorder()
+	f.app.mentionCandidatesHandler(rec, req, f.siteID)
+	var out struct {
+		Candidates []authorSummary `json:"candidates"`
+	}
+	decodeJSON(t, rec, &out)
+	// org_team has three members: admin, owner, other.
+	if len(out.Candidates) != 3 {
+		t.Fatalf("empty q should list all org members, got %+v", out.Candidates)
+	}
+}
+
+func TestMentionCandidates_OutsiderForbidden(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/mention-candidates?q=ad", "", f.outsider)
+	rec := httptest.NewRecorder()
+	f.app.mentionCandidatesHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("outsider: expected 403, got %d", rec.Code)
+	}
+}
+
+// --- E. commentContextHandler (by-slug bootstrap) ---
+
+func TestCommentContext_PublicSiteAnonymous(t *testing.T) {
+	f := seedCommentsFixture(t) // fixture site is public by default
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/by-slug/team/site-one/comment-context", "", "")
+	rec := httptest.NewRecorder()
+	f.app.commentContextHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public anonymous: expected 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		SiteID   string `json:"siteId"`
+		DeployID string `json:"deployId"`
+		IsPublic bool   `json:"isPublic"`
+		SiteName string `json:"siteName"`
+	}
+	decodeJSON(t, rec, &out)
+	if out.SiteID != f.siteID || out.DeployID != f.deployID || !out.IsPublic || out.SiteName != "Site One" {
+		t.Fatalf("unexpected context payload: %+v", out)
+	}
+}
+
+func TestCommentContext_PrivateSiteAuthGating(t *testing.T) {
+	f := seedCommentsFixture(t)
+	mustExec(t, f.app.db, `update sites set is_public = false where id = $1`, f.siteID)
+	path := "/api/sites/by-slug/team/site-one/comment-context"
+
+	// Anonymous → 401.
+	req := authedRequest(t, f.app, "GET", path, "", "")
+	rec := httptest.NewRecorder()
+	f.app.commentContextHandler(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("private anonymous: expected 401, got %d", rec.Code)
+	}
+
+	// Non-member → 403.
+	req = authedRequest(t, f.app, "GET", path, "", f.outsider)
+	rec = httptest.NewRecorder()
+	f.app.commentContextHandler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("private non-member: expected 403, got %d", rec.Code)
+	}
+
+	// Member → 200.
+	req = authedRequest(t, f.app, "GET", path, "", f.owner)
+	rec = httptest.NewRecorder()
+	f.app.commentContextHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("private member: expected 200, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- F. list-handler gaps ---
+
+func TestListComments_PagePathFilter(t *testing.T) {
+	f := seedCommentsFixture(t)
+	seedComment(t, f, `{"pagePath":"/","body":"home"}`, f.other)
+	seedComment(t, f, `{"pagePath":"/about","body":"about"}`, f.other)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/comments?pagePath=/about", "", f.owner)
+	rec := httptest.NewRecorder()
+	f.app.listSiteCommentsHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Comments []comment `json:"comments"`
+	}
+	decodeJSON(t, rec, &out)
+	if len(out.Comments) != 1 || out.Comments[0].PagePath != "/about" {
+		t.Fatalf("expected only the /about comment, got %+v", out.Comments)
+	}
+}
+
+func TestListComments_GuestCanReadPublicSite(t *testing.T) {
+	f := seedCommentsFixture(t) // public by default
+	seedComment(t, f, `{"pagePath":"/","body":"visible"}`, f.other)
+
+	// No session at all.
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/comments", "", "")
+	rec := httptest.NewRecorder()
+	f.app.listSiteCommentsHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("guest read of public site: expected 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Comments []comment `json:"comments"`
+	}
+	decodeJSON(t, rec, &out)
+	if len(out.Comments) != 1 {
+		t.Fatalf("expected 1 comment visible to guest, got %d", len(out.Comments))
+	}
+}
+
+func TestCreateComment_RejectsOverlongBody(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	huge := strings.Repeat("x", 8001)
+	body := `{"pagePath":"/","body":"` + huge + `"}`
+	req := authedRequest(t, f.app, "POST", "/api/sites/"+f.siteID+"/comments", body, f.other)
+	rec := httptest.NewRecorder()
+	f.app.createSiteCommentHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("overlong body should 400, got %d %s", rec.Code, rec.Body.String())
 	}
 }
