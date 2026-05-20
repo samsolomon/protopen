@@ -58,3 +58,14 @@ func listCommentsHandler(_ context.Context, _ *mcp.CallToolRequest, in listComme
 	}
 	return nil, listCommentsOutput{Comments: comments}, nil
 }
+
+func setVisibilityHandler(_ context.Context, _ *mcp.CallToolRequest, in setVisibilityInput) (*mcp.CallToolResult, setVisibilityOutput, error) {
+	c, site, err := mcpSiteContext(in.Site, in.Org)
+	if err != nil {
+		return nil, setVisibilityOutput{}, err
+	}
+	if err := c.updateVisibility(site.ID, in.Public); err != nil {
+		return nil, setVisibilityOutput{}, mcpError(err)
+	}
+	return nil, setVisibilityOutput{OK: true}, nil
+}

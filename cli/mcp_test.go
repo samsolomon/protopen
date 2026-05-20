@@ -67,7 +67,7 @@ func TestMCPExposesExpectedTools(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 
-	want := []string{"deploy", "list_comments", "list_deploys", "list_sites", "rollback"}
+	want := []string{"deploy", "list_comments", "list_deploys", "list_sites", "rollback", "set_visibility"}
 	got := make([]string, 0, len(res.Tools))
 	for _, tool := range res.Tools {
 		got = append(got, tool.Name)

@@ -64,11 +64,21 @@ type listCommentsOutput struct {
 	Comments []commentInfo `json:"comments"`
 }
 
+type setVisibilityInput struct {
+	Site   string `json:"site" jsonschema:"site name or slug"`
+	Public bool   `json:"public" jsonschema:"true to make the site public, false to make it private"`
+	Org    string `json:"org,omitempty" jsonschema:"optional organization slug; omit for the user's default org"`
+}
+
+type setVisibilityOutput struct {
+	OK bool `json:"ok"`
+}
+
 // boolPtr returns a pointer to v, used for the SDK's optional *bool annotation
 // fields (DestructiveHint, IdempotentHint, ReadOnlyHint).
 func boolPtr(v bool) *bool { return &v }
 
-// registerMCPTools wires the five v1 tools onto the server. Tool descriptions
+// registerMCPTools wires the v1 tools onto the server. Tool descriptions
 // are the agent-facing contract; keep them precise and action-oriented.
 func registerMCPTools(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
@@ -117,6 +127,16 @@ func registerMCPTools(s *mcp.Server) {
 			ReadOnlyHint: true,
 		},
 	}, listCommentsHandler)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set_visibility",
+		Description: "Set a site's visibility. Public sites are reachable by anyone with the URL; private sites require sign-in.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Set site visibility",
+			DestructiveHint: boolPtr(true),
+			IdempotentHint:  true,
+		},
+	}, setVisibilityHandler)
 }
 
 func deployHandler(_ context.Context, _ *mcp.CallToolRequest, in deployInput) (*mcp.CallToolResult, deployOutput, error) {
