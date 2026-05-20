@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type client struct {
@@ -55,11 +56,16 @@ type userInfo struct {
 	Email string `json:"email"`
 }
 
+// clientHTTPTimeout bounds every outbound request. Long enough for a multi-
+// hundred-MB upload, short enough that a hung backend can't pin an MCP tool
+// call indefinitely.
+const clientHTTPTimeout = 5 * time.Minute
+
 func newClient(token string, baseURL string) *client {
 	return &client{
 		token:   token,
 		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    &http.Client{},
+		http:    &http.Client{Timeout: clientHTTPTimeout},
 	}
 }
 
@@ -141,10 +147,11 @@ func (c *client) upload(name string, mode string, filename string, data []byte, 
 	if resp.StatusCode != http.StatusAccepted {
 		var errResp struct{ Error string `json:"error"` }
 		json.Unmarshal(respBody, &errResp)
-		if errResp.Error != "" {
-			return deployResult{}, fmt.Errorf("%s", errResp.Error)
+		msg := errResp.Error
+		if msg == "" {
+			msg = fmt.Sprintf("upload failed (HTTP %d)", resp.StatusCode)
 		}
-		return deployResult{}, fmt.Errorf("upload failed (HTTP %d)", resp.StatusCode)
+		return deployResult{}, categorize(resp.StatusCode, msg)
 	}
 
 	var result struct {
@@ -180,10 +187,10 @@ func (c *client) listSites(org string) ([]siteInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return nil, &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+		return nil, categorize(resp.StatusCode, fmt.Sprintf("request failed (HTTP %d)", resp.StatusCode))
 	}
 
 	var result struct {
@@ -210,7 +217,7 @@ func (c *client) getSession() (userInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return userInfo{}, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return userInfo{}, &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 
 	var result struct {
@@ -236,7 +243,7 @@ func (c *client) findSite(nameOrSlug string, org string) (siteInfo, error) {
 		}
 	}
 
-	return siteInfo{}, fmt.Errorf("site %q not found", nameOrSlug)
+	return siteInfo{}, &NotFoundError{Msg: fmt.Sprintf("site %q not found", nameOrSlug)}
 }
 
 func (c *client) listDeploys(siteID string) ([]deployInfo, error) {
@@ -253,10 +260,10 @@ func (c *client) listDeploys(siteID string) ([]deployInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return nil, &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+		return nil, categorize(resp.StatusCode, fmt.Sprintf("request failed (HTTP %d)", resp.StatusCode))
 	}
 
 	var result struct {
@@ -289,7 +296,14 @@ type commentInfo struct {
 	Author     *commentAuthor  `json:"author"`
 }
 
-func (c *client) listComments(siteID string, opts struct{ DeployID, Status string }) ([]commentInfo, error) {
+// listCommentsOpts narrows the listComments query. Empty fields are omitted
+// from the request, matching the CLI's "no filter" behavior.
+type listCommentsOpts struct {
+	DeployID string
+	Status   string
+}
+
+func (c *client) listComments(siteID string, opts listCommentsOpts) ([]commentInfo, error) {
 	url := c.baseURL + "/api/sites/" + siteID + "/comments"
 	params := []string{}
 	if opts.DeployID != "" {
@@ -315,13 +329,13 @@ func (c *client) listComments(siteID string, opts struct{ DeployID, Status strin
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return nil, &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 	if resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("forbidden — your token is not a member of this site's org")
+		return nil, &ForbiddenError{Msg: "forbidden — your token is not a member of this site's org"}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+		return nil, categorize(resp.StatusCode, fmt.Sprintf("request failed (HTTP %d)", resp.StatusCode))
 	}
 
 	var result struct {
@@ -350,15 +364,16 @@ func (c *client) rollback(siteID string, deployID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct{ Error string `json:"error"` }
 		json.NewDecoder(resp.Body).Decode(&errResp)
-		if errResp.Error != "" {
-			return fmt.Errorf("%s", errResp.Error)
+		msg := errResp.Error
+		if msg == "" {
+			msg = fmt.Sprintf("rollback failed (HTTP %d)", resp.StatusCode)
 		}
-		return fmt.Errorf("rollback failed (HTTP %d)", resp.StatusCode)
+		return categorize(resp.StatusCode, msg)
 	}
 
 	return nil
@@ -380,15 +395,16 @@ func (c *client) updateVisibility(siteID string, isPublic bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized — check your PROTOPEN_TOKEN")
+		return &AuthError{Msg: "unauthorized — check your PROTOPEN_TOKEN"}
 	}
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct{ Error string `json:"error"` }
 		json.NewDecoder(resp.Body).Decode(&errResp)
-		if errResp.Error != "" {
-			return fmt.Errorf("%s", errResp.Error)
+		msg := errResp.Error
+		if msg == "" {
+			msg = fmt.Sprintf("update failed (HTTP %d)", resp.StatusCode)
 		}
-		return fmt.Errorf("update failed (HTTP %d)", resp.StatusCode)
+		return categorize(resp.StatusCode, msg)
 	}
 
 	return nil

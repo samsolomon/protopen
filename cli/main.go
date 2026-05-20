@@ -46,6 +46,8 @@ func main() {
 		cmdLogout(args)
 	case "config":
 		cmdConfig(args)
+	case "mcp":
+		cmdMCP(args)
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	case "help", "--help", "-h":
@@ -71,6 +73,7 @@ Commands:
   login                        Authenticate and save your API token
   logout                       Remove saved token
   config                       View and update CLI configuration
+  mcp                          Run the Model Context Protocol server over stdio (for AI agents)
   version                      Print the CLI version
 
 Configuration:
@@ -266,7 +269,7 @@ func cmdComments(args []string) {
 		os.Exit(1)
 	}
 
-	comments, err := client.listComments(proj.ID, struct{ DeployID, Status string }{*deploy, *status})
+	comments, err := client.listComments(proj.ID, listCommentsOpts{DeployID: *deploy, Status: *status})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

@@ -44,6 +44,25 @@ echo "Preview at: $URL"
 
 Works with anything that can call a binary — Claude Code, Cursor, Codex, in-house scripts, post-commit hooks. The CLI is the universal interface; the API is documented at [docs/api-reference.md](docs/api-reference.md) if you'd rather talk HTTP directly.
 
+### MCP server
+
+For agents that speak the [Model Context Protocol](https://modelcontextprotocol.io) (Claude Desktop, MCP-aware editors), `protopen mcp` runs an MCP server over stdio. It exposes the same actions as the CLI — `deploy`, `list_sites`, `list_deploys`, `rollback`, `list_comments` — and reuses the existing `~/.protopen/config.json`, so `protopen login` is the only setup step.
+
+Example Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "protopen": {
+      "command": "/usr/local/bin/protopen",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The `deploy` tool requires absolute paths because stdio MCP has no shared working directory with the agent.
+
 ## Quickstart (local dev)
 
 ```bash
