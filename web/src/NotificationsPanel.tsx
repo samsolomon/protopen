@@ -82,7 +82,7 @@ export function NotificationsPanel({ onSessionExpired }: NotificationsPanelProps
       {ROWS.map((row, i) => (
         <div
           key={row.key}
-          className={`flex items-start justify-between gap-6 px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
+          className={`flex items-center justify-between gap-6 px-4 py-3 ${i > 0 ? 'border-t' : ''}`}
         >
           <div className="flex flex-col gap-1">
             <Label htmlFor={row.id} className="text-sm font-normal">{row.label}</Label>

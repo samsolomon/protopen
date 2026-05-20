@@ -278,7 +278,7 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
       </div>
 
       <div className="rounded-lg border bg-card">
-        <div className="flex items-start justify-between gap-6 px-4 py-3">
+        <div className="flex items-center justify-between gap-6 px-4 py-3">
           <div className="flex flex-col gap-1">
             <Label htmlFor="thumbnails-toggle" className="text-sm font-normal">Deploy thumbnails</Label>
             <p className="text-sm text-muted-foreground">
