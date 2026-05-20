@@ -209,6 +209,122 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"comments": comments})
 }
 
+// insertCommentParams carries an already-validated comment for insertComment.
+// Callers resolve deployID / rootID and own the transaction.
+type insertCommentParams struct {
+	siteID          string
+	deployID        string
+	orgID           string
+	authorID        string
+	pagePath        string
+	parentID        *string // nil for a top-level comment
+	rootID          string  // "" for a top-level comment
+	body            string
+	pinX, pinY      *float64
+	elementSelector *string
+	elementOffsetX  *float64
+	elementOffsetY  *float64
+}
+
+type insertCommentResult struct {
+	commentID  string
+	rootID     string            // the thread root (== commentID for a top-level comment)
+	recipients map[string]string // recipient user id -> notification type
+	createdAt  time.Time
+}
+
+// insertComment is the transactional core shared by the HTTP comment handler
+// and the inbound-email webhook: row insert, author subscription, and
+// notification fan-out. The caller owns the transaction and all request
+// validation (deploy / parent existence, auth, rate limiting).
+func (app *application) insertComment(ctx context.Context, tx pgx.Tx, p insertCommentParams) (insertCommentResult, error) {
+	commentID := generateID("cm")
+	now := time.Now().UTC()
+
+	if _, err := tx.Exec(ctx, `
+		insert into comments (
+			id, site_id, deploy_id, user_id, page_path,
+			pin_x, pin_y, body, parent_id,
+			element_selector, element_offset_x, element_offset_y,
+			created_at, updated_at
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+	`, commentID, p.siteID, p.deployID, p.authorID, p.pagePath,
+		p.pinX, p.pinY, p.body, p.parentID,
+		p.elementSelector, p.elementOffsetX, p.elementOffsetY,
+		now); err != nil {
+		return insertCommentResult{}, err
+	}
+
+	subscriptionRoot := p.rootID
+	if subscriptionRoot == "" {
+		subscriptionRoot = commentID
+	}
+	if err := upsertCommentSubscription(ctx, tx, subscriptionRoot, p.authorID); err != nil {
+		log.Printf("subscribe author: %v", err)
+	}
+
+	// Fan-out: union of thread subscribers (replies only) and site
+	// subscribers (every comment). Mentions override the notification type
+	// for the mentioned user and also subscribe them to the thread.
+	recipients := map[string]string{}
+	var rootArg *string
+	if p.rootID != "" {
+		rootArg = &p.rootID
+	}
+	subRows, err := tx.Query(ctx, `
+		select user_id from site_subscriptions where site_id = $1
+		union
+		select user_id from comment_subscriptions where $2::text is not null and comment_id = $2
+	`, p.siteID, rootArg)
+	if err == nil {
+		for subRows.Next() {
+			var uid string
+			if err := subRows.Scan(&uid); err != nil {
+				continue
+			}
+			recipients[uid] = notificationTypeCommentReply
+		}
+		subRows.Close()
+	} else {
+		log.Printf("fan-out subs: %v", err)
+	}
+
+	if mentions := parseMentions(p.body); len(mentions) > 0 {
+		mentionedIDs, err := resolveMentionUserIDs(ctx, tx, p.orgID, mentions)
+		if err != nil {
+			log.Printf("resolve mentions: %v", err)
+		}
+		for _, uid := range mentionedIDs {
+			recipients[uid] = notificationTypeCommentMention
+			if err := upsertCommentSubscription(ctx, tx, subscriptionRoot, uid); err != nil {
+				log.Printf("subscribe mentioned: %v", err)
+			}
+		}
+	}
+
+	delete(recipients, p.authorID)
+
+	if len(recipients) > 0 {
+		var (
+			args         []any
+			placeholders []string
+		)
+		i := 1
+		for uid, ntype := range recipients {
+			placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
+			args = append(args, generateID("notif"), uid, p.authorID, ntype, commentID, now)
+			i += 6
+		}
+		query := "insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at) values " + strings.Join(placeholders, ", ")
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			log.Printf("create notifications: %v", err)
+		}
+	}
+
+	return insertCommentResult{commentID: commentID, rootID: subscriptionRoot, recipients: recipients, createdAt: now}, nil
+}
+
 // createSiteCommentHandler: POST /api/sites/:siteID/comments
 //
 // Requires a signed-in org member. Cross-origin requests must include
@@ -304,94 +420,27 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		rootID = parentRoot
 	}
 
-	commentID := generateID("cm")
-	now := time.Now().UTC()
-
 	elementSelectorArg := clampSelector(req.ElementSelector)
 
-	if _, err := tx.Exec(r.Context(), `
-		insert into comments (
-			id, site_id, deploy_id, user_id, page_path,
-			pin_x, pin_y, body, parent_id,
-			element_selector, element_offset_x, element_offset_y,
-			created_at, updated_at
-		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
-	`, commentID, siteID, deployID, user.ID, req.PagePath,
-		req.PinX, req.PinY, body, req.ParentID,
-		elementSelectorArg, req.ElementOffsetX, req.ElementOffsetY,
-		now); err != nil {
+	res, err := app.insertComment(r.Context(), tx, insertCommentParams{
+		siteID:          siteID,
+		deployID:        deployID,
+		orgID:           orgID,
+		authorID:        user.ID,
+		pagePath:        req.PagePath,
+		parentID:        req.ParentID,
+		rootID:          rootID,
+		body:            body,
+		pinX:            req.PinX,
+		pinY:            req.PinY,
+		elementSelector: elementSelectorArg,
+		elementOffsetX:  req.ElementOffsetX,
+		elementOffsetY:  req.ElementOffsetY,
+	})
+	if err != nil {
 		log.Printf("insert comment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create comment"})
 		return
-	}
-
-	subscriptionRoot := rootID
-	if subscriptionRoot == "" {
-		subscriptionRoot = commentID
-	}
-
-	if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, user.ID); err != nil {
-		log.Printf("subscribe author: %v", err)
-	}
-
-	// Fan-out: union of thread subscribers (replies only) and site
-	// subscribers (every comment). Mentions override the notification type
-	// for the mentioned user and also subscribe them to the thread.
-	recipients := map[string]string{}
-
-	var rootArg *string
-	if rootID != "" {
-		rootArg = &rootID
-	}
-	subRows, err := tx.Query(r.Context(), `
-		select user_id from site_subscriptions where site_id = $1
-		union
-		select user_id from comment_subscriptions where $2::text is not null and comment_id = $2
-	`, siteID, rootArg)
-	if err == nil {
-		for subRows.Next() {
-			var uid string
-			if err := subRows.Scan(&uid); err != nil {
-				continue
-			}
-			recipients[uid] = notificationTypeCommentReply
-		}
-		subRows.Close()
-	} else {
-		log.Printf("fan-out subs: %v", err)
-	}
-
-	if mentions := parseMentions(body); len(mentions) > 0 {
-		mentionedIDs, err := resolveMentionUserIDs(r.Context(), tx, orgID, mentions)
-		if err != nil {
-			log.Printf("resolve mentions: %v", err)
-		}
-		for _, uid := range mentionedIDs {
-			recipients[uid] = notificationTypeCommentMention
-			if err := upsertCommentSubscription(r.Context(), tx, subscriptionRoot, uid); err != nil {
-				log.Printf("subscribe mentioned: %v", err)
-			}
-		}
-	}
-
-	delete(recipients, user.ID)
-
-	if len(recipients) > 0 {
-		var (
-			args         []any
-			placeholders []string
-		)
-		i := 1
-		for uid, ntype := range recipients {
-			placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
-			args = append(args, generateID("notif"), uid, user.ID, ntype, commentID, now)
-			i += 6
-		}
-		query := "insert into notifications (id, recipient_id, actor_id, type, comment_id, created_at) values " + strings.Join(placeholders, ", ")
-		if _, err := tx.Exec(r.Context(), query, args...); err != nil {
-			log.Printf("create notifications: %v", err)
-		}
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
@@ -401,10 +450,10 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Email the recipients off the request path so the POST stays fast.
-	go app.fanOutCommentEmails(recipients, user.Name, siteID, req.PagePath, commentID, body)
+	go app.fanOutCommentEmails(res.recipients, user.Name, siteID, req.PagePath, res.rootID, res.commentID, body)
 
 	resp := comment{
-		ID:              commentID,
+		ID:              res.commentID,
 		SiteID:          siteID,
 		DeployID:        deployID,
 		PagePath:        req.PagePath,
@@ -415,7 +464,7 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		ElementOffsetY:  req.ElementOffsetY,
 		Body:            body,
 		ParentID:        req.ParentID,
-		CreatedAt:       now.Format(time.RFC3339),
+		CreatedAt:       res.createdAt.Format(time.RFC3339),
 		Author: &authorSummary{
 			ID:       user.ID,
 			Name:     user.Name,
@@ -427,8 +476,10 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 
 // fanOutCommentEmails sends a notification email to each recipient who has a
 // verified address and hasn't opted out of that notification type. Runs off
-// the request path (own context) so it never slows the comment POST.
-func (app *application) fanOutCommentEmails(recipients map[string]string, actorName, siteID, pagePath, commentID, body string) {
+// the request path (own context) so it never slows the comment POST. When
+// inbound email is configured each message gets a per-recipient Reply-To so
+// the recipient can reply straight from their inbox.
+func (app *application) fanOutCommentEmails(recipients map[string]string, actorName, siteID, pagePath, rootID, commentID, body string) {
 	m := app.mailer.Load()
 	if m == nil || len(recipients) == 0 {
 		return
@@ -458,6 +509,7 @@ func (app *application) fanOutCommentEmails(recipients map[string]string, actorN
 		return
 	}
 	type target struct {
+		userID    string
 		email     string
 		isMention bool
 	}
@@ -472,7 +524,7 @@ func (app *application) fanOutCommentEmails(recipients map[string]string, actorN
 		if (isMention && !onMention) || (!isMention && !onReply) {
 			continue
 		}
-		targets = append(targets, target{email: email, isMention: isMention})
+		targets = append(targets, target{userID: id, email: email, isMention: isMention})
 	}
 	rows.Close()
 
@@ -480,12 +532,34 @@ func (app *application) fanOutCommentEmails(recipients map[string]string, actorN
 	if len(snippet) > 280 {
 		snippet = snippet[:280] + "…"
 	}
-	threadURL := app.contentBaseURL + pagePath + "#" + "protopen-comment=" + commentID
+	threadURL := app.contentBaseURL + pagePath + "#protopen-comment=" + commentID
+
+	inboundDomain, _, inboundEnabled := app.emailInboundConfig(ctx)
 	for _, t := range targets {
-		if err := m.sendCommentNotification(t.email, actorName, siteName, snippet, threadURL, t.isMention); err != nil {
+		replyTo := ""
+		if inboundEnabled {
+			if token := app.mintReplyToken(ctx, rootID, t.userID); token != "" {
+				replyTo = "reply+" + token + "@" + inboundDomain
+			}
+		}
+		if err := m.sendCommentNotification(t.email, replyTo, actorName, siteName, snippet, threadURL, t.isMention); err != nil {
 			log.Printf("comment notification email to %s: %v", t.email, err)
 		}
 	}
+}
+
+// mintReplyToken stores a reply-by-email token for (rootComment, user) and
+// returns it. Returns "" on failure so the caller falls back to no Reply-To.
+func (app *application) mintReplyToken(ctx context.Context, rootCommentID, userID string) string {
+	token := generateToken(16)
+	if _, err := app.db.Exec(ctx, `
+		insert into comment_reply_tokens (token, root_comment_id, user_id, expires_at)
+		values ($1, $2, $3, now() + interval '30 days')
+	`, token, rootCommentID, userID); err != nil {
+		log.Printf("mint reply token: %v", err)
+		return ""
+	}
+	return token
 }
 
 // commentContextHandler: GET /api/sites/by-slug/:org/:slug/comment-context

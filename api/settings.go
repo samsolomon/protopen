@@ -24,7 +24,17 @@ const (
 	settingEmailSMTPUser     = "email_smtp_user"
 	settingEmailSMTPPass     = "email_smtp_pass"
 	settingEmailSMTPTLS      = "email_smtp_tls"
+	settingEmailInboundDomain = "email_inbound_domain"
+	settingEmailInboundSecret = "email_inbound_secret"
 )
+
+// emailInboundConfig reports the reply-by-email settings. enabled is true only
+// when both the inbound domain and the webhook secret are configured.
+func (app *application) emailInboundConfig(ctx context.Context) (domain, secret string, enabled bool) {
+	domain, _, _ = app.getInstanceSetting(ctx, settingEmailInboundDomain)
+	secret, _, _ = app.getInstanceSetting(ctx, settingEmailInboundSecret)
+	return domain, secret, domain != "" && secret != ""
+}
 
 func (app *application) getInstanceSetting(ctx context.Context, key string) (string, bool, error) {
 	var value string
@@ -87,14 +97,16 @@ type adminThumbnailSettings struct {
 // adminEmailSettings is the client-facing view of the email config. Secrets
 // are never sent back — only the *Set booleans report whether one is stored.
 type adminEmailSettings struct {
-	Provider     string `json:"provider"`
-	From         string `json:"from"`
-	ResendKeySet bool   `json:"resendKeySet"`
-	SMTPHost     string `json:"smtpHost"`
-	SMTPPort     string `json:"smtpPort"`
-	SMTPUser     string `json:"smtpUser"`
-	SMTPPassSet  bool   `json:"smtpPassSet"`
-	SMTPTLS      bool   `json:"smtpTLS"`
+	Provider         string `json:"provider"`
+	From             string `json:"from"`
+	ResendKeySet     bool   `json:"resendKeySet"`
+	SMTPHost         string `json:"smtpHost"`
+	SMTPPort         string `json:"smtpPort"`
+	SMTPUser         string `json:"smtpUser"`
+	SMTPPassSet      bool   `json:"smtpPassSet"`
+	SMTPTLS          bool   `json:"smtpTLS"`
+	InboundDomain    string `json:"inboundDomain"`
+	InboundSecretSet bool   `json:"inboundSecretSet"`
 }
 
 // rebuildMailer reads the email config from instance_settings and atomically
@@ -181,6 +193,8 @@ func (app *application) currentSettings(ctx context.Context) adminSettingsRespon
 	smtpUser, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPUser)
 	smtpPass, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPPass)
 	smtpTLS, _, _ := app.getInstanceSetting(ctx, settingEmailSMTPTLS)
+	inboundDomain, _, _ := app.getInstanceSetting(ctx, settingEmailInboundDomain)
+	inboundSecret, _, _ := app.getInstanceSetting(ctx, settingEmailInboundSecret)
 	return adminSettingsResponse{
 		Thumbnails: adminThumbnailSettings{
 			Available: app.thumbnailEnv.available,
@@ -188,14 +202,16 @@ func (app *application) currentSettings(ctx context.Context) adminSettingsRespon
 			Reason:    app.thumbnailEnv.reason,
 		},
 		Email: adminEmailSettings{
-			Provider:     provider,
-			From:         from,
-			ResendKeySet: resendKey != "",
-			SMTPHost:     smtpHost,
-			SMTPPort:     smtpPort,
-			SMTPUser:     smtpUser,
-			SMTPPassSet:  smtpPass != "",
-			SMTPTLS:      smtpTLS == "true",
+			Provider:         provider,
+			From:             from,
+			ResendKeySet:     resendKey != "",
+			SMTPHost:         smtpHost,
+			SMTPPort:         smtpPort,
+			SMTPUser:         smtpUser,
+			SMTPPassSet:      smtpPass != "",
+			SMTPTLS:          smtpTLS == "true",
+			InboundDomain:    inboundDomain,
+			InboundSecretSet: inboundSecret != "",
 		},
 	}
 }
@@ -209,14 +225,16 @@ func (app *application) patchInstanceSettings(w http.ResponseWriter, r *http.Req
 	var payload struct {
 		ThumbnailsEnabled *bool `json:"thumbnailsEnabled"`
 		Email             *struct {
-			Provider  *string `json:"provider"`
-			From      *string `json:"from"`
-			ResendKey *string `json:"resendKey"`
-			SMTPHost  *string `json:"smtpHost"`
-			SMTPPort  *string `json:"smtpPort"`
-			SMTPUser  *string `json:"smtpUser"`
-			SMTPPass  *string `json:"smtpPass"`
-			SMTPTLS   *bool   `json:"smtpTLS"`
+			Provider      *string `json:"provider"`
+			From          *string `json:"from"`
+			ResendKey     *string `json:"resendKey"`
+			SMTPHost      *string `json:"smtpHost"`
+			SMTPPort      *string `json:"smtpPort"`
+			SMTPUser      *string `json:"smtpUser"`
+			SMTPPass      *string `json:"smtpPass"`
+			SMTPTLS       *bool   `json:"smtpTLS"`
+			InboundDomain *string `json:"inboundDomain"`
+			InboundSecret *string `json:"inboundSecret"`
 		} `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -273,11 +291,17 @@ func (app *application) patchInstanceSettings(w http.ResponseWriter, r *http.Req
 		if ok && e.SMTPTLS != nil {
 			ok = ok && set(settingEmailSMTPTLS, strconv.FormatBool(*e.SMTPTLS))
 		}
+		if ok && e.InboundDomain != nil {
+			ok = ok && set(settingEmailInboundDomain, *e.InboundDomain)
+		}
 		if ok && e.ResendKey != nil && *e.ResendKey != "" {
 			ok = ok && set(settingEmailResendKey, *e.ResendKey)
 		}
 		if ok && e.SMTPPass != nil && *e.SMTPPass != "" {
 			ok = ok && set(settingEmailSMTPPass, *e.SMTPPass)
+		}
+		if ok && e.InboundSecret != nil && *e.InboundSecret != "" {
+			ok = ok && set(settingEmailInboundSecret, *e.InboundSecret)
 		}
 		if !ok {
 			return

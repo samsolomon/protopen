@@ -917,7 +917,9 @@ Returns instance-wide settings: the deploy-thumbnail capture toggle and the emai
     "smtpPort": "587",
     "smtpUser": "apikey",
     "smtpPassSet": true,
-    "smtpTLS": false
+    "smtpTLS": false,
+    "inboundDomain": "reply.example.com",
+    "inboundSecretSet": true
   }
 }
 ```
@@ -926,7 +928,8 @@ Returns instance-wide settings: the deploy-thumbnail capture toggle and the emai
 - `thumbnails.enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
 - `thumbnails.reason` — populated only when `available` is `false`, explaining why.
 - `email.provider` — `none`, `resend`, or `smtp`.
-- `email.resendKeySet` / `email.smtpPassSet` — whether a secret is stored. **Secret values are never returned.**
+- `email.resendKeySet` / `email.smtpPassSet` / `email.inboundSecretSet` — whether a secret is stored. **Secret values are never returned.**
+- `email.inboundDomain` — the reply-by-email domain; reply-from-email is active when both `inboundDomain` and the inbound secret are set.
 
 ### `PATCH /api/admin/settings`
 
@@ -943,7 +946,9 @@ Update one or more settings.
     "smtpPort": "587",
     "smtpUser": "apikey",
     "smtpPass": "secret",
-    "smtpTLS": false
+    "smtpTLS": false,
+    "inboundDomain": "reply.example.com",
+    "inboundSecret": "webhook-signing-secret"
   }
 }
 ```
@@ -951,7 +956,7 @@ Update one or more settings.
 **Response (200):** same shape as `GET /api/admin/settings`.
 
 - All keys are optional; only supplied fields change.
-- `email.resendKey` / `email.smtpPass` are write-only: omit them or send `""` to keep the stored secret; send a non-empty value to replace it.
+- `email.resendKey` / `email.smtpPass` / `email.inboundSecret` are write-only: omit them or send `""` to keep the stored secret; send a non-empty value to replace it.
 - Saving email settings rebuilds the mailer immediately — no restart.
 - Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
 - Returns **403** if the caller is not admin.
@@ -972,6 +977,37 @@ Sends a one-off test message through the currently configured mailer so an admin
 - Returns **409** if no email provider is configured.
 - Returns **502** with the transport error in `error` if the send fails.
 - Returns **403** if the caller is not admin.
+
+### `POST /api/email/inbound`
+
+Webhook for reply-by-email. An email provider with inbound parsing (Postmark,
+Mailgun, SendGrid Inbound Parse, Cloudflare Email Workers, etc.) forwards a
+parsed reply here; the body is posted onto the thread the reply token points at.
+
+No session auth — gated instead by the webhook signature, the reply token, and
+a From-address match. Exempt from the 1 MiB JSON body cap (own 10 MiB limit).
+
+**Headers:**
+- `X-Protopen-Signature` — hex HMAC-SHA256 of the raw request body, keyed with
+  the configured inbound secret.
+
+**Request:**
+```json
+{
+  "to": "reply+<token>@reply.example.com",
+  "from": "Jane Chen <jane@example.com>",
+  "text": "the full reply including quoted history",
+  "strippedText": "just the new text (optional; used when present)"
+}
+```
+
+**Response (200):** `{"ok": true}` — also returned (as a no-op) when the reply
+body is empty after quote-stripping, so the provider doesn't retry.
+
+- **404** — inbound email is not configured on this instance.
+- **403** — bad signature, unknown/expired reply token, or the `from` address
+  doesn't match the token's user.
+- **410** — the thread the token points at no longer exists.
 
 ---
 

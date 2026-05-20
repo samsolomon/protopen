@@ -500,6 +500,8 @@ export type AdminEmailSettings = {
   smtpUser: string
   smtpPassSet: boolean
   smtpTLS: boolean
+  inboundDomain: string
+  inboundSecretSet: boolean
 }
 
 export type AdminSettings = {
@@ -522,6 +524,8 @@ export type AdminEmailPatch = {
   smtpUser?: string
   smtpPass?: string
   smtpTLS?: boolean
+  inboundDomain?: string
+  inboundSecret?: string
 }
 
 export async function fetchAdminSettings(): Promise<AdminSettings> {

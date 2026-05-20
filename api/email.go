@@ -28,8 +28,9 @@ var emailTemplatesFS embed.FS
 
 // emailTransport is the wire layer: it knows how to put a built message on
 // the network. emailClient sits above it and owns templates + subject lines.
+// replyTo is optional ("" omits the header).
 type emailTransport interface {
-	send(from string, to []string, subject, html, text string) error
+	send(from string, to []string, replyTo, subject, html, text string) error
 }
 
 type emailClient struct {
@@ -56,14 +57,18 @@ func newResendTransport(apiKey string) emailTransport {
 	return &resendTransport{client: resend.NewClient(apiKey)}
 }
 
-func (rt *resendTransport) send(from string, to []string, subject, html, text string) error {
-	_, err := rt.client.Emails.Send(&resend.SendEmailRequest{
+func (rt *resendTransport) send(from string, to []string, replyTo, subject, html, text string) error {
+	req := &resend.SendEmailRequest{
 		From:    from,
 		To:      to,
 		Subject: subject,
 		Html:    html,
 		Text:    text,
-	})
+	}
+	if replyTo != "" {
+		req.ReplyTo = replyTo
+	}
+	_, err := rt.client.Emails.Send(req)
 	return err
 }
 
@@ -74,9 +79,9 @@ type smtpTransport struct {
 	useTLS                         bool
 }
 
-func (st *smtpTransport) send(from string, to []string, subject, html, text string) error {
+func (st *smtpTransport) send(from string, to []string, replyTo, subject, html, text string) error {
 	addr := st.host + ":" + st.port
-	msg := buildMIME(from, to, subject, html, text)
+	msg := buildMIME(from, to, replyTo, subject, html, text)
 	var auth smtp.Auth
 	if st.username != "" {
 		auth = smtp.PlainAuth("", st.username, st.password, st.host)
@@ -121,11 +126,14 @@ func (st *smtpTransport) send(from string, to []string, subject, html, text stri
 
 // buildMIME assembles a multipart/alternative message with CRLF line endings.
 // Subjects are RFC 2047 encoded so non-ASCII author names survive.
-func buildMIME(from string, to []string, subject, html, text string) []byte {
+func buildMIME(from string, to []string, replyTo, subject, html, text string) []byte {
 	const boundary = "protopen-mime-boundary"
 	var b strings.Builder
 	b.WriteString("From: " + from + "\r\n")
 	b.WriteString("To: " + strings.Join(to, ", ") + "\r\n")
+	if replyTo != "" {
+		b.WriteString("Reply-To: " + replyTo + "\r\n")
+	}
 	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n\r\n")
@@ -168,7 +176,7 @@ func (ec *emailClient) sendVerifyEmail(to string, name string, verifyURL string)
 		return err
 	}
 
-	return ec.transport.send(ec.from, []string{to}, "Verify your Protopen account", html,
+	return ec.transport.send(ec.from, []string{to}, "", "Verify your Protopen account", html,
 		fmt.Sprintf("Hi %s,\n\nVerify your email to get started with Protopen:\n%s\n\nThis link expires in 24 hours.", name, verifyURL))
 }
 
@@ -183,7 +191,7 @@ func (ec *emailClient) sendOrgInvite(to string, orgName string, inviterName stri
 		return err
 	}
 
-	return ec.transport.send(ec.from, []string{to},
+	return ec.transport.send(ec.from, []string{to}, "",
 		fmt.Sprintf("%s invited you to %s on Protopen", inviterName, orgName), html,
 		fmt.Sprintf("%s invited you to %s on Protopen.\n\nSign up to join:\n%s", inviterName, orgName, signupURL))
 }
@@ -220,13 +228,14 @@ func (ec *emailClient) sendPasswordReset(to string, resetURL string) error {
 		return err
 	}
 
-	return ec.transport.send(ec.from, []string{to}, "Reset your Protopen password", html,
+	return ec.transport.send(ec.from, []string{to}, "", "Reset your Protopen password", html,
 		fmt.Sprintf("You requested a password reset for your Protopen account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", resetURL))
 }
 
 // sendCommentNotification tells a thread participant about new comment
 // activity. isMention switches the copy between a reply and an @mention.
-func (ec *emailClient) sendCommentNotification(to, actorName, siteName, snippet, threadURL string, isMention bool) error {
+// replyTo, when set, is the per-recipient reply-by-email address.
+func (ec *emailClient) sendCommentNotification(to, replyTo, actorName, siteName, snippet, threadURL string, isMention bool) error {
 	html, err := ec.render("comment_notification.html", map[string]any{
 		"ActorName": actorName,
 		"SiteName":  siteName,
@@ -244,7 +253,7 @@ func (ec *emailClient) sendCommentNotification(to, actorName, siteName, snippet,
 		verb = "mentioned you in a comment on"
 	}
 	text := fmt.Sprintf("%s %s %s.\n\n%s\n\nView the thread:\n%s", actorName, verb, siteName, snippet, threadURL)
-	return ec.transport.send(ec.from, []string{to}, subject, html, text)
+	return ec.transport.send(ec.from, []string{to}, replyTo, subject, html, text)
 }
 
 // sendTestEmail delivers a plain confirmation message so an admin can verify
@@ -252,5 +261,5 @@ func (ec *emailClient) sendCommentNotification(to, actorName, siteName, snippet,
 func (ec *emailClient) sendTestEmail(to string) error {
 	const msg = "This is a test email from Protopen. Your email provider is configured correctly."
 	html := "<p>" + msg + "</p>"
-	return ec.transport.send(ec.from, []string{to}, "Protopen email test", html, msg)
+	return ec.transport.send(ec.from, []string{to}, "", "Protopen email test", html, msg)
 }

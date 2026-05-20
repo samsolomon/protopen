@@ -15,6 +15,7 @@ func (app *application) startCleanupLoop(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				app.cleanupExpiredTokens(ctx)
+				app.cleanupExpiredReplyTokens(ctx)
 				app.cleanupExpiredDeviceCodes(ctx)
 				app.cleanupSoftDeletedSites(ctx)
 				app.cleanupOldAuditLog(ctx)
@@ -40,6 +41,10 @@ func (app *application) runCleanupQuery(ctx context.Context, label, sql string) 
 
 func (app *application) cleanupExpiredTokens(ctx context.Context) {
 	app.runCleanupQuery(ctx, "expired email tokens", `delete from email_tokens where expires_at < now()`)
+}
+
+func (app *application) cleanupExpiredReplyTokens(ctx context.Context) {
+	app.runCleanupQuery(ctx, "expired comment reply tokens", `delete from comment_reply_tokens where expires_at < now()`)
 }
 
 func (app *application) cleanupExpiredDeviceCodes(ctx context.Context) {

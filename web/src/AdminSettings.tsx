@@ -25,6 +25,8 @@ type EmailForm = {
   smtpUser: string
   smtpPass: string
   smtpTLS: boolean
+  inboundDomain: string
+  inboundSecret: string
 }
 
 function emailFormFrom(s: AdminSettingsType): EmailForm {
@@ -37,6 +39,8 @@ function emailFormFrom(s: AdminSettingsType): EmailForm {
     smtpUser: s.email.smtpUser,
     smtpPass: '',
     smtpTLS: s.email.smtpTLS,
+    inboundDomain: s.email.inboundDomain,
+    inboundSecret: '',
   }
 }
 
@@ -100,6 +104,8 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
           smtpUser: email.smtpUser,
           smtpPass: email.smtpPass || undefined,
           smtpTLS: email.smtpTLS,
+          inboundDomain: email.inboundDomain,
+          inboundSecret: email.inboundSecret || undefined,
         },
       })
       setSettings(updated)
@@ -221,6 +227,31 @@ export function AdminSettings({ onSessionExpired }: AdminSettingsProps) {
                   <Label htmlFor="smtp-tls" className="text-sm font-normal">Implicit TLS (port 465)</Label>
                 </div>
               </>
+            ) : null}
+
+            {email.provider !== 'none' ? (
+              <div className="flex flex-col gap-3 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Reply-by-email (optional). Set an inbound domain with MX records pointed at
+                  a provider that forwards parsed mail to <code>/api/email/inbound</code>. With
+                  this configured, notification emails carry a Reply-To so recipients can reply
+                  straight from their inbox.
+                </p>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="inbound-domain" className="text-xs font-normal text-muted-foreground">Inbound domain</Label>
+                  <Input id="inbound-domain" placeholder="reply.example.com" value={email.inboundDomain}
+                    onChange={(e) => setEmail({ ...email, inboundDomain: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="inbound-secret" className="text-xs font-normal text-muted-foreground">
+                    Webhook signing secret {settings.email.inboundSecretSet ? '· configured' : ''}
+                  </Label>
+                  <Input id="inbound-secret" type="password"
+                    placeholder={settings.email.inboundSecretSet ? '•••••••• (leave blank to keep)' : ''}
+                    value={email.inboundSecret}
+                    onChange={(e) => setEmail({ ...email, inboundSecret: e.target.value })} />
+                </div>
+              </div>
             ) : null}
 
             <div>
