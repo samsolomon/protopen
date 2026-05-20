@@ -491,12 +491,37 @@ export async function adminDeleteUser(userId: string): Promise<void> {
   }
 }
 
+export type AdminEmailSettings = {
+  provider: 'none' | 'resend' | 'smtp'
+  from: string
+  resendKeySet: boolean
+  smtpHost: string
+  smtpPort: string
+  smtpUser: string
+  smtpPassSet: boolean
+  smtpTLS: boolean
+}
+
 export type AdminSettings = {
   thumbnails: {
     available: boolean
     enabled: boolean
     reason?: string
   }
+  email: AdminEmailSettings
+}
+
+// Secret fields (resendKey, smtpPass) are write-only: omit or send '' to keep
+// the stored value, send a non-empty string to replace it.
+export type AdminEmailPatch = {
+  provider?: 'none' | 'resend' | 'smtp'
+  from?: string
+  resendKey?: string
+  smtpHost?: string
+  smtpPort?: string
+  smtpUser?: string
+  smtpPass?: string
+  smtpTLS?: boolean
 }
 
 export async function fetchAdminSettings(): Promise<AdminSettings> {
@@ -511,7 +536,9 @@ export async function fetchAdminSettings(): Promise<AdminSettings> {
   return (await response.json()) as AdminSettings
 }
 
-export async function updateAdminSettings(patch: { thumbnailsEnabled?: boolean }): Promise<AdminSettings> {
+export async function updateAdminSettings(
+  patch: { thumbnailsEnabled?: boolean; email?: AdminEmailPatch },
+): Promise<AdminSettings> {
   const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
     method: 'PATCH',
     credentials: 'include',
@@ -526,6 +553,21 @@ export async function updateAdminSettings(patch: { thumbnailsEnabled?: boolean }
   }
 
   return (await response.json()) as AdminSettings
+}
+
+export async function sendTestEmail(to: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/settings/email-test`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to }),
+  })
+
+  if (response.status === 401) throw new SessionExpiredError()
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? 'Could not send test email')
+  }
 }
 
 export async function fetchNotifications(opts: { unread?: boolean } = {}): Promise<{ notifications: Notification[]; unreadCount: number }> {

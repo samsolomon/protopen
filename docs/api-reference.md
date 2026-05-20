@@ -868,7 +868,7 @@ Lists every account on the instance with its organization memberships.
 
 ### `GET /api/admin/settings`
 
-Returns instance-wide settings. Currently exposes the deploy-thumbnail capture toggle.
+Returns instance-wide settings: the deploy-thumbnail capture toggle and the email-provider configuration.
 
 **Response (200):**
 ```json
@@ -877,13 +877,25 @@ Returns instance-wide settings. Currently exposes the deploy-thumbnail capture t
     "available": true,
     "enabled": true,
     "reason": ""
+  },
+  "email": {
+    "provider": "smtp",
+    "from": "Protopen <noreply@example.com>",
+    "resendKeySet": false,
+    "smtpHost": "smtp.example.com",
+    "smtpPort": "587",
+    "smtpUser": "apikey",
+    "smtpPassSet": true,
+    "smtpTLS": false
   }
 }
 ```
 
-- `available` — whether this server has the capability (env `THUMBNAILS_ENABLED` set and a Chromium binary resolved).
-- `enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
-- `reason` — populated only when `available` is `false`, explaining why.
+- `thumbnails.available` — whether this server has the capability (env `THUMBNAILS_ENABLED` set and a Chromium binary resolved).
+- `thumbnails.enabled` — current runtime state from `instance_settings.thumbnails_enabled`.
+- `thumbnails.reason` — populated only when `available` is `false`, explaining why.
+- `email.provider` — `none`, `resend`, or `smtp`.
+- `email.resendKeySet` / `email.smtpPassSet` — whether a secret is stored. **Secret values are never returned.**
 
 ### `PATCH /api/admin/settings`
 
@@ -891,14 +903,44 @@ Update one or more settings.
 
 **Request:**
 ```json
-{"thumbnailsEnabled": true}
+{
+  "thumbnailsEnabled": true,
+  "email": {
+    "provider": "smtp",
+    "from": "Protopen <noreply@example.com>",
+    "smtpHost": "smtp.example.com",
+    "smtpPort": "587",
+    "smtpUser": "apikey",
+    "smtpPass": "secret",
+    "smtpTLS": false
+  }
+}
 ```
 
 **Response (200):** same shape as `GET /api/admin/settings`.
 
+- All keys are optional; only supplied fields change.
+- `email.resendKey` / `email.smtpPass` are write-only: omit them or send `""` to keep the stored secret; send a non-empty value to replace it.
+- Saving email settings rebuilds the mailer immediately — no restart.
 - Returns **409** if the request asks to enable a feature whose `available` is `false`, with `reason` in the error body.
 - Returns **403** if the caller is not admin.
-- Toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+- Thumbnail toggling takes effect immediately: enabling spawns the Chromium allocator and kicks the backstop loop to capture any older deploys that were missed; disabling cancels the allocator and frees memory.
+
+### `POST /api/admin/settings/email-test`
+
+Sends a one-off test message through the currently configured mailer so an admin can confirm the provider works.
+
+**Request:**
+```json
+{"to": "you@example.com"}
+```
+
+**Response (200):** `{"ok": true}`
+
+- Returns **400** if `to` is missing.
+- Returns **409** if no email provider is configured.
+- Returns **502** with the transport error in `error` if the send fails.
+- Returns **403** if the caller is not admin.
 
 ---
 

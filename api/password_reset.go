@@ -52,8 +52,8 @@ func (app *application) forgotPasswordHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	resetURL := app.appOrigin + "/?reset-token=" + token
-	app.trySendEmail("password reset", email, func() error {
-		return app.mailer.sendPasswordReset(email, resetURL)
+	app.trySendEmail("password reset", email, func(m *emailClient) error {
+		return m.sendPasswordReset(email, resetURL)
 	})
 
 	writeJSON(w, http.StatusOK, ok)
