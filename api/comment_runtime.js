@@ -78,9 +78,8 @@
     '.pin.draggable { cursor: grab; }' +
     '.pin.dragging { --pin-scale: 1.15; opacity: .75; cursor: grabbing; transition: none; z-index: 2147483646; }' +
     '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
-    '.topbar .brand { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; transition: opacity .15s; }' +
+    '.topbar .brand { display: flex; align-items: center; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; transition: opacity .15s; }' +
     '.topbar .brand:hover { opacity: 1; }' +
-    '.topbar .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: #ff8f52; transform: rotate(-45deg); }' +
     '.topbar .toggle-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); padding: 6px 14px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; transition: background .15s, border-color .15s; }' +
     '.topbar .toggle-btn:hover { border-color: rgba(255,255,255,.4); }' +
     '.topbar .toggle-btn.active { background: #ff8f52; border-color: #ff8f52; }' +
