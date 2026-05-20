@@ -129,10 +129,11 @@ func TestCreateComment_AnyMemberCanPost(t *testing.T) {
 		t.Fatalf("expected author subscription, got count=%d err=%v", subs, err)
 	}
 
-	// Site owner auto-subscribes (different user).
+	// Site owner is subscribed at the site level (not per-comment): the
+	// real site-create path auto-subscribes the creator via site_subscriptions.
 	if err := f.app.db.QueryRow(context.Background(),
-		`select count(*) from comment_subscriptions where comment_id = $1 and user_id = $2`,
-		out.Comment.ID, f.owner).Scan(&subs); err != nil || subs != 1 {
+		`select count(*) from site_subscriptions where site_id = $1 and user_id = $2`,
+		f.siteID, f.owner).Scan(&subs); err != nil || subs != 1 {
 		t.Fatalf("expected site-owner subscription, got count=%d err=%v", subs, err)
 	}
 }
@@ -505,9 +506,12 @@ func TestListComments_InvalidStatus(t *testing.T) {
 	}
 }
 
-// Smoke: outsider gets 403 on list too.
+// Smoke: outsider gets 403 on list of a private site.
 func TestListComments_OutsiderForbidden(t *testing.T) {
 	f := seedCommentsFixture(t)
+	// The fixture site is public by default; a signed-in non-member can read
+	// a public site. Forbidden only applies to private sites.
+	mustExec(t, f.app.db, `update sites set is_public = false where id = $1`, f.siteID)
 
 	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/comments", "", f.outsider)
 	rec := httptest.NewRecorder()
