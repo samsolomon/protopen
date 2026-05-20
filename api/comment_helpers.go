@@ -137,6 +137,31 @@ func clampSelector(raw string) *string {
 	return &s
 }
 
+// normalizeAnchor canonicalizes the anchor inputs on a create-comment request.
+// Root comments (parentID nil) are guaranteed to come out anchored — when the
+// caller omits the selector or offsets we default to body at center, matching
+// the runtime's terminal-body fallback so server-stored data is invariant.
+// Replies (parentID set) get nil/nil/nil; only the root carries a pin.
+func normalizeAnchor(rawSelector string, offX, offY *float64, parentID *string) (*string, *float64, *float64) {
+	if parentID != nil && *parentID != "" {
+		return nil, nil, nil
+	}
+	sel := clampSelector(rawSelector)
+	if sel == nil {
+		body := "body"
+		sel = &body
+	}
+	if offX == nil {
+		v := 0.5
+		offX = &v
+	}
+	if offY == nil {
+		v := 0.5
+		offY = &v
+	}
+	return sel, offX, offY
+}
+
 // requireRuntimeOrigin enforces the X-Protopen-Client header on cross-origin
 // requests. Same-origin (frontend/app) and empty-Origin (CLI/Bearer) clients
 // pass through. Returns true when the request should proceed; on false the

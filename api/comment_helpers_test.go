@@ -58,6 +58,86 @@ func TestClampSelector(t *testing.T) {
 	}
 }
 
+func TestNormalizeAnchor(t *testing.T) {
+	t.Parallel()
+	parent := "cm_parent"
+	custom := 0.25
+
+	cases := []struct {
+		name     string
+		selector string
+		offX     *float64
+		offY     *float64
+		parent   *string
+		wantSel  *string
+		wantX    *float64
+		wantY    *float64
+	}{
+		{
+			name:    "root with explicit anchor preserved",
+			selector: ".cta", offX: &custom, offY: &custom, parent: nil,
+			wantSel: ptr(".cta"), wantX: &custom, wantY: &custom,
+		},
+		{
+			name:    "root missing selector defaults to body at center",
+			selector: "", offX: nil, offY: nil, parent: nil,
+			wantSel: ptr("body"), wantX: fptr(0.5), wantY: fptr(0.5),
+		},
+		{
+			name:    "root missing one offset defaults that axis only",
+			selector: ".cta", offX: &custom, offY: nil, parent: nil,
+			wantSel: ptr(".cta"), wantX: &custom, wantY: fptr(0.5),
+		},
+		{
+			name:    "reply gets no anchor regardless of payload",
+			selector: ".cta", offX: &custom, offY: &custom, parent: &parent,
+			wantSel: nil, wantX: nil, wantY: nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sel, x, y := normalizeAnchor(tc.selector, tc.offX, tc.offY, tc.parent)
+			if !strPtrEqual(sel, tc.wantSel) {
+				t.Fatalf("selector: got %v want %v", strPtrDeref(sel), strPtrDeref(tc.wantSel))
+			}
+			if !floatPtrEqual(x, tc.wantX) {
+				t.Fatalf("offsetX: got %v want %v", floatPtrDeref(x), floatPtrDeref(tc.wantX))
+			}
+			if !floatPtrEqual(y, tc.wantY) {
+				t.Fatalf("offsetY: got %v want %v", floatPtrDeref(y), floatPtrDeref(tc.wantY))
+			}
+		})
+	}
+}
+
+func ptr(s string) *string   { return &s }
+func fptr(f float64) *float64 { return &f }
+func strPtrEqual(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+func strPtrDeref(p *string) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+func floatPtrEqual(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+func floatPtrDeref(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
 func TestRequireRuntimeOrigin(t *testing.T) {
 	t.Parallel()
 	app := &application{appOrigin: "https://app.test", frontendOrigin: "https://front.test"}

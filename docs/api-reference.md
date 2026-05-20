@@ -328,11 +328,20 @@ deploys that have not yet been captured return 404.
 
 ## Comments
 
-Comments are pinned to a specific page on a specific deploy. They form
+Comments are pinned to a DOM element on a page of a site. They form
 single-level threads (a root comment plus replies). Posting requires a
 signed-in org member. Reading is open to org members on any site and to
 anonymous viewers on public sites. Only the comment author or an org
 admin can delete; any member can toggle resolve.
+
+Comments are **site-scoped** — they survive across deploys. The
+`deployId` field on a comment records the deploy it was first seen on
+(metadata only); deleting a deploy nulls the reference but keeps the
+comment. Every root comment is anchored to an element via
+`elementSelector` + `elementOffsetX`/`elementOffsetY` (offset within the
+element's bounding box, both in `[0,1]`). See [`docs/site-anchors.md`](site-anchors.md)
+for the `data-comment-anchor` convention that keeps anchors stable
+across HTML refactors.
 
 A Figma-style runtime is injected into every deployed HTML response and
 renders the comment overlay (Browse/Comment toggle, pin layer, side
@@ -369,7 +378,8 @@ Org members can read on any site. Anonymous visitors can read on public
 sites only.
 
 **Query params:**
-- `deployId` (optional) — defaults to the site's current deploy.
+- `deployId` (optional) — filters to comments first seen on this deploy.
+  Omit for site-scoped results (the typical case).
 - `status` (optional) — `open` (default), `resolved`, or `all`.
 - `pagePath` (optional) — exact-match filter on the page path.
 
@@ -382,9 +392,7 @@ sites only.
       "siteId": "site_...",
       "deployId": "dep_...",
       "pagePath": "/",
-      "pinX": 0.5,
-      "pinY": 0.4,
-      "elementSelector": "[data-testid=\"cta\"]",
+      "elementSelector": "[data-comment-anchor=\"hero-cta\"]",
       "elementOffsetX": 0.5,
       "elementOffsetY": 0.5,
       "body": "Move this CTA above the fold",
@@ -399,11 +407,13 @@ sites only.
 }
 ```
 
-Replies have a non-null `parentId` pointing at the root comment.
-Pin anchoring is a DOM `elementSelector` plus normalized offset within
-that element (`elementOffsetX`/`elementOffsetY` in `[0,1]`). When the
-selector can't be resolved at render time, the runtime falls back to
-the legacy document-relative `pinX`/`pinY` percentages.
+Replies have a non-null `parentId` pointing at the root comment and no
+anchor fields. Root comments always have `elementSelector` populated;
+when the selector can't be resolved at render time the runtime skips
+the pin rather than rendering at the document origin.
+
+`deployId` on a comment can be null when the originating deploy has
+since been deleted — the comment itself stays site-scoped.
 
 New comments always have `author` populated and `guestName: null`.
 Pre-existing rows from before sign-in was required can have a non-null
@@ -419,9 +429,7 @@ per client IP.
 {
   "deployId": "dep_...",
   "pagePath": "/",
-  "pinX": 0.5,
-  "pinY": 0.4,
-  "elementSelector": "[data-testid=\"cta\"]",
+  "elementSelector": "[data-comment-anchor=\"hero-cta\"]",
   "elementOffsetX": 0.5,
   "elementOffsetY": 0.5,
   "parentId": null,
@@ -429,11 +437,15 @@ per client IP.
 }
 ```
 
-- `deployId` is optional and defaults to the site's current deploy.
-- `parentId` is optional and indicates a reply.
-- `elementSelector` / `elementOffsetX` / `elementOffsetY` are optional;
-  the runtime captures them at click time. `pinX` / `pinY` are kept as
-  a fallback.
+- `deployId` is optional and defaults to the site's current deploy. It
+  marks the deploy the comment was first seen on; the comment itself is
+  site-scoped.
+- `parentId` is optional and indicates a reply (replies carry no anchor).
+- `elementSelector` / `elementOffsetX` / `elementOffsetY` together
+  anchor the pin to a DOM element. For root comments these are optional
+  but recommended — when omitted the server defaults to body at center
+  (`selector: "body"`, both offsets `0.5`). Legacy `pinX` / `pinY` are
+  silently ignored.
 
 **Header:** `X-Protopen-Client: runtime` is required on cross-origin
 requests (i.e. POSTs from the deployed-site origin). Same-origin
@@ -486,20 +498,17 @@ by the runtime to commit a pin drag.
 **Request:** every field is optional; omitted fields are left unchanged.
 ```json
 {
-  "pinX": 0.5,
-  "pinY": 0.4,
-  "elementSelector": "[data-testid=\"cta\"]",
+  "elementSelector": "[data-comment-anchor=\"hero-cta\"]",
   "elementOffsetX": 0.5,
-  "elementOffsetY": 0.5,
-  "clearAnchor": false
+  "elementOffsetY": 0.5
 }
 ```
 
-When the runtime drops a dragged pin it sends `pinX` / `pinY` plus
-`clearAnchor: true`, which unsets `elementSelector` + both offsets in
-one shot. The pin becomes "unanchored" (rendered with a dashed
-outline). `clearAnchor` takes precedence over a populated
-`elementSelector` in the same request.
+The runtime sends these three fields whenever a pin is dragged onto a
+new element — `elementFromPoint` resolves the drop target, the runtime
+captures a fresh anchor against it, and the PATCH commits the new
+selector + offsets. Legacy `pinX`, `pinY`, and `clearAnchor` fields are
+silently ignored: every comment must stay anchored to an element.
 
 **Header:** `X-Protopen-Client: runtime` is required on cross-origin
 PATCHes, matching the POST policy.

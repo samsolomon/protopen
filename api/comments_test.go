@@ -490,8 +490,8 @@ func TestCreateComment_DefaultsDeployToCurrent(t *testing.T) {
 	}
 	var out struct{ Comment comment }
 	decodeJSON(t, rec, &out)
-	if out.Comment.DeployID != f.deployID {
-		t.Fatalf("expected deployId=%s, got %s", f.deployID, out.Comment.DeployID)
+	if out.Comment.DeployID == nil || *out.Comment.DeployID != f.deployID {
+		t.Fatalf("expected deployId=%s, got %v", f.deployID, out.Comment.DeployID)
 	}
 }
 
@@ -668,53 +668,67 @@ func seedComment(t *testing.T, f commentsFixture, body, asUserID string) string 
 
 // --- B. PATCH /api/comments/:id (updateCommentHandler) ---
 
-func TestUpdateComment_AuthorUpdatesPin(t *testing.T) {
+func TestUpdateComment_AuthorUpdatesAnchor(t *testing.T) {
 	f := seedCommentsFixture(t)
-	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.2,"body":"pin"}`, f.other)
+	id := seedComment(t, f,
+		`{"pagePath":"/","body":"pin","elementSelector":".a","elementOffsetX":0.1,"elementOffsetY":0.2}`,
+		f.other)
 
-	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.9,"pinY":0.8}`, f.other)
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id,
+		`{"elementSelector":".b","elementOffsetX":0.9,"elementOffsetY":0.8}`, f.other)
 	rec := httptest.NewRecorder()
 	f.app.commentByIDHandler(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
 	}
 
+	var sel string
 	var x, y sql.NullFloat64
 	if err := f.app.db.QueryRow(context.Background(),
-		`select pin_x, pin_y from comments where id = $1`, id).Scan(&x, &y); err != nil {
-		t.Fatalf("read pin: %v", err)
+		`select element_selector, element_offset_x, element_offset_y from comments where id = $1`, id).
+		Scan(&sel, &x, &y); err != nil {
+		t.Fatalf("read anchor: %v", err)
 	}
-	if !x.Valid || x.Float64 != 0.9 || !y.Valid || y.Float64 != 0.8 {
-		t.Fatalf("expected pin (0.9, 0.8), got (%v, %v)", x, y)
+	if sel != ".b" || !x.Valid || x.Float64 != 0.9 || !y.Valid || y.Float64 != 0.8 {
+		t.Fatalf("expected (.b, 0.9, 0.8), got (%s, %v, %v)", sel, x, y)
 	}
 }
 
 func TestUpdateComment_PartialUpdatePreservesOmitted(t *testing.T) {
 	f := seedCommentsFixture(t)
-	id := seedComment(t, f, `{"pagePath":"/","pinX":0.1,"pinY":0.2,"body":"pin"}`, f.other)
+	id := seedComment(t, f,
+		`{"pagePath":"/","body":"pin","elementSelector":".a","elementOffsetX":0.1,"elementOffsetY":0.2}`,
+		f.other)
 
-	// Send only pinX; pinY must be preserved via COALESCE.
-	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"pinX":0.5}`, f.other)
+	// Send only elementOffsetX; selector + offsetY must be preserved via COALESCE.
+	req := authedRequest(t, f.app, "PATCH", "/api/comments/"+id, `{"elementOffsetX":0.5}`, f.other)
 	rec := httptest.NewRecorder()
 	f.app.commentByIDHandler(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
 	}
 
+	var sel string
 	var x, y sql.NullFloat64
 	if err := f.app.db.QueryRow(context.Background(),
-		`select pin_x, pin_y from comments where id = $1`, id).Scan(&x, &y); err != nil {
-		t.Fatalf("read pin: %v", err)
+		`select element_selector, element_offset_x, element_offset_y from comments where id = $1`, id).
+		Scan(&sel, &x, &y); err != nil {
+		t.Fatalf("read anchor: %v", err)
+	}
+	if sel != ".a" {
+		t.Fatalf("expected selector preserved at .a, got %q", sel)
 	}
 	if !x.Valid || x.Float64 != 0.5 {
-		t.Fatalf("expected pinX updated to 0.5, got %v", x)
+		t.Fatalf("expected offsetX updated to 0.5, got %v", x)
 	}
 	if !y.Valid || y.Float64 != 0.2 {
-		t.Fatalf("expected pinY preserved at 0.2, got %v", y)
+		t.Fatalf("expected offsetY preserved at 0.2, got %v", y)
 	}
 }
 
-func TestUpdateComment_ClearAnchor(t *testing.T) {
+// The deprecated clearAnchor field is silently ignored: every comment must
+// stay anchored. The runtime re-anchors on drag instead of clearing.
+func TestUpdateComment_ClearAnchorFieldIgnored(t *testing.T) {
 	f := seedCommentsFixture(t)
 	id := seedComment(t, f,
 		`{"pagePath":"/","body":"anchored","elementSelector":".target","elementOffsetX":0.25,"elementOffsetY":0.5}`,
@@ -724,7 +738,7 @@ func TestUpdateComment_ClearAnchor(t *testing.T) {
 	rec := httptest.NewRecorder()
 	f.app.commentByIDHandler(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("clearAnchor: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("patch: %d %s", rec.Code, rec.Body.String())
 	}
 
 	var sel sql.NullString
@@ -734,8 +748,8 @@ func TestUpdateComment_ClearAnchor(t *testing.T) {
 		Scan(&sel, &ox, &oy); err != nil {
 		t.Fatalf("read anchor: %v", err)
 	}
-	if sel.Valid || ox.Valid || oy.Valid {
-		t.Fatalf("expected anchor fields cleared, got sel=%v ox=%v oy=%v", sel, ox, oy)
+	if !sel.Valid || sel.String != ".target" || !ox.Valid || ox.Float64 != 0.25 || !oy.Valid || oy.Float64 != 0.5 {
+		t.Fatalf("expected anchor preserved (.target, 0.25, 0.5), got sel=%v ox=%v oy=%v", sel, ox, oy)
 	}
 }
 
@@ -1049,5 +1063,89 @@ func TestCreateComment_RejectsOverlongBody(t *testing.T) {
 	f.app.createSiteCommentHandler(rec, req, f.siteID)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("overlong body should 400, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Creating a comment without an explicit anchor defaults to body at center.
+// Mirrors normalizeAnchor — every root comment is guaranteed anchored.
+func TestCreateComment_DefaultsAnchorToBody(t *testing.T) {
+	f := seedCommentsFixture(t)
+
+	id := seedComment(t, f, `{"pagePath":"/","body":"unanchored payload"}`, f.other)
+
+	var sel string
+	var ox, oy float64
+	if err := f.app.db.QueryRow(context.Background(),
+		`select element_selector, element_offset_x, element_offset_y from comments where id = $1`, id).
+		Scan(&sel, &ox, &oy); err != nil {
+		t.Fatalf("read anchor: %v", err)
+	}
+	if sel != "body" || ox != 0.5 || oy != 0.5 {
+		t.Fatalf("expected body anchor at (0.5, 0.5), got (%q, %v, %v)", sel, ox, oy)
+	}
+}
+
+// Comments are site-scoped: listing without ?deployId returns every open
+// comment, including ones first seen on an older deploy.
+func TestListComments_SiteScopedAcrossDeploys(t *testing.T) {
+	f := seedCommentsFixture(t)
+	ctx := context.Background()
+
+	// Comment on the current deploy.
+	c1 := seedComment(t, f, `{"pagePath":"/","body":"first"}`, f.other)
+
+	// Roll forward to a new deploy. The old comment must still appear.
+	seedDeploy(t, f.app, f.siteID, "dep_next")
+	c2 := seedComment(t, f, `{"pagePath":"/","body":"second"}`, f.other)
+
+	req := authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/comments?pagePath=/", "", f.other)
+	rec := httptest.NewRecorder()
+	f.app.listSiteCommentsHandler(rec, req, f.siteID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Comments []comment `json:"comments"`
+	}
+	decodeJSON(t, rec, &out)
+	seen := map[string]bool{}
+	for _, c := range out.Comments {
+		seen[c.ID] = true
+	}
+	if !seen[c1] || !seen[c2] {
+		t.Fatalf("expected both %s and %s in site-scoped list, got %v", c1, c2, seen)
+	}
+	// Sanity: passing ?deployId filters back to one.
+	req = authedRequest(t, f.app, "GET", "/api/sites/"+f.siteID+"/comments?pagePath=/&deployId=dep_next", "", f.other)
+	rec = httptest.NewRecorder()
+	f.app.listSiteCommentsHandler(rec, req, f.siteID)
+	decodeJSON(t, rec, &out)
+	if len(out.Comments) != 1 || out.Comments[0].ID != c2 {
+		t.Fatalf("deployId filter: expected only %s, got %d comments", c2, len(out.Comments))
+	}
+	_ = ctx
+}
+
+// Deleting the deploy a comment was first seen on must NOT delete the
+// comment — the FK is ON DELETE SET NULL.
+func TestDeployDelete_SetsCommentDeployIDNull(t *testing.T) {
+	f := seedCommentsFixture(t)
+	ctx := context.Background()
+
+	id := seedComment(t, f, `{"pagePath":"/","body":"persist me"}`, f.other)
+
+	// Point the site at a different deploy so we can drop the first.
+	seedDeploy(t, f.app, f.siteID, "dep_replacement")
+	if _, err := f.app.db.Exec(ctx, `delete from deploys where id = $1`, f.deployID); err != nil {
+		t.Fatalf("delete deploy: %v", err)
+	}
+
+	var deployID sql.NullString
+	if err := f.app.db.QueryRow(ctx,
+		`select deploy_id from comments where id = $1`, id).Scan(&deployID); err != nil {
+		t.Fatalf("read comment after deploy delete: %v", err)
+	}
+	if deployID.Valid {
+		t.Fatalf("expected deploy_id NULL after deploy delete, got %q", deployID.String)
 	}
 }

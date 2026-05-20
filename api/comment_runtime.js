@@ -73,7 +73,6 @@
     '.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; background: rgba(255,143,82,.92); color: white; font: 600 12px system-ui, sans-serif; --pin-scale: 1; transform-origin: 0% 100%; transform: translate(0, -100%) rotate(-45deg) scale(var(--pin-scale)); box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid rgba(255,255,255,.6); -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4); pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: transform .15s, filter .15s; }' +
     '.pin:hover { --pin-scale: 1.1; filter: brightness(1.05); }' +
     '.pin > span { transform: rotate(45deg); line-height: 1; }' +
-    '.pin.unanchored { border: 2px dashed rgba(255,255,255,.6); }' +
     '.pin.active { background: #0066ff; }' +
     '.pin.draggable { cursor: grab; }' +
     '.pin.dragging { --pin-scale: 1.15; opacity: .75; cursor: grabbing; transition: none; z-index: 2147483646; }' +
@@ -290,40 +289,80 @@
     }).catch(function () {});
   }
 
-  // ---------- selector capture + resolve ----------
-  function captureSelector(el) {
-    if (!el || el === document.body || el === document.documentElement) return null;
+  // ---------- anchor capture + resolve ----------
+  //
+  // captureAnchor turns a click into {selector, offsetX, offsetY}. It always
+  // returns an anchor — never null — so every pin survives layout reflows by
+  // tracking some real DOM element. Priority:
+  //   1. nearest ancestor (up to 4 hops) with a data-comment-anchor /
+  //      data-testid / data-id / data-component attribute
+  //   2. a stable id on the click target itself (skips uuid-ish ids)
+  //   3. nth-of-type structural path from the click target, up to 5 hops
+  //   4. terminal: body
+  // The offset is computed against the *anchor element's* bounding box, not
+  // the click target's — important when step 1 walks past intermediate
+  // wrappers, so rendering uses the same box capture used.
+  function captureAnchor(target, clickX, clickY) {
     var dataAttrs = ['data-comment-anchor', 'data-testid', 'data-id', 'data-component'];
-    var cur = el;
-    for (var hop = 0; hop < 4 && cur; hop++) {
+    var anchorEl = null;
+    var selector = null;
+
+    var cur = target;
+    for (var hop = 0; hop < 4 && cur && cur !== document.body; hop++) {
       for (var i = 0; i < dataAttrs.length; i++) {
         var v = cur.getAttribute && cur.getAttribute(dataAttrs[i]);
         if (v) {
-          return '[' + dataAttrs[i] + '="' + cssEscape(v) + '"]';
+          anchorEl = cur;
+          selector = '[' + dataAttrs[i] + '="' + cssEscape(v) + '"]';
+          break;
         }
       }
+      if (selector) break;
       cur = cur.parentElement;
     }
-    if (el.id && /^[A-Za-z][A-Za-z0-9_-]*$/.test(el.id) && !/[0-9a-f]{6,}/i.test(el.id)) {
-      return '#' + el.id;
+
+    if (!selector && target && target.id &&
+        /^[A-Za-z][A-Za-z0-9_-]*$/.test(target.id) &&
+        !/[0-9a-f]{6,}/i.test(target.id)) {
+      anchorEl = target;
+      selector = '#' + target.id;
     }
-    var path = [];
-    cur = el;
-    for (var step = 0; step < 5 && cur && cur !== document.body; step++) {
-      var part = cur.tagName.toLowerCase();
-      if (cur.parentElement) {
-        var siblings = Array.prototype.filter.call(cur.parentElement.children, function (c) { return c.tagName === cur.tagName; });
-        if (siblings.length > 1) {
-          var idx = siblings.indexOf(cur) + 1;
-          part += ':nth-of-type(' + idx + ')';
+
+    if (!selector && target && target !== document.body && target !== document.documentElement) {
+      var path = [];
+      cur = target;
+      for (var step = 0; step < 5 && cur && cur !== document.body; step++) {
+        var part = cur.tagName.toLowerCase();
+        if (cur.parentElement) {
+          var siblings = Array.prototype.filter.call(cur.parentElement.children, function (c) { return c.tagName === cur.tagName; });
+          if (siblings.length > 1) {
+            var idx = siblings.indexOf(cur) + 1;
+            part += ':nth-of-type(' + idx + ')';
+          }
         }
+        path.unshift(part);
+        cur = cur.parentElement;
       }
-      path.unshift(part);
-      cur = cur.parentElement;
+      var sel = path.join(' > ');
+      if (sel && sel.length <= 200) {
+        anchorEl = target;
+        selector = sel;
+      }
     }
-    var sel = path.join(' > ');
-    if (sel.length > 200) return null;
-    return sel || null;
+
+    if (!selector) {
+      anchorEl = document.body;
+      selector = 'body';
+    }
+
+    var rect = anchorEl.getBoundingClientRect();
+    var offsetX = rect.width > 0 ? (clickX - rect.left) / rect.width : 0.5;
+    var offsetY = rect.height > 0 ? (clickY - rect.top) / rect.height : 0.5;
+    // Clamp 0..1 — drag-end uses elementFromPoint, which can return an
+    // element that doesn't cover the cursor exactly (1px gutters, etc.).
+    offsetX = Math.max(0, Math.min(1, offsetX));
+    offsetY = Math.max(0, Math.min(1, offsetY));
+    return { selector: selector, offsetX: offsetX, offsetY: offsetY };
   }
 
   function cssEscape(s) {
@@ -340,24 +379,21 @@
   }
 
   // ---------- pin rendering ----------
+  //
+  // pinPosition is anchored-only. Returns null when:
+  //   - the selector no longer resolves uniquely (DOM changed under us)
+  //   - offsets are missing (legacy row pre-backfill)
+  //   - the resolved element has zero size (display:none, collapsed, etc.)
+  // Callers skip rendering on null — better than snapping the pin to (0,0).
   function pinPosition(c) {
     var el = resolveSelector(c.elementSelector);
-    if (el && c.elementOffsetX != null && c.elementOffsetY != null) {
-      var rect = el.getBoundingClientRect();
-      return {
-        x: rect.left + window.scrollX + rect.width * c.elementOffsetX,
-        y: rect.top + window.scrollY + rect.height * c.elementOffsetY,
-        anchored: true,
-      };
-    }
-    if (c.pinX != null && c.pinY != null) {
-      return {
-        x: c.pinX * document.documentElement.scrollWidth,
-        y: c.pinY * document.documentElement.scrollHeight,
-        anchored: false,
-      };
-    }
-    return null;
+    if (!el || c.elementOffsetX == null || c.elementOffsetY == null) return null;
+    var rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return null;
+    return {
+      x: rect.left + window.scrollX + rect.width * c.elementOffsetX,
+      y: rect.top + window.scrollY + rect.height * c.elementOffsetY,
+    };
   }
 
   function rootComments() {
@@ -378,7 +414,7 @@
       var pos = pinPosition(c);
       if (!pos) return;
       var el = document.createElement('div');
-      el.className = 'pin' + (pos.anchored ? '' : ' unanchored') + (c.id === state.activeThreadId ? ' active' : '');
+      el.className = 'pin' + (c.id === state.activeThreadId ? ' active' : '');
       el.dataset.commentId = c.id;
       el.style.left = pos.x + 'px';
       el.style.top = pos.y + 'px';
@@ -449,16 +485,20 @@
           return;
         }
         pinEl.classList.remove('dragging');
-        var newLeft = startLeft + (ev.clientX - startClientX);
-        var newTop = startTop + (ev.clientY - startClientY);
-        var w = Math.max(document.documentElement.scrollWidth, 1);
-        var h = Math.max(document.documentElement.scrollHeight, 1);
+        // Re-anchor to whatever's under the drop point. Hide the pin first so
+        // elementFromPoint skips it (the host is pointer-events:none, but the
+        // dragged pin itself is pointer-events:auto — visibility:hidden
+        // removes it from hit-testing without affecting pointer capture).
+        pinEl.style.visibility = 'hidden';
+        var dropTarget = document.elementFromPoint(ev.clientX, ev.clientY) || document.body;
+        pinEl.style.visibility = '';
+        var anchor = captureAnchor(dropTarget, ev.clientX, ev.clientY);
         api('/api/comments/' + c.id, {
           method: 'PATCH',
           body: JSON.stringify({
-            pinX: Math.max(0, Math.min(1, newLeft / w)),
-            pinY: Math.max(0, Math.min(1, newTop / h)),
-            clearAnchor: true,
+            elementSelector: anchor.selector,
+            elementOffsetX: anchor.offsetX,
+            elementOffsetY: anchor.offsetY,
           }),
         }).then(loadComments).catch(function (err) {
           alert('Failed to move pin: ' + err.message);
@@ -746,9 +786,7 @@
       postComment({
         body: text,
         pagePath: location.pathname,
-        pinX: pin.pinX,
-        pinY: pin.pinY,
-        elementSelector: pin.selector || undefined,
+        elementSelector: pin.selector,
         elementOffsetX: pin.offsetX,
         elementOffsetY: pin.offsetY,
       }).then(function () {
@@ -786,21 +824,14 @@
     if (e.target.closest && e.target.closest('a[href]')) return;
     e.preventDefault();
     e.stopPropagation();
-    var target = e.target;
-    var rect = target.getBoundingClientRect();
-    var selector = captureSelector(target);
-    var offsetX = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5;
-    var offsetY = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5;
-    var pin = {
-      selector: selector,
-      offsetX: offsetX,
-      offsetY: offsetY,
-      pinX: e.pageX / Math.max(document.documentElement.scrollWidth, 1),
-      pinY: e.pageY / Math.max(document.documentElement.scrollHeight, 1),
+    var anchor = captureAnchor(e.target, e.clientX, e.clientY);
+    openComposer({
+      selector: anchor.selector,
+      offsetX: anchor.offsetX,
+      offsetY: anchor.offsetY,
       viewportX: e.clientX,
       viewportY: e.clientY,
-    };
-    openComposer(pin);
+    });
   }, true);
 
   // ---------- textarea ergonomics ----------

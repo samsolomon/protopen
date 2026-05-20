@@ -221,9 +221,13 @@ func seedSiteComments(ctx context.Context, tx pgx.Tx, orgID, userID string, team
 			}
 			rootID := generateID("cm")
 			rootCreated := now.Add(-time.Duration(len(threads)-i) * time.Hour)
+			// Seed root comments as body-anchored at the legacy pinX/pinY so
+			// they render in the demo without a real anchorable element.
 			if _, err := tx.Exec(ctx, `
-				insert into comments (id, site_id, deploy_id, user_id, page_path, pin_x, pin_y, body, created_at, updated_at)
-				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+				insert into comments (id, site_id, deploy_id, user_id, page_path,
+					element_selector, element_offset_x, element_offset_y,
+					body, created_at, updated_at)
+				values ($1, $2, $3, $4, $5, 'body', $6, $7, $8, $9, $9)
 			`, rootID, siteID, deployID, rootAuthorID, pagePath, thread.pinX, thread.pinY, thread.body, rootCreated); err != nil {
 				return err
 			}

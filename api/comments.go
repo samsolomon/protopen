@@ -18,13 +18,16 @@ import (
 )
 
 
+// comment is the wire shape returned by every comment endpoint. DeployID is
+// the deploy the comment was first seen on; it's metadata only — comments are
+// site-scoped and survive deploy deletion (the FK is ON DELETE SET NULL).
+// Pins are anchored to an element (selector + offset within the element);
+// pin_x/pin_y are legacy columns kept for one release and never read.
 type comment struct {
 	ID              string         `json:"id"`
 	SiteID          string         `json:"siteId"`
-	DeployID        string         `json:"deployId"`
+	DeployID        *string        `json:"deployId"`
 	PagePath        string         `json:"pagePath"`
-	PinX            *float64       `json:"pinX"`
-	PinY            *float64       `json:"pinY"`
 	ElementSelector *string        `json:"elementSelector"`
 	ElementOffsetX  *float64       `json:"elementOffsetX"`
 	ElementOffsetY  *float64       `json:"elementOffsetY"`
@@ -37,11 +40,13 @@ type comment struct {
 	GuestName       *string        `json:"guestName"`
 }
 
+// createCommentRequest is the POST body. Root comments (parentId nil) must
+// carry an element anchor; missing fields default to body-anchored at center
+// for backward compatibility with older clients. Replies (parentId set) have
+// no anchor.
 type createCommentRequest struct {
 	DeployID        string   `json:"deployId,omitempty"`
 	PagePath        string   `json:"pagePath"`
-	PinX            *float64 `json:"pinX,omitempty"`
-	PinY            *float64 `json:"pinY,omitempty"`
 	ParentID        *string  `json:"parentId,omitempty"`
 	Body            string   `json:"body"`
 	ElementSelector string   `json:"elementSelector,omitempty"`
@@ -52,9 +57,14 @@ type createCommentRequest struct {
 // listSiteCommentsHandler: GET /api/sites/:siteID/comments
 // Query params:
 //
-//	?deployId=...   defaults to the site's current_deploy_id
+//	?deployId=...   optional filter; default is site-scoped (all deploys)
 //	?status=open|resolved|all (default open)
 //	?pagePath=...   optional exact-match filter
+//
+// Comments are site-scoped: by default this returns every open comment on
+// the site (optionally filtered by page_path), regardless of which deploy
+// each comment was first seen on. Pass deployId only when you specifically
+// want comments first seen on that deploy.
 func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.Request, siteID string) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -85,16 +95,6 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	q := r.URL.Query()
-	deployID := strings.TrimSpace(q.Get("deployId"))
-	if deployID == "" {
-		var current *string
-		if err := app.db.QueryRow(r.Context(), `select current_deploy_id from sites where id = $1`, siteID).Scan(&current); err != nil || current == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"comments": []comment{}})
-			return
-		}
-		deployID = *current
-	}
-
 	status := q.Get("status")
 	if status == "" {
 		status = "open"
@@ -112,23 +112,28 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	args := []any{siteID, deployID}
+	args := []any{siteID}
 	pagePathClause := ""
 	if pagePath := q.Get("pagePath"); pagePath != "" {
-		pagePathClause = "and c.page_path = $3"
 		args = append(args, pagePath)
+		pagePathClause = fmt.Sprintf("and c.page_path = $%d", len(args))
+	}
+	deployClause := ""
+	if deployID := strings.TrimSpace(q.Get("deployId")); deployID != "" {
+		args = append(args, deployID)
+		deployClause = fmt.Sprintf("and c.deploy_id = $%d", len(args))
 	}
 
 	query := fmt.Sprintf(`
-		select c.id, c.site_id, c.deploy_id, c.page_path, c.pin_x, c.pin_y,
+		select c.id, c.site_id, c.deploy_id, c.page_path,
 		       c.element_selector, c.element_offset_x, c.element_offset_y,
 		       c.body, c.parent_id, c.resolved_at, c.resolved_by, c.created_at,
 		       u.id, u.name, u.username, c.guest_name
 		from comments c
 		left join users u on u.id = c.user_id
-		where c.site_id = $1 and c.deploy_id = $2 %s %s
+		where c.site_id = $1 %s %s %s
 		order by c.created_at asc
-	`, statusClause, pagePathClause)
+	`, statusClause, pagePathClause, deployClause)
 
 	rows, err := app.db.Query(r.Context(), query, args...)
 	if err != nil {
@@ -142,8 +147,7 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 	for rows.Next() {
 		var (
 			c              comment
-			pinX           sql.NullFloat64
-			pinY           sql.NullFloat64
+			deployID       sql.NullString
 			elementSel     sql.NullString
 			elementOffsetX sql.NullFloat64
 			elementOffsetY sql.NullFloat64
@@ -156,20 +160,16 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 			authorUser     sql.NullString
 			guestName      sql.NullString
 		)
-		if err := rows.Scan(&c.ID, &c.SiteID, &c.DeployID, &c.PagePath, &pinX, &pinY,
+		if err := rows.Scan(&c.ID, &c.SiteID, &deployID, &c.PagePath,
 			&elementSel, &elementOffsetX, &elementOffsetY,
 			&c.Body, &parentID, &resolvedAt, &resolvedBy, &createdAt,
 			&authorID, &authorName, &authorUser, &guestName); err != nil {
 			log.Printf("scan comment: %v", err)
 			continue
 		}
-		if pinX.Valid {
-			x := pinX.Float64
-			c.PinX = &x
-		}
-		if pinY.Valid {
-			y := pinY.Float64
-			c.PinY = &y
+		if deployID.Valid {
+			d := deployID.String
+			c.DeployID = &d
 		}
 		if elementSel.Valid {
 			s := elementSel.String
@@ -210,7 +210,8 @@ func (app *application) listSiteCommentsHandler(w http.ResponseWriter, r *http.R
 }
 
 // insertCommentParams carries an already-validated comment for insertComment.
-// Callers resolve deployID / rootID and own the transaction.
+// Callers resolve deployID / rootID and own the transaction. Root comments
+// (parentID nil) must carry an element anchor; replies have no anchor.
 type insertCommentParams struct {
 	siteID          string
 	deployID        string
@@ -220,7 +221,6 @@ type insertCommentParams struct {
 	parentID        *string // nil for a top-level comment
 	rootID          string  // "" for a top-level comment
 	body            string
-	pinX, pinY      *float64
 	elementSelector *string
 	elementOffsetX  *float64
 	elementOffsetY  *float64
@@ -244,13 +244,13 @@ func (app *application) insertComment(ctx context.Context, tx pgx.Tx, p insertCo
 	if _, err := tx.Exec(ctx, `
 		insert into comments (
 			id, site_id, deploy_id, user_id, page_path,
-			pin_x, pin_y, body, parent_id,
+			body, parent_id,
 			element_selector, element_offset_x, element_offset_y,
 			created_at, updated_at
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
 	`, commentID, p.siteID, p.deployID, p.authorID, p.pagePath,
-		p.pinX, p.pinY, p.body, p.parentID,
+		p.body, p.parentID,
 		p.elementSelector, p.elementOffsetX, p.elementOffsetY,
 		now); err != nil {
 		return insertCommentResult{}, err
@@ -420,7 +420,12 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		rootID = parentRoot
 	}
 
-	elementSelectorArg := clampSelector(req.ElementSelector)
+	// Anchor defaulting: root comments without an explicit anchor default to
+	// body at center. Replies (parentId set) carry no anchor. This keeps every
+	// rendered pin attached to a layout-reflowing element rather than fixed
+	// document coordinates.
+	selectorArg, offsetX, offsetY := normalizeAnchor(
+		req.ElementSelector, req.ElementOffsetX, req.ElementOffsetY, req.ParentID)
 
 	res, err := app.insertComment(r.Context(), tx, insertCommentParams{
 		siteID:          siteID,
@@ -431,11 +436,9 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 		parentID:        req.ParentID,
 		rootID:          rootID,
 		body:            body,
-		pinX:            req.PinX,
-		pinY:            req.PinY,
-		elementSelector: elementSelectorArg,
-		elementOffsetX:  req.ElementOffsetX,
-		elementOffsetY:  req.ElementOffsetY,
+		elementSelector: selectorArg,
+		elementOffsetX:  offsetX,
+		elementOffsetY:  offsetY,
 	})
 	if err != nil {
 		log.Printf("insert comment: %v", err)
@@ -455,13 +458,11 @@ func (app *application) createSiteCommentHandler(w http.ResponseWriter, r *http.
 	resp := comment{
 		ID:              res.commentID,
 		SiteID:          siteID,
-		DeployID:        deployID,
+		DeployID:        &deployID,
 		PagePath:        req.PagePath,
-		PinX:            req.PinX,
-		PinY:            req.PinY,
-		ElementSelector: elementSelectorArg,
-		ElementOffsetX:  req.ElementOffsetX,
-		ElementOffsetY:  req.ElementOffsetY,
+		ElementSelector: selectorArg,
+		ElementOffsetX:  offsetX,
+		ElementOffsetY:  offsetY,
 		Body:            body,
 		ParentID:        req.ParentID,
 		CreatedAt:       res.createdAt.Format(time.RFC3339),
@@ -717,16 +718,13 @@ func (app *application) commentByIDHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// updateCommentRequest accepts anchor updates only. The deprecated pinX/pinY
+// and clearAnchor fields are silently ignored — every comment must remain
+// anchored to an element; drag-end re-anchors to the new drop target.
 type updateCommentRequest struct {
-	PinX            *float64 `json:"pinX,omitempty"`
-	PinY            *float64 `json:"pinY,omitempty"`
 	ElementSelector *string  `json:"elementSelector,omitempty"`
 	ElementOffsetX  *float64 `json:"elementOffsetX,omitempty"`
 	ElementOffsetY  *float64 `json:"elementOffsetY,omitempty"`
-	// ClearAnchor unsets element_selector + element_offset_{x,y} in one
-	// shot. The runtime sends this on drag drop so the pin becomes purely
-	// x/y-positioned and gets the dashed "unanchored" outline.
-	ClearAnchor bool `json:"clearAnchor,omitempty"`
 }
 
 // updateCommentHandler: PATCH /api/comments/{commentID}
@@ -776,29 +774,19 @@ func (app *application) updateCommentHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// nil pointers mean "field omitted" — COALESCE keeps the current value.
-	// clearAnchor wins over a populated ElementSelector (only one matters in
-	// practice; the runtime never sends both).
 	var selectorArg *string
-	if req.ClearAnchor {
-		selectorArg = nil
-	} else if req.ElementSelector != nil {
+	if req.ElementSelector != nil {
 		selectorArg = clampSelector(*req.ElementSelector)
 	}
 
 	if _, err := app.db.Exec(r.Context(), `
 		update comments
-		set pin_x = coalesce($2, pin_x),
-		    pin_y = coalesce($3, pin_y),
-		    element_selector = case
-		        when $7::boolean then null
-		        when $4::text is not null then $4
-		        else element_selector
-		    end,
-		    element_offset_x = case when $7::boolean then null else coalesce($5, element_offset_x) end,
-		    element_offset_y = case when $7::boolean then null else coalesce($6, element_offset_y) end,
+		set element_selector = coalesce($2, element_selector),
+		    element_offset_x = coalesce($3, element_offset_x),
+		    element_offset_y = coalesce($4, element_offset_y),
 		    updated_at = now()
 		where id = $1
-	`, commentID, req.PinX, req.PinY, selectorArg, req.ElementOffsetX, req.ElementOffsetY, req.ClearAnchor); err != nil {
+	`, commentID, selectorArg, req.ElementOffsetX, req.ElementOffsetY); err != nil {
 		log.Printf("update comment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update comment"})
 		return
