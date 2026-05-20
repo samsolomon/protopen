@@ -447,6 +447,8 @@ list response.
   to the thread.
 - Every notification recipient gets one row in a single multi-row
   insert. The author never notifies themselves.
+- When email is configured, recipients are also emailed off the request
+  path — see [Notifications](#notifications).
 
 **Status codes:** `201` created, `400` invalid (missing body, parent
 belongs to a different site, deploy not on this site), `401`
@@ -896,6 +898,16 @@ Lists every account on the instance with its organization memberships.
   ]
 }
 ```
+
+### `DELETE /api/admin/users/{userID}`
+
+Deletes an account. The user's personal organizations are removed along
+with it; the action is recorded in the audit log.
+
+**Response (200):** `{ "ok": true }`
+
+**Status codes:** `200` ok, `400` missing user ID, `403` caller not
+admin, `404` user not found.
 
 ### `GET /api/admin/settings`
 
