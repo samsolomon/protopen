@@ -163,7 +163,12 @@ func main() {
 	listenAddr := getenv("PORT", "")
 	appListenAddr := getenv("APP_LISTEN_ADDR", ":8080")
 	contentListenAddr := getenv("CONTENT_LISTEN_ADDR", ":8081")
-	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://127.0.0.1:8081"), "/")
+	// Default to `localhost` (not 127.0.0.1) so the session cookie set by
+	// the app on `localhost:8080` is sent to fetches from the content origin.
+	// Browsers treat `127.0.0.1` and `localhost` as different hosts and
+	// won't ship a host-only cookie across them, which makes the injected
+	// comment runtime read as signed-out.
+	contentBaseURL := strings.TrimRight(getenv("PUBLIC_CONTENT_URL", "http://localhost:8081"), "/")
 	frontendOrigin := strings.TrimRight(getenv("FRONTEND_ORIGIN", "http://localhost:5173"), "/")
 	appOrigin := strings.TrimRight(getenv("APP_ORIGIN", ""), "/")
 	contentOrigin := strings.TrimRight(getenv("CONTENT_ORIGIN", ""), "/")
