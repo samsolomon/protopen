@@ -38,7 +38,7 @@ For agents that speak the [Model Context Protocol](https://modelcontextprotocol.
 | List deploys   | `protopen deploys <name>`            | `list_deploys`  |
 | Rollback       | `protopen rollback <name> <id>`      | `rollback`      |
 | Read comments  | `protopen comments <name>`           | `list_comments` |
-| Set visibility | `protopen visibility <name> <vis>`   | —               |
+| Set visibility | `protopen visibility <name> <vis>`   | `set_visibility` |
 
 Example Claude Desktop config (`claude_desktop_config.json`):
 

@@ -116,7 +116,7 @@ func TestMCPBinarySmoke(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"deploy", "list_comments", "list_deploys", "list_sites", "rollback"}
+	want := []string{"deploy", "list_comments", "list_deploys", "list_sites", "rollback", "set_visibility"}
 	if len(got) != len(want) {
 		t.Fatalf("tools = %v, want %v", got, want)
 	}
