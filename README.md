@@ -78,7 +78,10 @@ Sign in, then visit the dashboard to see the seeded sites. Thumbnails are captur
 - Rollback to any previous deploy in one command
 - Public / private sites (private requires sign-in)
 - Local-filesystem storage for dev, Cloudflare R2 for production
-- Password auth with optional email verification (Resend)
+- Password auth with optional email verification; email via Resend or SMTP
+- Figma-style comments on live sites — pinned threads, `@mentions`, resolve
+- In-app and email notifications with per-user preferences; reply to a
+  comment straight from your inbox
 
 ## Tests
 
