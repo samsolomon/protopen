@@ -76,8 +76,8 @@
     '.pin.active { background: #0066ff; }' +
     '.pin.draggable { cursor: grab; }' +
     '.pin.dragging { --pin-scale: 1.15; opacity: .75; cursor: grabbing; transition: none; z-index: 2147483646; }' +
-    '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-size: 12px; font-weight: 500; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
-    '.topbar .brand { display: flex; align-items: center; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; transition: opacity .15s; }' +
+    '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 16px; font-size: 12px; font-weight: 500; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
+    '.topbar .brand { display: flex; align-items: center; justify-self: start; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; transition: opacity .15s; }' +
     '.topbar .brand:hover { opacity: 1; }' +
     '.topbar .source-link { display: inline-flex; align-items: center; gap: 6px; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; transition: opacity .15s; }' +
     '.topbar .source-link:hover { opacity: 1; }' +
@@ -88,7 +88,9 @@
     '.topbar .toggle-btn .count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 6px; align-items: center; justify-content: center; background: rgba(255,255,255,.22); border-radius: 999px; font-size: 11px; }' +
     '.topbar .toggle-btn .count:empty { display: none; }' +
     '.topbar .shortcut { opacity: .55; font-size: 11px; margin-left: 4px; }' +
-    '.topbar-right { display: flex; align-items: center; gap: 10px; }' +
+    '.topbar-right { display: flex; align-items: center; justify-self: end; gap: 10px; }' +
+    '.topbar-center { display: flex; align-items: center; justify-self: center; gap: 10px; }' +
+    '.topbar .site-name { font-size: 12px; font-weight: 500; white-space: nowrap; }' +
     '.topbar .versions { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid rgba(255,255,255,.2); color: inherit; font-size: 12px; font-weight: 500; min-height: var(--ctl-size); padding: 5px 24px 5px 12px; border-radius: var(--ctl-radius); cursor: pointer; background-image: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\' viewBox=\'0 0 8 8\'><path d=\'M2 3l2 2 2-2\' stroke=\'white\' stroke-width=\'1\' fill=\'none\'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; outline: none; }' +
     '.topbar .versions:hover { border-color: rgba(255,255,255,.4); }' +
     '.topbar .versions option { background: #111; color: white; }' +
@@ -134,6 +136,7 @@
     '<div class="pin-layer"></div>' +
     '<div class="topbar">' +
       '<a class="brand" href="' + escapeHTML(apiBase || '/') + '">Protopen</a>' +
+      '<div class="topbar-center"><span class="site-name"></span></div>' +
       '<div class="topbar-right">' +
         '<button class="toggle-btn" aria-pressed="false">' +
           '<span class="label">Comments</span>' +
@@ -148,6 +151,8 @@
   var toggleBtn = shadow.querySelector('.toggle-btn');
   var countBadge = shadow.querySelector('.toggle-btn .count');
   var topbarRight = shadow.querySelector('.topbar-right');
+  var topbarCenter = shadow.querySelector('.topbar-center');
+  var siteNameEl = shadow.querySelector('.site-name');
 
   // Cursor style for the host page when in comment mode. Single <style> in
   // <head> is the only host-page mutation aside from #__protopen_host.
@@ -213,6 +218,7 @@
       state.deployId = ctx.deployId;
       state.isPublic = ctx.isPublic;
       state.siteName = ctx.siteName;
+      siteNameEl.textContent = ctx.siteName || '';
       loadComments().then(focusHashThread);
       loadDeploys();
     }).catch(function (err) {
@@ -287,7 +293,7 @@
       var picked = ordered[sel.selectedIndex];
       if (picked) window.location.href = deployUrl(picked);
     });
-    topbarRight.insertBefore(sel, topbarRight.firstChild);
+    topbarCenter.appendChild(sel);
   }
 
   // Mirrors commitURL() in web/src/lib/utils.ts — keep host handling in sync.
