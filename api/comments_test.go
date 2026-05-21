@@ -651,6 +651,16 @@ func TestCommentRuntimeNotEmpty(t *testing.T) {
 	}
 }
 
+// Embedding guard: ensures the source-commit link feature is present in the
+// runtime served to clients.
+func TestCommentRuntimeHasSourceLink(t *testing.T) {
+	for _, want := range []string{"renderSourceLink", "source-link", "commitURL"} {
+		if !strings.Contains(commentRuntimeJS, want) {
+			t.Fatalf("comment runtime missing %q", want)
+		}
+	}
+}
+
 // seedComment posts a comment as the given user and returns its ID, failing
 // the test on any non-201 response.
 func seedComment(t *testing.T, f commentsFixture, body, asUserID string) string {

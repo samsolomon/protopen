@@ -79,6 +79,9 @@
     '.topbar { position: fixed; top: 0; left: 0; right: 0; height: ' + TOPBAR_H + 'px; background: #111; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font: 500 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: auto; z-index: 1; }' +
     '.topbar .brand { display: flex; align-items: center; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; letter-spacing: .02em; transition: opacity .15s; }' +
     '.topbar .brand:hover { opacity: 1; }' +
+    '.topbar .source-link { display: inline-flex; align-items: center; gap: 6px; color: inherit; text-decoration: none; opacity: .7; font-size: 12px; transition: opacity .15s; }' +
+    '.topbar .source-link:hover { opacity: 1; }' +
+    '.topbar .source-link .hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }' +
     '.topbar .toggle-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.2); padding: 6px 14px; border-radius: 999px; cursor: pointer; font: 500 13px system-ui; transition: background .15s, border-color .15s; }' +
     '.topbar .toggle-btn:hover { border-color: rgba(255,255,255,.4); }' +
     '.topbar .toggle-btn.active { background: #ff8f52; border-color: #ff8f52; }' +
@@ -225,9 +228,21 @@
 
   function loadDeploys() {
     if (!state.siteId) return;
-    // 401s silently for non-members; that's the signal to hide the selector.
+    // 401s silently for non-members; that's the signal to hide the selector
+    // and the source link.
     api('/api/sites/' + state.siteId + '/deploys').then(function (resp) {
       var deploys = (resp && resp.deploys) || [];
+      var wanted = servedDeployId || state.deployId;
+      var served = null;
+      for (var i = 0; i < deploys.length; i++) {
+        if (deploys[i].id === wanted) { served = deploys[i]; break; }
+      }
+      if (!served) {
+        for (var j = 0; j < deploys.length; j++) {
+          if (deploys[j].isCurrent) { served = deploys[j]; break; }
+        }
+      }
+      renderSourceLink(served);
       if (deploys.length < 2) return;
       renderVersionSelector(deploys);
     }).catch(function () {});
@@ -273,6 +288,45 @@
       if (picked) window.location.href = deployUrl(picked);
     });
     topbarRight.insertBefore(sel, topbarRight.firstChild);
+  }
+
+  // Mirrors commitURL() in web/src/lib/utils.ts — keep host handling in sync.
+  function commitURL(remoteURL, hash) {
+    try {
+      var host = new URL(remoteURL).hostname;
+      if (host === 'bitbucket.org') return remoteURL + '/commits/' + hash;
+      if (host === 'gitlab.com' || host.indexOf('gitlab.') === 0) return remoteURL + '/-/commit/' + hash;
+    } catch (e) {}
+    // SSH-style remotes (git@host:org/repo) make new URL() throw and fall
+    // through here; the result fails renderSourceLink's https check and drops.
+    return remoteURL + '/commit/' + hash;
+  }
+
+  // Adds a link to the served deploy's source commit. Only ever called with
+  // data from the auth-gated /deploys endpoint, so the link is never built for
+  // anonymous viewers — a private repo URL stays out of public page source.
+  function renderSourceLink(deploy) {
+    if (!deploy || !deploy.gitRemoteURL || !deploy.gitCommitHash) return;
+    if (topbarRight.querySelector('.source-link')) return;
+    var url = commitURL(deploy.gitRemoteURL, deploy.gitCommitHash);
+    if (!/^https?:\/\//i.test(url)) return;
+    var shortHash = deploy.gitCommitHash.slice(0, 7);
+    var link = document.createElement('a');
+    link.className = 'source-link';
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', 'View commit ' + shortHash + ' on GitHub');
+    var tip = [];
+    if (deploy.gitCommitMessage) tip.push(deploy.gitCommitMessage);
+    if (deploy.gitBranch) tip.push('(' + deploy.gitBranch + ')');
+    if (tip.length) link.title = tip.join(' ');
+    link.innerHTML = GITHUB_SVG;
+    var hash = document.createElement('span');
+    hash.className = 'hash';
+    hash.textContent = shortHash + (deploy.gitDirty ? '*' : '');
+    link.appendChild(hash);
+    topbarRight.insertBefore(link, toggleBtn);
   }
 
   function loadComments() {
@@ -530,6 +584,7 @@
   var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
   var DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
   var CLOSE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  var GITHUB_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
 
   // Set by buildToolbar when the kebab menu opens; cleared on close or when
   // the popover is dismissed. Keeps the outside-click handler from leaking

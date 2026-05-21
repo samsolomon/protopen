@@ -5,6 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Mirrored by commitURL() in api/comment_runtime.js — keep host handling in sync.
 export function commitURL(remoteURL: string, hash: string): string {
   try {
     const host = new URL(remoteURL).hostname
