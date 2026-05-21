@@ -44,6 +44,41 @@ func TestValidateUploadRejectsFolderWithoutIndex(t *testing.T) {
 	}
 }
 
+func TestValidateUploadHintsAtBuildOutputForSourceProject(t *testing.T) {
+	t.Parallel()
+
+	payload := uploadRequest{
+		Name:  "Unbuilt Project",
+		Mode:  "files",
+		Files: []fileMeta{{Name: "package.json", Path: "package.json", Size: 64}},
+	}
+
+	err := validateUpload(payload)
+	if err == nil {
+		t.Fatal("expected missing index.html error")
+	}
+	if !strings.Contains(err.Error(), "package.json") || !strings.Contains(err.Error(), "npm run build") {
+		t.Fatalf("expected build-output hint, got %v", err)
+	}
+}
+
+func TestDetectSiteRootHintsAtBuildOutputForSourceProject(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := detectSiteRoot(root)
+	if err == nil {
+		t.Fatal("expected missing index.html error")
+	}
+	if !strings.Contains(err.Error(), "package.json") || !strings.Contains(err.Error(), "npm run build") {
+		t.Fatalf("expected build-output hint, got %v", err)
+	}
+}
+
 func TestDetectSiteRootPrefersDirectoryWithIndex(t *testing.T) {
 	t.Parallel()
 

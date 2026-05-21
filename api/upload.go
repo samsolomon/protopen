@@ -404,14 +404,28 @@ func collectFiles(root string) ([]fileMeta, error) {
 	return files, nil
 }
 
+// missingIndexError builds the error for an upload with no index.html. When a
+// package.json is present the upload is almost certainly unbuilt source, so the
+// message points at the build output instead of the generic rejection.
+func missingIndexError(where string, hasPackageJSON bool) error {
+	if hasPackageJSON {
+		return fmt.Errorf("no index.html found%s. A package.json is present, so this looks like an unbuilt project — deploy your build output (e.g. the dist/ folder from `npm run build`), not the project source", where)
+	}
+	return fmt.Errorf("no index.html found%s - Protopen hosts built static sites only", where)
+}
+
 func detectSiteRoot(root string) (string, error) {
 	var candidates []string
+	hasPackageJSON := false
 	err := filepath.WalkDir(root, func(pathname string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if entry.IsDir() {
 			return nil
+		}
+		if entry.Name() == "package.json" {
+			hasPackageJSON = true
 		}
 		if !strings.EqualFold(entry.Name(), "index.html") {
 			return nil
@@ -423,7 +437,7 @@ func detectSiteRoot(root string) (string, error) {
 		return "", err
 	}
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("no index.html found - Protopen hosts built static sites only")
+		return "", missingIndexError("", hasPackageJSON)
 	}
 
 	sort.Slice(candidates, func(i int, j int) bool {
@@ -473,6 +487,7 @@ func validateUpload(payload uploadRequest) error {
 	totalSize := int64(0)
 	hasIndexHTML := false
 	hasZip := false
+	hasPackageJSON := false
 
 	for _, file := range payload.Files {
 		totalSize += file.Size
@@ -490,6 +505,10 @@ func validateUpload(payload uploadRequest) error {
 		if name == "index.html" || strings.HasSuffix(path, "/index.html") {
 			hasIndexHTML = true
 		}
+
+		if name == "package.json" || strings.HasSuffix(path, "/package.json") {
+			hasPackageJSON = true
+		}
 	}
 
 	if totalSize > maxDeploySize {
@@ -505,13 +524,13 @@ func validateUpload(payload uploadRequest) error {
 		}
 
 		if !hasIndexHTML {
-			return fmt.Errorf("no index.html found in extracted zip - Protopen hosts built static sites only")
+			return missingIndexError(" in extracted zip", hasPackageJSON)
 		}
 		return nil
 	}
 
 	if !hasIndexHTML {
-		return fmt.Errorf("no index.html found - Protopen hosts built static sites only")
+		return missingIndexError("", hasPackageJSON)
 	}
 
 	return nil
