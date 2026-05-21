@@ -91,8 +91,8 @@
     '.topbar-right { display: flex; align-items: center; justify-self: end; gap: 10px; }' +
     '.topbar-center { display: flex; align-items: center; justify-self: center; gap: 10px; }' +
     '.topbar .site-name { font-size: 12px; font-weight: 500; white-space: nowrap; }' +
-    '.topbar .versions { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid rgba(255,255,255,.2); color: inherit; font-size: 12px; font-weight: 500; min-height: var(--ctl-size); padding: 5px 24px 5px 12px; border-radius: var(--ctl-radius); cursor: pointer; background-image: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\' viewBox=\'0 0 8 8\'><path d=\'M2 3l2 2 2-2\' stroke=\'white\' stroke-width=\'1\' fill=\'none\'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; outline: none; }' +
-    '.topbar .versions:hover { border-color: rgba(255,255,255,.4); }' +
+    '.topbar .versions { appearance: none; -webkit-appearance: none; background: transparent; border: 0; color: inherit; font-size: 12px; font-weight: 500; padding: 4px 20px 4px 8px; border-radius: var(--ctl-radius); cursor: pointer; transition: background-color .15s; background-image: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\' viewBox=\'0 0 8 8\'><path d=\'M2 3l2 2 2-2\' stroke=\'white\' stroke-width=\'1\' fill=\'none\'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; outline: none; }' +
+    '.topbar .versions:hover { background-color: rgba(255,255,255,.1); }' +
     '.topbar .versions option { background: #111; color: white; }' +
     '.composer { position: fixed; background: var(--surface); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); color: var(--text); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,.12); padding: 6px 6px 6px 14px; pointer-events: auto; z-index: 2; min-width: 260px; max-width: 360px; display: flex; align-items: flex-end; gap: 6px; }' +
     '.composer textarea, .pop-compose textarea { color: inherit; }' +
